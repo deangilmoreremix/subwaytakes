@@ -17,9 +17,49 @@ import type {
   SubjectDemographic,
   SubjectGender,
   SubjectStyle,
+  SubwayEnhancementConfig,
+  SubwayLine,
+  StreetEnhancementConfig,
+  MotivationalEnhancementConfig,
+  Neighborhood,
+  AgeGroup,
 } from './types';
+import { generateEnhancedSubwayPrompt } from './subwayJourneyEngine';
+import { generateStreetEnhancementPrompt } from './streetJourneyEngine';
+import { generateMotivationalEnhancementPrompt } from './motivationalEngine';
+import { buildWisdomPrompt } from './wisdomPromptEngine';
+import { LINE_PERSONALITIES, NEIGHBORHOOD_PERSONALITIES } from './constants';
 
 const NEGATIVE_PROMPT = 'no distorted faces, no extra limbs, no unreadable text, no watermarks, no logos, no celebrity lookalikes, no text overlays in video';
+
+// 55+ WISDOM DEFAULTS - Applied to ALL interview types by default
+export const WISDOM_SYSTEM_RULES = `
+CORE IDENTITY FOR ALL SUBJECTS:
+- Subject is 55-75 years old with gray/silver hair visible
+- Calm confidence, grounded presence, earned wisdom
+- No slang, no trendy expressions, no "influencer" energy
+- Voice: warm, measured, respectful, wise conversational tone
+
+VISUAL CASTING RULES:
+- Natural faces, confident posture, no filter-looks
+- Wardrobe: smart casual, timeless, no logos or trendy clothes
+- Warm, authentic, real-world experience vibe
+
+WRITING STYLE:
+- Short sentences, clear and direct
+- Phrases like: "I've learned..." "Here's what I wish I knew..." "What matters is..."
+- Optimistic realism, not toxic positivity
+- Measured delivery with thoughtful pauses implied
+
+TOPIC FRAMING:
+- Money -> retirement, budgeting, avoiding scams, healthcare
+- Relationships -> second marriages, empty nest, boundaries, loneliness
+- Health -> mobility, sleep, stress, purpose, longevity
+- Work -> reinvention, consulting, mentorship, late-career pivots
+- Life -> regrets, freedom, legacy, what's worth worrying about
+
+No stereotypes. No mocking age. No "boomer" jokes. Respectful disagreement only.
+`;
 
 const SPEAKER_STYLE_PROMPTS: Record<SpeakerStyle, string> = {
   intense_coach: 'Intense motivational speaker with drill sergeant energy, leaning forward, commanding presence, finger pointing, veins showing, passionate delivery',
@@ -77,11 +117,25 @@ const INTERVIEW_STYLE_PROMPTS: Record<InterviewStyle, string> = {
   reaction_test: 'Reaction test scenario, reading prompt or statement, genuine surprise or shock, unfiltered first impression, authentic response moment',
   serious_probe: 'Serious investigative probe, pressing questions, searching for truth, journalist intensity, accountability interview style',
   storytelling: 'Storytelling narrative mode, recounting personal experience, expressive hand gestures, vivid memory recall, captivating anecdote delivery',
+  unpopular_opinion: 'Unpopular opinion format, defending controversial stance, expecting pushback, bold declaration, conviction despite opposition',
+  exposed_callout: 'Expose industry secrets format, revealing hidden truths, insider knowledge, whistleblowing energy, breaking fourth wall',
+  red_flag_detector: 'Red flag detection mode, identifying warning signs, skepticism, cautionary tone, teaching moment, pattern recognition',
+  hot_take_react: 'Hot take reaction style, responding to trending topics, real-time commentary, immediate opinion, trending topic energy',
+  confessions: 'Confession format, personal story sharing, intimate revelation, emotional vulnerability, therapeutic sharing, cathartic moment',
+  before_after_story: 'Before and after transformation journey, dramatic change narrative, personal growth story, dramatic contrast, inspiring transformation',
+  finish_sentence: 'Finish the sentence prompt, completing thought, collaborative storytelling, creative completion, interactive format',
+  one_piece_advice: 'One piece of advice delivery, single powerful tip, memorable takeaway, wisdom bomb, impactful guidance moment',
+  would_you_rather: 'Would you rather format, choosing between options, preference reveal, debate energy, fun polarization',
+  street_quiz: 'Street quiz format, trick questions, knowledge test, surprising answers, quiz show energy, trivia challenge',
 };
 
 const TIME_OF_DAY_PROMPTS: Record<TimeOfDay, string> = {
-  morning: 'Morning daylight, fresh early light, commuter energy, new day atmosphere',
+  early_morning: '5AM quiet platforms, sleepy commuters, early risers, peaceful dawn atmosphere',
+  morning_rush: '7-9AM packed trains, coffee-fueled energy, hurried commuters, peak morning chaos',
   midday: 'Midday bright sunlight, harsh shadows, lunch crowd activity, peak daylight',
+  evening_rush: '5-7PM tired commuters heading home, social energy, end of workday vibe',
+  late_night: '11PM+ nearly empty platforms, mysterious atmosphere, night owls, quiet solitude',
+  weekend: 'Weekend relaxed vibe, tourists, different energy, non-commuter crowd',
   golden_hour: 'Golden hour sunset glow, warm light, magic hour beauty, cinematic tones',
   dusk: 'Dusk blue hour, city lights beginning, transitional light, evening atmosphere',
   night: 'Nighttime urban setting, street lights illumination, neon signs, city nightlife energy',
@@ -107,7 +161,7 @@ const SUBJECT_DEMOGRAPHIC_PROMPTS: Record<SubjectDemographic, string> = {
   young_professional: 'Young professional in their late 20s to mid 30s, career-focused appearance, confident posture',
   college_student: 'College-age student, youthful energy, casual student style, early 20s appearance',
   middle_aged: 'Middle-aged person, experienced presence, mature demeanor, 40s to 50s appearance',
-  senior: 'Senior citizen, wise appearance, life experience visible, 60+ years old',
+  senior: 'Senior citizen, wise appearance, life experience visible, 60+ years old with gray or silver hair',
   business_exec: 'Business executive type, power presence, leadership demeanor, successful appearance',
   creative_type: 'Creative professional, artistic appearance, unique personal style, designer or artist vibe',
   fitness_enthusiast: 'Fitness-focused person, athletic build, healthy appearance, gym-goer energy',
@@ -120,7 +174,7 @@ const SUBJECT_GENDER_PROMPTS: Record<SubjectGender, string> = {
 };
 
 const SUBJECT_STYLE_PROMPTS: Record<SubjectStyle, string> = {
-  casual: 'casual everyday clothing, comfortable and relaxed attire',
+  casual: 'casual everyday clothing, comfortable and relaxed attire, timeless style',
   streetwear: 'urban streetwear fashion, sneakers, hoodies, contemporary street style',
   business_casual: 'smart casual office attire, polished but relaxed professional look',
   athletic: 'athletic wear, gym clothes, activewear, sporty appearance',
@@ -161,16 +215,17 @@ function buildEnhancedMotivationalPrompt(
     cameraStyle?: CameraStyle;
     lightingMood?: LightingMood;
     angle?: string;
+    motivationalEnhancements?: MotivationalEnhancementConfig;
   }
 ): string {
-  const { speakerStyle, setting, cameraStyle, lightingMood, angle } = options;
+  const { speakerStyle, setting, cameraStyle, lightingMood, angle, motivationalEnhancements } = options;
 
   const speakerDesc = speakerStyle ? SPEAKER_STYLE_PROMPTS[speakerStyle] : SPEAKER_STYLE_PROMPTS.intense_coach;
   const settingDesc = setting ? SETTING_PROMPTS[setting] : SETTING_PROMPTS.gym;
   const cameraDesc = cameraStyle ? CAMERA_STYLE_PROMPTS[cameraStyle] : CAMERA_STYLE_PROMPTS.dramatic_push;
   const lightingDesc = lightingMood ? LIGHTING_PROMPTS[lightingMood] : LIGHTING_PROMPTS.dramatic_shadows;
 
-  const basePrompt = `Vertical 9:16 motivational speaker video clip, ${duration} seconds.
+  let basePrompt = `Vertical 9:16 motivational speaker video clip, ${duration} seconds.
 
 Speaker: ${speakerDesc}
 Topic: ${topic} - delivering powerful message about this theme.
@@ -184,6 +239,11 @@ The speaker is mid-delivery of an impactful motivational speech moment.
 
 No comedy, no parody, no text inside the video frame.
 Single continuous shot. Capture the raw emotion and intensity.`;
+
+  // Apply motivational enhancements if provided
+  if (motivationalEnhancements) {
+    basePrompt = generateMotivationalEnhancementPrompt(motivationalEnhancements) + '\n\n' + basePrompt;
+  }
 
   if (angle) {
     return `${basePrompt}\nSpecific creative direction: ${angle}`;
@@ -249,6 +309,8 @@ function buildEnhancedStreetInterviewPrompt(
     subjectDemographic?: SubjectDemographic;
     subjectGender?: SubjectGender;
     subjectStyle?: SubjectStyle;
+    neighborhood?: Neighborhood;
+    streetEnhancements?: StreetEnhancementConfig;
   }
 ): string {
   const {
@@ -262,6 +324,8 @@ function buildEnhancedStreetInterviewPrompt(
     subjectDemographic,
     subjectGender,
     subjectStyle,
+    neighborhood,
+    streetEnhancements,
   } = options;
 
   const sceneDesc = streetScene ? STREET_SCENE_PROMPTS[streetScene] : STREET_SCENE_PROMPTS.busy_sidewalk;
@@ -277,10 +341,16 @@ function buildEnhancedStreetInterviewPrompt(
     subjectStyle,
   });
 
-  const basePrompt = `Realistic street interview clip, documentary style, ${duration} seconds.
+  let locationDesc = sceneDesc;
+  if (neighborhood) {
+    const personality = NEIGHBORHOOD_PERSONALITIES[neighborhood];
+    locationDesc = `${personality.atmosphere}. ${sceneDesc}`;
+  }
+
+  let basePrompt = `Realistic street interview clip, documentary style, ${duration} seconds.
 Vertical 9:16 format. Handheld camera, authentic feel.
 
-Location: ${sceneDesc}
+Location: ${locationDesc}
 Time: ${timeDesc}
 Interview approach: ${styleDesc}
 
@@ -294,6 +364,11 @@ Lighting: Natural available light appropriate for time of day.
 Mood: authentic, spontaneous, real, candid, viral-worthy moment.
 
 No text inside the video frame. Single continuous shot. Capture genuine human moment.`;
+
+  // Apply street enhancements if provided
+  if (streetEnhancements) {
+    basePrompt = generateStreetEnhancementPrompt(streetEnhancements) + '\n\n' + basePrompt;
+  }
 
   if (angle) {
     return `${basePrompt}\nSpecific creative direction: ${angle}`;
@@ -316,6 +391,8 @@ function buildEnhancedSubwayPrompt(
     subjectDemographic?: SubjectDemographic;
     subjectGender?: SubjectGender;
     subjectStyle?: SubjectStyle;
+    subwayLine?: SubwayLine;
+    subwayEnhancements?: SubwayEnhancementConfig;
   }
 ): string {
   const {
@@ -330,6 +407,8 @@ function buildEnhancedSubwayPrompt(
     subjectDemographic,
     subjectGender,
     subjectStyle,
+    subwayLine,
+    subwayEnhancements,
   } = options;
 
   const sceneSetting = sceneType ? SCENE_PROMPTS[sceneType] : SCENE_PROMPTS.platform_waiting;
@@ -368,10 +447,24 @@ Mood: Urban, raw, authentic, spontaneous, real city life, viral-worthy moment.
 
 No text inside the video frame. Single continuous shot. Capture genuine human moment.`;
 
-  if (angle) {
-    return `${basePrompt}\nSpecific creative direction: ${angle}`;
+  let finalPrompt = basePrompt;
+  
+  // Add subway line personality
+  if (subwayLine && subwayLine !== 'any') {
+    const personality = LINE_PERSONALITIES[subwayLine];
+    finalPrompt += `\n\nSubway Line Vibe: ${personality.vibe}. This is the ${subwayLine} train - ${personality.atmosphere}.`;
   }
-  return basePrompt;
+  
+  // Apply enhancements if provided
+  if (subwayEnhancements) {
+    finalPrompt = generateEnhancedSubwayPrompt(finalPrompt, subwayEnhancements);
+  }
+  
+  if (angle) {
+    finalPrompt += `\n\nSpecific creative direction: ${angle}`;
+  }
+  
+  return finalPrompt;
 }
 
 function buildProviderPrompt(request: GenerateRequest): string {
@@ -406,6 +499,7 @@ function buildProviderPrompt(request: GenerateRequest): string {
         cameraStyle,
         lightingMood,
         angle: anglePrompt,
+        motivationalEnhancements: request.motivationalEnhancements,
       });
     case 'street_interview':
       return buildEnhancedStreetInterviewPrompt(topic, durationSeconds, {
@@ -419,6 +513,8 @@ function buildProviderPrompt(request: GenerateRequest): string {
         subjectDemographic,
         subjectGender,
         subjectStyle,
+        neighborhood: request.neighborhood,
+        streetEnhancements: request.streetEnhancements,
       });
     case 'subway_interview':
       return buildEnhancedSubwayPrompt(topic, durationSeconds, {
@@ -433,6 +529,33 @@ function buildProviderPrompt(request: GenerateRequest): string {
         subjectDemographic,
         subjectGender,
         subjectStyle,
+        subwayLine: request.subwayLine,
+        subwayEnhancements: request.subwayEnhancements,
+      });
+    case 'studio_interview':
+      // Studio interview uses subway prompt with studio modifications for now
+      return buildEnhancedSubwayPrompt(topic, durationSeconds, {
+        question: interviewQuestion,
+        angle: anglePrompt,
+        interviewerType,
+        interviewerPosition,
+        subjectDemographic,
+        subjectGender,
+        subjectStyle,
+      });
+    case 'wisdom_interview':
+      return buildWisdomPrompt(topic, durationSeconds, {
+        tone: request.wisdomTone,
+        angle: anglePrompt,
+      });
+    default:
+      return buildEnhancedSubwayPrompt(topic, durationSeconds, {
+        question: interviewQuestion,
+        sceneType,
+        cityStyle,
+        energyLevel,
+        interviewStyle,
+        angle: anglePrompt,
       });
   }
 }
@@ -462,6 +585,22 @@ function generateVariationHint(type: ClipType): string {
       'alter station lighting',
       'different subject reaction intensity',
       'vary background passenger activity',
+    ],
+    studio_interview: [
+      'different camera angle',
+      'vary lighting setup',
+      'change guest positioning',
+      'alter background elements',
+      'different energy level',
+      'vary shot composition',
+    ],
+    wisdom_interview: [
+      'different tone (gentle/direct/funny/heartfelt)',
+      'vary subject demographic',
+      'change setting location',
+      'alter emotional intensity',
+      'different pacing of advice',
+      'vary storytelling approach',
     ],
   };
 
@@ -503,4 +642,200 @@ export function createBatchVariationPrompt(basePrompt: string, sequence: number,
 
   const variationIndex = (sequence - 1) % variations.length;
   return `${basePrompt}\nBatch variation ${sequence}/${total}: ${variations[variationIndex]}`;
+}
+
+// === AGE-APPROPRIATE PROMPT GENERATION ===
+
+// Age-appropriate language modifiers for prompts
+const AGE_GROUP_MODIFIERS: Record<AgeGroup, {
+  tone: string;
+  vocabulary: string;
+  contentWarnings: string[];
+  styleHints: string[];
+}> = {
+  kids: {
+    tone: 'fun, educational, encouraging, positive',
+    vocabulary: 'simple and easy to understand language, no complex jargon',
+    contentWarnings: ['no mature themes', 'no adult situations', 'no controversial politics', 'no explicit content'],
+    styleHints: ['bright and cheerful energy', 'colorful environment', 'uplifting messages', 'inspiring for young audiences'],
+  },
+  teens: {
+    tone: 'relatable, trendy, authentic, engaging',
+    vocabulary: 'casual teen-friendly language, relatable references',
+    contentWarnings: ['no explicit adult content', 'no graphic violence', 'no dangerous stunts'],
+    styleHints: ['modern and current', 'social media friendly', 'shareable content', 'authentic voice'],
+  },
+  older_adults: {
+    tone: 'reflective, experienced, wise, storytelling',
+    vocabulary: 'nuanced perspectives drawn from decades of experience',
+    contentWarnings: [], // Older adults can handle most content
+    styleHints: ['authentic slow-paced delivery', 'thoughtful pauses', 'hard-earned wisdom', 'storytelling approach'],
+  },
+  adults: {
+    tone: 'mature, professional, sophisticated',
+    vocabulary: 'adult-level vocabulary, nuanced perspectives',
+    contentWarnings: [], // Adults can handle most content
+    styleHints: ['mature themes allowed', 'complex discussions welcome', 'candid and honest'],
+  },
+  all_ages: {
+    tone: 'universal, family-friendly, inclusive',
+    vocabulary: 'accessible language that works for all ages',
+    contentWarnings: ['no explicit content', 'no controversial mature themes', 'no graphic content'],
+    styleHints: ['broad appeal', 'shareable with family', 'wholesome entertainment', 'positive messaging'],
+  },
+};
+
+// Interview mode modifiers by age group
+const MODE_AGE_MODIFIERS: Record<AgeGroup, Record<string, string>> = {
+  kids: {
+    hot_take_challenge: 'fun opinions on kid-friendly topics like snacks, toys, games',
+    rapid_fire_round: 'quick and exciting questions about fun topics',
+    deep_dive_interview: 'thoughtful questions about dreams, goals, and feelings',
+    myth_busters: 'fun facts and reality vs fiction about interesting topics',
+    would_you_rather: 'fun choices between favorite things',
+    story_time: 'exciting stories about adventures and achievements',
+    unpopular_opinion: 'fun opinions about preferences like pizza toppings or colors',
+    expert_take: 'learned knowledge about interesting subjects',
+    none: 'friendly conversation about fun topics',
+  },
+  teens: {
+    hot_take_challenge: 'bold opinions on trending topics',
+    rapid_fire_round: 'rapid questions on hot topics',
+    deep_dive_interview: 'meaningful discussion on personal growth',
+    myth_busters: 'separating fact from fiction on teen topics',
+    would_you_rather: 'choices on social trends and preferences',
+    story_time: 'relatable teen experiences and stories',
+    unpopular_opinion: 'controversial takes on modern life',
+    expert_take: 'authority on trending topics',
+    none: 'casual conversation',
+  },
+  older_adults: {
+    hot_take_challenge: 'spicy opinions on life lessons and wisdom',
+    rapid_fire_round: 'quick takes on career and retirement',
+    deep_dive_interview: 'philosophical exploration of life experiences',
+    myth_busters: 'debunking myths about aging and life',
+    would_you_rather: 'life choices and priorities',
+    story_time: 'personal growth stories and hard-won wisdom',
+    unpopular_opinion: 'unpopular but honest life opinions',
+    expert_take: 'expertise on career and life experience',
+    none: 'reflective conversation',
+  },
+  adults: {
+    hot_take_challenge: 'controversial opinions on mature topics',
+    rapid_fire_round: 'quick takes on real-world issues',
+    deep_dive_interview: 'nuanced exploration of complex topics',
+    myth_busters: 'challenging conventional wisdom',
+    would_you_rather: 'adult life trade-offs',
+    story_time: 'life experiences and hard-won wisdom',
+    unpopular_opinion: 'candid controversial takes',
+    expert_take: 'authority on professional topics',
+    none: 'candid discussion',
+  },
+  all_ages: {
+    hot_take_challenge: 'fun opinions on universal preferences',
+    rapid_fire_round: 'quick-fire questions on interesting topics',
+    deep_dive_interview: 'thoughtful exploration of universal themes',
+    myth_busters: 'fun facts about everyday things',
+    would_you_rather: 'choices everyone can relate to',
+    story_time: 'universal stories of human experience',
+    unpopular_opinion: 'light controversial opinions',
+    expert_take: 'interesting knowledge sharing',
+    none: 'friendly conversation',
+  },
+};
+
+/**
+ * Generate age-appropriate prompt modifiers
+ */
+export function getAgeGroupModifiers(ageGroup: AgeGroup): string[] {
+  const modifiers = AGE_GROUP_MODIFIERS[ageGroup];
+  return [
+    `Tone: ${modifiers.tone}`,
+    `Vocabulary: ${modifiers.vocabulary}`,
+    ...modifiers.contentWarnings.map(w => w),
+    ...modifiers.styleHints.map(h => h),
+  ];
+}
+
+/**
+ * Get mode-specific modifier for age group
+ */
+export function getModeAgeModifier(mode: string, ageGroup: AgeGroup): string {
+  return MODE_AGE_MODIFIERS[ageGroup]?.[mode] || '';
+}
+
+/**
+ * Build an age-appropriate prompt modifier string
+ */
+export function buildAgeAppropriatePrompt(
+  basePrompt: string,
+  ageGroup: AgeGroup,
+  mode?: string
+): string {
+  const modifiers = getAgeGroupModifiers(ageGroup);
+  const modeModifier = mode ? getModeAgeModifier(mode, ageGroup) : '';
+  
+  let ageSection = `\n\n=== AGE-APPROPRIATE CONTENT ===`;
+  ageSection += `\nTarget Audience: ${ageGroup.replace('_', ' ').toUpperCase()}`;
+  ageSection += `\n${modifiers.join('\n')}`;
+  
+  if (modeModifier) {
+    ageSection += `\n\nMode Adaptation: ${modeModifier}`;
+  }
+  
+  return `${basePrompt}${ageSection}`;
+}
+
+/**
+ * Add age-appropriate modifications to existing prompt builders
+ */
+export function addAgeModifiersToPrompt(
+  prompt: string,
+  ageGroup: AgeGroup,
+  mode?: string
+): string {
+  if (!ageGroup || ageGroup === 'all_ages') {
+    return prompt; // No modification needed for all_ages
+  }
+  
+  return buildAgeAppropriatePrompt(prompt, ageGroup, mode);
+}
+
+/**
+ * Validate that content is appropriate for the age group
+ */
+export function validateContentForAgeGroup(
+  topic: string,
+  interviewQuestion: string | null,
+  ageGroup: AgeGroup
+): { valid: boolean; warnings: string[] } {
+  const warnings: string[] = [];
+  
+  const modifiers = AGE_GROUP_MODIFIERS[ageGroup];
+  
+  // Check for potential issues in topic
+  if (ageGroup === 'kids') {
+    const maturePatterns = ['sex', 'dating', 'politics', 'money', 'alcohol', 'drugs'];
+    maturePatterns.forEach(pattern => {
+      if (topic.toLowerCase().includes(pattern)) {
+        warnings.push(`Topic may not be ideal for kids: ${topic}`);
+      }
+    });
+  }
+  
+  if (interviewQuestion) {
+    if (ageGroup === 'kids') {
+      const kidInappropriate = ['sex', 'dating', 'alcohol', 'drugs', 'work', 'career'];
+      kidInappropriate.forEach(pattern => {
+        if (interviewQuestion.toLowerCase().includes(pattern)) {
+          warnings.push(`Question may not be appropriate for kids`);
+        }
+      });
+    }
+  }
+  
+  return {
+    valid: warnings.length === 0,
+    warnings,
+  };
 }

@@ -12,6 +12,17 @@ import type {
   LightingMood,
   StreetScene,
   InterviewStyle,
+  InterviewFormat,
+  DurationPreset,
+  DurationConfig,
+  ProductPlacementConfig,
+  SupportedLanguage,
+  CaptionStyleConfig,
+  ExportPlatform,
+  ExportConfig,
+  NicheCategory,
+  KeywordConfig,
+  GeneratedInterview,
   TimeOfDay,
   InterviewerType,
   InterviewerPosition,
@@ -665,7 +676,142 @@ export const INTERVIEW_STYLES: { value: InterviewStyle; label: string; descripti
   { value: 'reaction_test', label: 'Reaction Test', description: 'Testing responses to scenarios' },
   { value: 'serious_probe', label: 'Serious Probe', description: 'Investigative, pressing for truth' },
   { value: 'storytelling', label: 'Storytelling', description: 'Narrative focus, personal stories' },
+  { value: 'unpopular_opinion', label: 'Unpopular Opinion', description: 'Share controversial takes' },
+  { value: 'exposed_callout', label: 'Exposed/Callout', description: 'Reveal industry secrets' },
+  { value: 'red_flag_detector', label: 'Red Flag Detector', description: 'Spot warning signs' },
+  { value: 'hot_take_react', label: 'Hot Take React', description: 'React to trending topics' },
+  { value: 'confessions', label: 'Confessions', description: 'Share personal stories' },
+  { value: 'before_after_story', label: 'Before & After', description: 'Transformation journey' },
+  { value: 'finish_sentence', label: 'Finish Sentence', description: 'Complete the prompt' },
+  { value: 'one_piece_advice', label: 'One Piece of Advice', description: 'Single powerful tip' },
+  { value: 'would_you_rather', label: 'Would You Rather', description: 'Choose between options' },
+  { value: 'street_quiz', label: 'Street Quiz', description: 'Test knowledge, trick questions' },
 ];
+
+// Interview Formats
+export const INTERVIEW_FORMATS: { value: InterviewFormat; label: string; description: string; icon: string }[] = [
+  { value: 'solo', label: 'Solo', description: 'Single subject, medium shot', icon: '👤' },
+  { value: 'face_to_face', label: 'Face to Face', description: 'Interviewer + subject, two-shot', icon: '👥' },
+  { value: 'reporter_style', label: 'Reporter', description: 'Reporter with mic, handheld', icon: '🎤' },
+  { value: 'full_body', label: 'Full Body', description: 'Subject full frame, street setting', icon: '🚶' },
+  { value: 'pov_interviewer', label: 'POV Interviewer', description: 'First-person POV', icon: '👁️' },
+  { value: 'group', label: 'Group', description: 'Multiple people, panel', icon: '👥👥' },
+];
+
+// Duration Presets
+export const DURATION_PRESETS: { value: DurationPreset; label: string; min: number; max: number; description: string }[] = [
+  { value: 'hook', label: 'Hook (8-15s)', min: 8, max: 15, description: 'Short, punchy, viral-ready' },
+  { value: 'quick', label: 'Quick (15-30s)', min: 15, max: 30, description: 'Brief but engaging' },
+  { value: 'standard', label: 'Standard (30-60s)', min: 30, max: 60, description: 'Balanced content' },
+  { value: 'deep', label: 'Deep (60-90s)', min: 60, max: 90, description: 'More detailed' },
+  { value: 'long_form', label: 'Long Form (90-160s)', min: 90, max: 160, description: 'Full storytelling' },
+];
+
+// Language Options
+export const LANGUAGE_OPTIONS: { code: SupportedLanguage; name: string; nativeName: string; flag: string }[] = [
+  { code: 'en', name: 'English', nativeName: 'English', flag: '🇺🇸' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸' },
+  { code: 'fr', name: 'French', nativeName: 'Français', flag: '🇫🇷' },
+  { code: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇩🇪' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano', flag: '🇮🇹' },
+  { code: 'pt', name: 'Portuguese', nativeName: 'Português', flag: '🇧🇷' },
+  { code: 'zh', name: 'Chinese', nativeName: '中文', flag: '🇨🇳' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語', flag: '🇯🇵' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어', flag: '🇰🇷' },
+  { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी', flag: '🇮🇳' },
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية', flag: '🇸🇦' },
+  { code: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺' },
+];
+
+// Caption Presets
+export const CAPTION_PRESETS: Record<string, CaptionStyleConfig> = {
+  standard: {
+    fontFamily: 'Inter',
+    fontSize: 24,
+    fontWeight: 600,
+    textColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    backgroundOpacity: 0.6,
+    position: 'bottom',
+    animationStyle: 'static',
+    highlightWords: [],
+  },
+  tiktok: {
+    fontFamily: 'Montserrat',
+    fontSize: 28,
+    fontWeight: 700,
+    textColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    backgroundOpacity: 0.7,
+    position: 'bottom',
+    animationStyle: 'pop',
+    highlightWords: [{ word: '🔥', color: '#FFD700' }],
+  },
+  youtube: {
+    fontFamily: 'Roboto',
+    fontSize: 26,
+    fontWeight: 500,
+    textColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    backgroundOpacity: 0.5,
+    position: 'bottom',
+    animationStyle: 'slide',
+    highlightWords: [],
+  },
+  attention_grabber: {
+    fontFamily: 'Inter',
+    fontSize: 32,
+    fontWeight: 800,
+    textColor: '#FFD700',
+    backgroundColor: '#000000',
+    backgroundOpacity: 0.8,
+    position: 'center',
+    animationStyle: 'pop',
+    highlightWords: [{ word: 'WAIT', color: '#FF4444' }],
+  },
+  minimalist: {
+    fontFamily: 'Inter',
+    fontSize: 22,
+    fontWeight: 500,
+    textColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    backgroundOpacity: 0,
+    position: 'bottom',
+    animationStyle: 'typewriter',
+    highlightWords: [],
+  },
+};
+
+// Platform Export Specs
+export const PLATFORM_SPECS: Record<ExportPlatform, { name: string; aspectRatio: string; resolution: string; maxDuration: number; }> = {
+  tiktok: { name: 'TikTok', aspectRatio: '9:16', resolution: '1080x1920', maxDuration: 180 },
+  instagram_reel: { name: 'Instagram Reels', aspectRatio: '9:16', resolution: '1080x1920', maxDuration: 90 },
+  youtube_shorts: { name: 'YouTube Shorts', aspectRatio: '9:16', resolution: '1080x1920', maxDuration: 60 },
+  instagram_post: { name: 'Instagram Post', aspectRatio: '4:5', resolution: '1080x1350', maxDuration: 60 },
+  facebook: { name: 'Facebook', aspectRatio: '16:9', resolution: '1920x1080', maxDuration: 240 },
+  youtube: { name: 'YouTube', aspectRatio: '16:9', resolution: '1920x1080', maxDuration: 43200 },
+};
+
+// Niche Categories
+export const NICHE_CONFIGS: { value: NicheCategory; label: string; icon: string; defaultKeywords: string[] }[] = [
+  { value: 'money', label: 'Money & Finance', icon: '💰', defaultKeywords: ['investing', 'saving', 'budgeting', 'crypto'] },
+  { value: 'business', label: 'Business', icon: '💼', defaultKeywords: ['startup', 'entrepreneurship', 'marketing', 'sales'] },
+  { value: 'fitness', label: 'Fitness', icon: '💪', defaultKeywords: ['workout', 'nutrition', 'weight loss', 'muscle'] },
+  { value: 'relationships', label: 'Relationships', icon: '❤️', defaultKeywords: ['dating', 'marriage', 'friendship', 'love'] },
+  { value: 'crypto', label: 'Crypto', icon: '🪙', defaultKeywords: ['bitcoin', 'ethereum', 'trading', 'defi'] },
+  { value: 'motivation', label: 'Motivation', icon: '🔥', defaultKeywords: ['success', 'mindset', 'habits', 'productivity'] },
+  { value: 'local_services', label: 'Local Services', icon: '🏪', defaultKeywords: ['plumber', 'restaurant', 'contractor', 'cleaning'] },
+  { value: 'personal_brand', label: 'Personal Brand', icon: '⭐', defaultKeywords: ['influencer', 'content creator', 'online business'] },
+  { value: 'tech', label: 'Tech', icon: '💻', defaultKeywords: ['AI', 'software', 'gadgets', 'programming'] },
+  { value: 'health', label: 'Health', icon: '🏥', defaultKeywords: ['wellness', 'mental health', 'diet', 'sleep'] },
+  { value: 'education', label: 'Education', icon: '📚', defaultKeywords: ['learning', 'career', 'skills', 'college'] },
+  { value: 'entertainment', label: 'Entertainment', icon: '🎬', defaultKeywords: ['movies', 'music', 'celebrities', 'gaming'] },
+  { value: 'food', label: 'Food', icon: '🍔', defaultKeywords: ['recipes', 'restaurants', 'cooking', 'nutrition'] },
+  { value: 'travel', label: 'Travel', icon: '✈️', defaultKeywords: ['vacation', 'destinations', 'hotels', 'budget travel'] },
+  { value: 'fashion', label: 'Fashion', icon: '👗', defaultKeywords: ['style', 'clothing', 'trends', 'shopping'] },
+  { value: 'gaming', label: 'Gaming', icon: '🎮', defaultKeywords: ['video games', 'esports', 'streaming', 'gaming tips'] },
+];
+
 
 export const TIME_OF_DAY_OPTIONS: { value: TimeOfDay; label: string; description: string; emoji: string }[] = [
   { value: 'early_morning', label: '5AM Club', description: 'Quiet platforms, sleepy commuters, early risers', emoji: '🌅' },

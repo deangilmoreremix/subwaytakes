@@ -19,6 +19,16 @@ const STYLE_COLORS: Record<InterviewStyle, { bg: string; border: string; text: s
   reaction_test: { bg: 'bg-cyan-500/15', border: 'border-cyan-500/50', text: 'text-cyan-400' },
   serious_probe: { bg: 'bg-slate-500/15', border: 'border-slate-500/50', text: 'text-slate-400' },
   storytelling: { bg: 'bg-emerald-500/15', border: 'border-emerald-500/50', text: 'text-emerald-400' },
+  unpopular_opinion: { bg: 'bg-violet-500/15', border: 'border-violet-500/50', text: 'text-violet-400' },
+  exposed_callout: { bg: 'bg-red-600/15', border: 'border-red-600/50', text: 'text-red-600' },
+  red_flag_detector: { bg: 'bg-yellow-500/15', border: 'border-yellow-500/50', text: 'text-yellow-400' },
+  hot_take_react: { bg: 'bg-orange-600/15', border: 'border-orange-600/50', text: 'text-orange-600' },
+  confessions: { bg: 'bg-pink-600/15', border: 'border-pink-600/50', text: 'text-pink-600' },
+  before_after_story: { bg: 'bg-teal-600/15', border: 'border-teal-600/50', text: 'text-teal-600' },
+  finish_sentence: { bg: 'bg-indigo-500/15', border: 'border-indigo-500/50', text: 'text-indigo-400' },
+  one_piece_advice: { bg: 'bg-amber-600/15', border: 'border-amber-600/50', text: 'text-amber-600' },
+  would_you_rather: { bg: 'bg-emerald-600/15', border: 'border-emerald-600/50', text: 'text-emerald-600' },
+  street_quiz: { bg: 'bg-blue-600/15', border: 'border-blue-600/50', text: 'text-blue-600' },
 };
 
 export function InterviewStyleSelector({ value, onChange, disabled }: InterviewStyleSelectorProps) {

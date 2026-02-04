@@ -241,7 +241,113 @@ export type InterviewStyle =
   | 'debate_challenge'
   | 'reaction_test'
   | 'serious_probe'
-  | 'storytelling';
+  | 'storytelling'
+  | 'unpopular_opinion'
+  | 'exposed_callout'
+  | 'red_flag_detector'
+  | 'hot_take_react'
+  | 'confessions'
+  | 'before_after_story'
+  | 'finish_sentence'
+  | 'one_piece_advice'
+  | 'would_you_rather'
+  | 'street_quiz';
+
+// Interview Format - How the interview appears visually
+export type InterviewFormat =
+  | 'solo'
+  | 'face_to_face'
+  | 'reporter_style'
+  | 'full_body'
+  | 'pov_interviewer'
+  | 'group';
+
+// Video Length Configuration
+export type DurationPreset =
+  | 'hook'        // 8-15s
+  | 'quick'       // 15-30s
+  | 'standard'    // 30-60s
+  | 'deep'        // 60-90s
+  | 'long_form';  // 90-160s
+
+export interface DurationConfig {
+  targetSeconds: number; // 8-160
+  preset: DurationPreset;
+  clipStrategy: 'auto' | 'short_first' | 'long_build' | 'balanced';
+  pacingStyle: 'fast' | 'normal' | 'slow';
+}
+
+// Product Placement Configuration
+export interface ProductPlacementConfig {
+  enabled: boolean;
+  productName: string;
+  productDescription: string;
+  callToAction: string;
+  placementStyle: 'subtle' | 'moderate' | 'prominent';
+  integrationType: 'end_card' | 'natural_mention' | 'demonstration';
+  offerCode?: string;
+  affiliateLink?: string;
+}
+
+// Multi-Language Support
+export type SupportedLanguage =
+  | 'en' | 'es' | 'fr' | 'de' | 'it' | 'pt'
+  | 'zh' | 'ja' | 'ko' | 'hi' | 'ar' | 'ru';
+
+// Caption Style Configuration
+export interface CaptionStyleConfig {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  textColor: string;
+  backgroundColor: string;
+  backgroundOpacity: number;
+  position: 'bottom' | 'center' | 'top';
+  animationStyle: 'static' | 'pop' | 'slide' | 'typewriter' | 'karaoke';
+  highlightWords: { word: string; color: string }[];
+}
+
+// Platform Export
+export type ExportPlatform =
+  | 'tiktok'
+  | 'instagram_reel'
+  | 'youtube_shorts'
+  | 'instagram_post'
+  | 'facebook'
+  | 'youtube';
+
+export interface ExportConfig {
+  platform: ExportPlatform;
+  includeCaptions: boolean;
+  captionStyleId?: string;
+  quality: 'draft' | 'standard' | 'high' | '4k';
+}
+
+// Niche Category
+export type NicheCategory =
+  | 'money' | 'business' | 'fitness' | 'relationships'
+  | 'crypto' | 'motivation' | 'local_services' | 'personal_brand'
+  | 'tech' | 'health' | 'education' | 'entertainment'
+  | 'food' | 'travel' | 'fashion' | 'gaming';
+
+// Keyword-to-Viral Configuration
+export interface KeywordConfig {
+  keyword: string;
+  topicDepth: 'surface' | 'moderate' | 'deep';
+  tone: 'casual' | 'professional' | 'controversial' | 'humorous';
+  niche: NicheCategory;
+}
+
+export interface GeneratedInterview {
+  id: string;
+  keyword: string;
+  topic: string;
+  questions: string[];
+  suggestedAnswers: string[];
+  estimatedDuration: number;
+  viralScore: number;
+  talkingPoints: string[];
+}
 
 export type TimeOfDay =
   | 'early_morning'      // 5AM - quiet, sleepy, early commuters
