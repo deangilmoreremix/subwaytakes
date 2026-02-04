@@ -8,13 +8,21 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "remotion:studio": "remotion studio remotion/src/index.ts",
+    "remotion:render": "remotion render remotion/src/index.ts SubwayTakesDemo demo-video.mp4",
+    "remotion:preview": "remotion preview remotion/src/index.ts"
   },
   "dependencies": {
+    "@remotion/cli": "^4.0.417",
+    "@remotion/skills": "github:remotion-dev/skills",
     "@supabase/supabase-js": "^2.57.4",
+    "@types/dompurify": "^3.0.5",
+    "dompurify": "^3.3.1",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.417"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

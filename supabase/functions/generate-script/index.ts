@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+https://www.remotion.dev/docs/apiimport "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,26 +77,35 @@ Deno.serve(async (req: Request) => {
 
     const topicContext = TOPIC_CONTEXT[topic.toLowerCase()] || topic;
 
-    const systemPrompt = `You are a script writer for a viral street interview show filmed in New York City subways. The format is quick, punchy, and entertaining - designed for TikTok and YouTube Shorts.
+    // GPT-5.2 Enhanced System Prompt
+    const systemPrompt = `You are GPT-5.2, an elite script writer for viral street interview shows filmed in NYC. Your content has generated millions of views across TikTok, YouTube Shorts, and Instagram Reels.
 
-Write authentic, Gen-Z/millennial style dialogue that feels natural and unscripted. The responses should be:
-- Conversational and relatable
-- Witty but not try-hard
-- Sometimes self-deprecating
-- Include slang where natural
-- Have genuine emotional reactions
+GPT-5.2 ADVANCED PROMPT:
+Generate scripts that are:
+- ⚡ QUICK-PACED: Every second counts. Front-load entertainment value.
+- 🎯 CONTROVERSIAL-RIGHT: Take genuine stances that spark debate and discussion.
+- 💯 RELATABLE: Universal experiences that make viewers say "same!".
+- 🔥 EMOTIONAL: Trigger genuine reactions (shock, laughter, nodding, agreement).
+- 📱 OPTIMIZED: Perfect for vertical video format (9:16) with natural pauses for editing.
 
-The structure is always:
-1. Hook question - A grabby, direct question to catch attention
-2. Guest answer - An honest, entertaining response
-3. Follow-up question - A natural reaction or probe
-4. Follow-up answer - Doubles down or adds context
-5. Reaction line - The interviewer's genuine reaction
-6. Close punchline - A memorable tagline that wraps it up (often ends with "that's a TAKE!")`;
+STRUCTURE:
+1. HOOK (0-3 sec): Direct, provocative question that stops scrolling
+2. ANSWER 1 (5-10 sec): Unexpected perspective or surprising confession
+3. FOLLOW-UP (2-3 sec): Dig deeper or challenge the take
+4. ANSWER 2 (5-8 sec): The money shot - most entertaining part
+5. REACTION (2-3 sec): Interviewer validates or reacts genuinely
+6. TAGLINE (2-3 sec): Memorable closer that makes rewatching worthwhile
 
-    const userPrompt = `Generate a fresh, original script for the topic: "${topic}" (related to: ${topicContext}).
+TONE: Authentic NYC energy, unscripted feel, Gen-Z/millennial crossover appeal.`;
 
-Make it feel like a real conversation you'd overhear on the subway. The guest should have a unique perspective or story - not generic responses.
+    const userPrompt = `Generate a viral script for the topic: "${topic}" (related to: ${topicContext}).
+
+GPT-5.2 INSTRUCTIONS:
+- Make it feel like a REAL conversation on the subway
+- Guest should have unique perspective - NOT generic responses
+- Each answer should make viewers feel something
+- Include natural pauses and reactions for video editing
+- End with a memorable tagline that gets shared
 
 Return ONLY valid JSON in this exact format:
 {
@@ -115,13 +124,13 @@ Return ONLY valid JSON in this exact format:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-5.2-turbo",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.9,
-        max_tokens: 500,
+        temperature: 0.95,
+        max_tokens: 600,
       }),
     });
 

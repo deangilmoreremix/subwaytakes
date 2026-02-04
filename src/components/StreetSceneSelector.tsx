@@ -23,6 +23,8 @@ export function StreetSceneSelector({ value, onChange, disabled }: StreetSceneSe
               type="button"
               onClick={() => onChange(scene.value)}
               disabled={disabled}
+              aria-label={`Select ${scene.label} street scene`}
+              aria-pressed={isSelected}
               className={`px-3 py-2.5 rounded-lg border transition-all text-left ${
                 isSelected
                   ? 'bg-emerald-500/15 border-emerald-500/50'

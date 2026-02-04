@@ -512,6 +512,37 @@ export function EffectsCustomizeModal({ isOpen, onClose, clipType, effects, onSa
                         </button>
                       ))}
                     </div>
+
+                    {/* Custom Text Inputs */}
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-300 mb-2">Custom Name</label>
+                        <input
+                          type="text"
+                          value={localEffects.lowerThird.customName || ''}
+                          onChange={(e) => setLocalEffects({
+                            ...localEffects,
+                            lowerThird: { ...localEffects.lowerThird, customName: e.target.value }
+                          })}
+                          placeholder="Enter name (e.g., John Doe)"
+                          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-300 mb-2">Custom Title</label>
+                        <input
+                          type="text"
+                          value={localEffects.lowerThird.customTitle || ''}
+                          onChange={(e) => setLocalEffects({
+                            ...localEffects,
+                            lowerThird: { ...localEffects.lowerThird, customTitle: e.target.value }
+                          })}
+                          placeholder="Enter title (e.g., CEO, Expert)"
+                          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
                   </>
                 )}
               </div>

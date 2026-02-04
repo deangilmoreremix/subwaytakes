@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Zap, Layers, ChevronDown, ChevronUp, Users } from 'lucide-react';
+import { Zap, Layers, ChevronDown, ChevronUp, Users, Sparkles, MapPin, Flame, Heart, Wand2, Globe, Hash, Film, Tag, ShoppingBag, Languages } from 'lucide-react';
 import { ClipTypeSelector } from '../components/ClipTypeSelector';
 import { TopicSelect } from '../components/TopicSelect';
 import { DurationChips } from '../components/DurationChips';
@@ -20,6 +20,52 @@ import { TimeOfDaySelector } from '../components/TimeOfDaySelector';
 import { InterviewerSelector } from '../components/InterviewerSelector';
 import { SubjectSelector } from '../components/SubjectSelector';
 import { CharacterPresetSelector } from '../components/CharacterPresetSelector';
+import { AgeGroupSelector } from '../components/AgeGroupSelector';
+import { WisdomToneSelector } from '../components/WisdomToneSelector';
+import { KeywordInput } from '../components/KeywordInput';
+// NEW FEATURES
+import { InterviewFormatSelector } from '../components/InterviewFormatSelector';
+import { DurationSelector } from '../components/DurationSelector';
+import { ProductPlacementPanel } from '../components/ProductPlacementConfig';
+import { LanguageSelector } from '../components/LanguageSelector';
+import { CaptionStyleSelector } from '../components/CaptionStyleSelector';
+import { PlatformExportSelector } from '../components/PlatformExportSelector';
+import { NicheSelector } from '../components/NicheSelector';
+import { KeywordGenerator } from '../components/KeywordGenerator';
+// Remotion Effects Components
+import { CompactEffectsBar } from '../components/CompactEffectsBar';
+import { EffectsCustomizeModal } from '../components/EffectsCustomizeModal';
+// Subway Enhancement Components
+import { JourneyBuilder } from '../components/JourneyBuilder';
+import { CrowdReactionPanel } from '../components/CrowdReactionPanel';
+import { SoundscapeSelector } from '../components/SoundscapeSelector';
+import { PlotTwistSelector } from '../components/PlotTwistSelector';
+import { PlatformPoll as PlatformPollComponent } from '../components/PlatformPoll';
+import { SubwayLineSelector } from '../components/SubwayLineSelector';
+import { TrainArrivalTimer } from '../components/TrainArrivalTimer';
+import { SeasonalContextSelector } from '../components/SeasonalContextSelector';
+import { TransferPointBuilder } from '../components/TransferPointBuilder';
+// Street Interview Enhancement Components
+import { StreetJourneyBuilder } from '../components/StreetJourneyBuilder';
+import { StreetCrowdPanel } from '../components/StreetCrowdPanel';
+import { UrbanSoundscapeSelector } from '../components/UrbanSoundscapeSelector';
+import { StreetPlotTwistSelector } from '../components/StreetPlotTwistSelector';
+import { StreetPoll } from '../components/StreetPoll';
+import { NeighborhoodSelector } from '../components/NeighborhoodSelector';
+import { StreetDramaticMoment } from '../components/StreetDramaticMoment';
+import { StreetSeasonalSelector } from '../components/StreetSeasonalSelector';
+import { CrossStreetPivot } from '../components/CrossStreetPivot';
+// Motivational Enhancement Components
+import { TransformationArcBuilder } from '../components/TransformationArcBuilder';
+import { AudienceEnergyPanel } from '../components/AudienceEnergyPanel';
+import { MotivationalSoundscape } from '../components/MotivationalSoundscape';
+import { BreakthroughMomentSelector } from '../components/BreakthroughMomentSelector';
+import { EventEnergyArc } from '../components/EventEnergyArc';
+import { LiveChallengeSelector } from '../components/LiveChallengeSelector';
+import { SpeakerArchetypeSelector } from '../components/SpeakerArchetypeSelector';
+import { PauseForEffect } from '../components/PauseForEffect';
+import { AchievementContextSelector } from '../components/AchievementContextSelector';
+import { CTAPivot } from '../components/CTAPivot';
 import {
   TOPICS,
   DURATION_OPTIONS,
@@ -27,8 +73,13 @@ import {
   getPlaceholderText,
   getDefaultDuration,
   CHARACTER_PRESETS,
+  AGE_APPROPRIATE_TOPICS,
+  INTERVIEW_MODES,
 } from '../lib/constants';
 import { createClip, createClipBatch } from '../lib/clips';
+import { filterTopicsByAge, filterModesByAge } from '../lib/contentFilter';
+import { analyzeKeyword, type KeywordAnalysis } from '../lib/keywordEngine';
+import { getDefaultEffects } from '../lib/types';
 import type {
   ClipType,
   SubwaySceneType,
@@ -41,6 +92,16 @@ import type {
   LightingMood,
   StreetScene,
   InterviewStyle,
+  InterviewFormat,
+  DurationPreset,
+  DurationConfig,
+  ProductPlacementConfig,
+  SupportedLanguage,
+  CaptionStyleConfig,
+  ExportPlatform,
+  ExportConfig,
+  NicheCategory,
+  KeywordConfig,
   TimeOfDay,
   InterviewerType,
   InterviewerPosition,
@@ -48,7 +109,47 @@ import type {
   SubjectGender,
   SubjectStyle,
   CharacterPreset,
+  // Subway enhancement types
+  MultiStopJourney,
+  CrowdReactionConfig,
+  SoundscapeConfig,
+  PlotTwist,
+  PlatformPoll,
+  SubwayLine,
+  TrainArrivalMoment,
+  SeasonalContext,
+  TransferPoint,
+  SubwayEnhancementConfig,
+  // Street enhancement types
+  StreetMultiLocationJourney,
+  StreetCrowdConfig,
+  UrbanSoundscapeConfig,
+  StreetPlotTwist,
+  StreetPoll as StreetPollType,
+  Neighborhood,
+  StreetDramaticMoment as StreetDramaticMomentType,
+  StreetSeasonalContext,
+  CrossStreetPivot as CrossStreetPivotType,
+  StreetEnhancementConfig,
+  // Motivational enhancement types
+  TransformationArc,
+  AudienceEnergyConfig,
+  MotivationalSoundscapeConfig,
+  BreakthroughMoment,
+  EventEnergyArcConfig,
+  LiveChallenge,
+  SpeakerArchetypeConfig,
+  PauseForEffectConfig,
+  AchievementContext,
+  CTAPivotConfig,
+  MotivationalEnhancementConfig,
+  AgeGroup,
+  WisdomTone,
+  RemotionEffectsConfig,
 } from '../lib/types';
+
+// Alias for component to avoid naming conflict with type
+const PlatformPoll = PlatformPollComponent;
 
 interface CreatePageProps {
   onClipCreated: (clipId: string) => void;
@@ -57,9 +158,9 @@ interface CreatePageProps {
 type GenerationStatus = 'idle' | 'planning' | 'generating' | 'done' | 'error';
 
 export function CreatePage({ onClipCreated }: CreatePageProps) {
-  const [clipType, setClipType] = useState<ClipType>('subway_interview');
-  const [topic, setTopic] = useState<string>(TOPICS.subway_interview[0]);
-  const [duration, setDuration] = useState<number>(4);
+  const [clipType, setClipType] = useState<ClipType>('wisdom_interview');
+  const [topic, setTopic] = useState<string>(TOPICS.wisdom_interview[0]);
+  const [duration, setDuration] = useState<number>(6);
   const [angle, setAngle] = useState<string>('');
   const [status, setStatus] = useState<GenerationStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -92,10 +193,219 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
   const [subjectStyle, setSubjectStyle] = useState<SubjectStyle>('casual');
   const [showCharacterDetails, setShowCharacterDetails] = useState(false);
 
-  const topics = useMemo(() => TOPICS[clipType], [clipType]);
+  // Subway Enhancement States
+  const [subwayLine, setSubwayLine] = useState<SubwayLine | undefined>('any');
+  const [multiStopJourney, setMultiStopJourney] = useState<MultiStopJourney | undefined>();
+  const [crowdReactions, setCrowdReactions] = useState<CrowdReactionConfig | undefined>();
+  const [soundscape, setSoundscape] = useState<SoundscapeConfig | undefined>();
+  const [plotTwist, setPlotTwist] = useState<PlotTwist | undefined>();
+  const [platformPoll, setPlatformPoll] = useState<PlatformPoll | undefined>();
+  const [trainArrival, setTrainArrival] = useState<TrainArrivalMoment | undefined>();
+  const [seasonalContext, setSeasonalContext] = useState<SeasonalContext | undefined>();
+  const [transferPoint, setTransferPoint] = useState<TransferPoint | undefined>();
+  const [showEnhancements, setShowEnhancements] = useState(false);
+
+  // Street Interview Enhancement States
+  const [neighborhood, setNeighborhood] = useState<Neighborhood | undefined>('soho');
+  const [streetMultiLocationJourney, setStreetMultiLocationJourney] = useState<StreetMultiLocationJourney | undefined>();
+  const [streetCrowdConfig, setStreetCrowdConfig] = useState<StreetCrowdConfig | undefined>();
+  const [urbanSoundscape, setUrbanSoundscape] = useState<UrbanSoundscapeConfig | undefined>();
+  const [streetPlotTwist, setStreetPlotTwist] = useState<StreetPlotTwist | undefined>();
+  const [streetPoll, setStreetPoll] = useState<StreetPollType | undefined>();
+  const [streetDramaticMoment, setStreetDramaticMoment] = useState<StreetDramaticMomentType | undefined>();
+  const [streetSeasonalContext, setStreetSeasonalContext] = useState<StreetSeasonalContext | undefined>();
+  const [crossStreetPivot, setCrossStreetPivot] = useState<CrossStreetPivotType | undefined>();
+  const [showStreetEnhancements, setShowStreetEnhancements] = useState(false);
+
+  // Motivational Enhancement States
+  const [transformationArc, setTransformationArc] = useState<TransformationArc | undefined>();
+  const [audienceEnergy, setAudienceEnergy] = useState<AudienceEnergyConfig | undefined>();
+  const [motivationalSoundscape, setMotivationalSoundscape] = useState<MotivationalSoundscapeConfig | undefined>();
+  const [breakthroughMoment, setBreakthroughMoment] = useState<BreakthroughMoment | undefined>();
+  const [eventEnergyArc, setEventEnergyArc] = useState<EventEnergyArcConfig | undefined>();
+  const [liveChallenge, setLiveChallenge] = useState<LiveChallenge | undefined>();
+  const [speakerArchetype, setSpeakerArchetype] = useState<SpeakerArchetypeConfig | undefined>();
+  const [pauseForEffect, setPauseForEffect] = useState<PauseForEffectConfig | undefined>();
+  const [achievementContext, setAchievementContext] = useState<AchievementContext | undefined>();
+  const [ctaPivot, setCtaPivot] = useState<CTAPivotConfig | undefined>();
+
+  // NEW FEATURES - Interview Format & Duration
+  const [interviewFormat, setInterviewFormat] = useState<InterviewFormat>('solo');
+  const [durationPreset, setDurationPreset] = useState<DurationPreset>('hook');
+  
+  // NEW FEATURES - Product & Language
+  const [productPlacement, setProductPlacement] = useState<ProductPlacementConfig>({
+    enabled: false,
+    productName: '',
+    productDescription: '',
+    callToAction: '',
+    placementStyle: 'subtle',
+    integrationType: 'natural_mention',
+  });
+  const [language, setLanguage] = useState<SupportedLanguage>('en');
+  
+  // NEW FEATURES - Captions & Export
+  const [captionStyle, setCaptionStyle] = useState<string>('standard');
+  const [exportPlatforms, setExportPlatforms] = useState<ExportPlatform[]>(['tiktok', 'instagram_reel']);
+  
+  // NEW FEATURES - Niche & Keywords
+  const [niche, setNiche] = useState<NicheCategory>('motivation');
+  const [keyword, setKeyword] = useState<string>('');
+  const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
+  const [showMotivationalEnhancements, setShowMotivationalEnhancements] = useState(false);
+
+  // Age Group State
+  const [targetAgeGroup, setTargetAgeGroup] = useState<AgeGroup>('all_ages');
+
+  // Wisdom Mode State
+  const [wisdomTone, setWisdomTone] = useState<WisdomTone>('gentle');
+
+  // Keyword Mode State
+  const [keywordMode, setKeywordMode] = useState(false);
+  const [keywordAnalysis, setKeywordAnalysis] = useState<KeywordAnalysis | null>(null);
+
+  // Remotion Effects State
+  const [showEffectsModal, setShowEffectsModal] = useState(false);
+  const [effects, setEffects] = useState<RemotionEffectsConfig>(() => getDefaultEffects('wisdom_interview'));
+
+  // Update effects when clip type changes
+  useEffect(() => {
+    setEffects(getDefaultEffects(clipType));
+  }, [clipType]);
+
+  // Handle keyword analysis result
+  function handleKeywordAnalyzed(analysis: KeywordAnalysis) {
+    setKeywordAnalysis(analysis);
+    // Auto-select clip type and settings based on keyword
+    setClipType(analysis.clipType);
+    setTopic(analysis.topic);
+    setCharacterPreset(analysis.characterPreset);
+    
+    // Apply other settings based on analysis
+    if (analysis.interviewStyle) setInterviewStyle(analysis.interviewStyle);
+    if (analysis.energyLevel) setEnergyLevel(analysis.energyLevel);
+    if (analysis.sceneType) setSceneType(analysis.sceneType);
+    if (analysis.cityStyle) setCityStyle(analysis.cityStyle);
+    if (analysis.subwayLine) setSubwayLine(analysis.subwayLine);
+    if (analysis.timeOfDay) setTimeOfDay(analysis.timeOfDay);
+    if (analysis.motivationalSetting) setMotivationalSetting(analysis.motivationalSetting);
+    if (analysis.speakerStyle) setSpeakerStyle(analysis.speakerStyle);
+    if (analysis.cameraStyle) setCameraStyle(analysis.cameraStyle);
+    if (analysis.lightingMood) setLightingMood(analysis.lightingMood);
+    if (analysis.wisdomTone) setWisdomTone(analysis.wisdomTone);
+    if (analysis.streetScene) setStreetScene(analysis.streetScene);
+    if (analysis.subjectDemographic) setSubjectDemographic(analysis.subjectDemographic);
+    if (analysis.subjectStyle) setSubjectStyle(analysis.subjectStyle);
+  }
+
+  // Reset keyword mode when manually changing clip type
+  function handleClipTypeChange(newType: ClipType) {
+    setClipType(newType);
+    setKeywordMode(false);
+    setKeywordAnalysis(null);
+  }
+
+  // Build subway enhancements config from individual states
+  function buildSubwayEnhancements(): SubwayEnhancementConfig | undefined {
+    const hasEnhancements = multiStopJourney?.enabled || 
+      crowdReactions?.enabled || 
+      soundscape?.enabled || 
+      plotTwist || 
+      platformPoll?.enabled || 
+      trainArrival?.enabled || 
+      seasonalContext?.enabled || 
+      transferPoint?.enabled;
+    
+    if (!hasEnhancements) return undefined;
+
+    return {
+      multiStopJourney,
+      crowdReactions,
+      soundscape,
+      plotTwist,
+      platformPoll,
+      subwayLine,
+      trainArrival,
+      seasonalContext,
+      transferPoint,
+    };
+  }
+
+  // Build street enhancements config from individual states
+  function buildStreetEnhancements(): StreetEnhancementConfig | undefined {
+    const hasEnhancements = streetMultiLocationJourney?.enabled || 
+      streetCrowdConfig?.enabled || 
+      urbanSoundscape?.enabled || 
+      streetPlotTwist || 
+      streetPoll?.enabled || 
+      streetDramaticMoment?.enabled || 
+      streetSeasonalContext?.enabled || 
+      crossStreetPivot?.enabled;
+    
+    if (!hasEnhancements) return undefined;
+
+    return {
+      multiLocationJourney: streetMultiLocationJourney,
+      crowdDynamics: streetCrowdConfig,
+      urbanSoundscape,
+      plotTwist: streetPlotTwist,
+      streetPoll,
+      neighborhood,
+      dramaticMoment: streetDramaticMoment,
+      seasonalContext: streetSeasonalContext,
+      crossStreetPivot,
+    };
+  }
+
+  // Build motivational enhancements config from individual states
+  function buildMotivationalEnhancements(): MotivationalEnhancementConfig | undefined {
+    const hasEnhancements = transformationArc?.enabled || 
+      audienceEnergy?.enabled || 
+      motivationalSoundscape?.enabled || 
+      breakthroughMoment?.enabled || 
+      eventEnergyArc?.enabled || 
+      liveChallenge?.enabled || 
+      speakerArchetype?.enabled || 
+      pauseForEffect?.enabled || 
+      achievementContext?.enabled || 
+      ctaPivot?.enabled;
+    
+    if (!hasEnhancements) return undefined;
+
+    return {
+      transformationArc,
+      audienceEnergy,
+      soundscape: motivationalSoundscape,
+      breakthroughMoment,
+      eventEnergyArc,
+      liveChallenge,
+      speakerArchetype,
+      pauseForEffect,
+      achievementContext,
+      ctaPivot,
+    };
+  }
+
+  const topics = useMemo(() => {
+    const baseTopics = TOPICS[clipType];
+    // Filter topics based on age group if not all_ages
+    if (targetAgeGroup === 'all_ages') {
+      return baseTopics;
+    }
+    // Combine clip-type topics with age-appropriate topics
+    const ageAppropriate = AGE_APPROPRIATE_TOPICS[targetAgeGroup] || [];
+    const combined = [...new Set([...baseTopics, ...ageAppropriate])];
+    return combined;
+  }, [clipType, targetAgeGroup]);
+  
+  const filteredModes = useMemo(() => {
+    return filterModesByAge(targetAgeGroup);
+  }, [targetAgeGroup]);
+
   const isSubway = clipType === 'subway_interview';
   const isStreet = clipType === 'street_interview';
   const isMotivational = clipType === 'motivational';
+  const isWisdom = clipType === 'wisdom_interview';
   const isInterview = isSubway || isStreet;
 
   function handlePresetChange(preset: CharacterPreset) {
@@ -150,6 +460,20 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
         subjectDemographic: isInterview ? subjectDemographic : undefined,
         subjectGender: isInterview ? subjectGender : undefined,
         subjectStyle: isInterview ? subjectStyle : undefined,
+        // Subway enhancements
+        subwayLine: isSubway ? subwayLine : undefined,
+        subwayEnhancements: isSubway ? buildSubwayEnhancements() : undefined,
+        // Street enhancements
+        neighborhood: isStreet ? neighborhood : undefined,
+        streetEnhancements: isStreet ? buildStreetEnhancements() : undefined,
+        // Motivational enhancements
+        motivationalEnhancements: isMotivational ? buildMotivationalEnhancements() : undefined,
+        // Age-appropriate content
+        targetAgeGroup,
+        // Wisdom mode
+        wisdomTone: isWisdom ? wisdomTone : undefined,
+        // Remotion effects
+        effects,
       };
 
       if (batchMode && isSubway) {
@@ -186,11 +510,33 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
         </p>
       </div>
 
+      {/* Keyword Input Section - NEW FEATURE */}
+      <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Wand2 className="h-5 w-5 text-amber-500" />
+          <h2 className="text-lg font-semibold text-amber-400">AI Keyword Generator</h2>
+        </div>
+        <p className="text-sm text-zinc-400 mb-4">
+          Enter a single keyword and let AI automatically select the best settings for viral content.
+        </p>
+        <KeywordInput 
+          onKeywordAnalyzed={handleKeywordAnalyzed}
+          disabled={busy}
+          forceClipType={clipType}
+        />
+      </div>
+
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6 space-y-6">
         <ClipTypeSelector
           value={clipType}
-          onChange={setClipType}
+          onChange={handleClipTypeChange}
           disabled={busy}
+        />
+
+        <AgeGroupSelector
+          value={targetAgeGroup}
+          onChange={setTargetAgeGroup}
+          showSuggestions={true}
         />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -209,6 +555,32 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
           />
         </div>
 
+        {/* Remotion Effects Bar */}
+        <div className="mt-4">
+          <CompactEffectsBar
+            clipType={clipType}
+            effects={effects}
+            onCustomize={() => setShowEffectsModal(true)}
+          />
+        </div>
+
+        {isWisdom && (
+          <div className="border-t border-zinc-800 pt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Heart className="h-4 w-4 text-amber-500" />
+              <span className="text-sm font-medium text-amber-400">Wisdom Mode Options</span>
+            </div>
+
+            <div className="space-y-4">
+              <WisdomToneSelector
+                value={wisdomTone}
+                onChange={setWisdomTone}
+                disabled={busy}
+              />
+            </div>
+          </div>
+        )}
+
         {isSubway && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -216,6 +588,8 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
                 type="button"
                 onClick={() => setBatchMode(!batchMode)}
                 disabled={busy}
+                aria-label="Toggle batch mode for generating multiple clips"
+                aria-pressed={batchMode}
                 className={`relative h-6 w-11 rounded-full transition-colors ${
                   batchMode ? 'bg-amber-500' : 'bg-zinc-700'
                 } ${busy ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -287,6 +661,120 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
                 />
               </div>
             </div>
+
+            {/* Motivational Enhancements Section */}
+            <div className="border-t border-zinc-800 pt-6 mt-6">
+              <button
+                type="button"
+                onClick={() => setShowMotivationalEnhancements(!showMotivationalEnhancements)}
+                disabled={busy}
+                className="flex items-center gap-2 text-sm font-medium text-red-400 hover:text-red-300 transition-colors mb-4"
+              >
+                <Flame className="h-4 w-4" />
+                <span>Motivational Enhancements</span>
+                {showMotivationalEnhancements ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+
+              {showMotivationalEnhancements && (
+                <div className="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                  {/* 1. Transformation Arc */}
+                  <TransformationArcBuilder
+                    value={transformationArc}
+                    onChange={setTransformationArc}
+                    disabled={busy}
+                  />
+
+                  {/* 2. Audience Energy */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <AudienceEnergyPanel
+                      value={audienceEnergy}
+                      onChange={setAudienceEnergy}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 3. Motivational Soundscape */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <MotivationalSoundscape
+                      value={motivationalSoundscape}
+                      onChange={setMotivationalSoundscape}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 4. Breakthrough Moment */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <BreakthroughMomentSelector
+                      value={breakthroughMoment}
+                      onChange={setBreakthroughMoment}
+                      disabled={busy}
+                      maxDuration={duration}
+                    />
+                  </div>
+
+                  {/* 5. Event Energy Arc */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <EventEnergyArc
+                      value={eventEnergyArc}
+                      onChange={setEventEnergyArc}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 6. Live Challenge */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <LiveChallengeSelector
+                      value={liveChallenge}
+                      onChange={setLiveChallenge}
+                      disabled={busy}
+                      maxDuration={duration}
+                    />
+                  </div>
+
+                  {/* 7. Speaker Archetype */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <SpeakerArchetypeSelector
+                      value={speakerArchetype}
+                      onChange={setSpeakerArchetype}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 8. Pause for Effect */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <PauseForEffect
+                      value={pauseForEffect}
+                      onChange={setPauseForEffect}
+                      disabled={busy}
+                      maxDuration={duration}
+                    />
+                  </div>
+
+                  {/* 9. Achievement Context */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <AchievementContextSelector
+                      value={achievementContext}
+                      onChange={setAchievementContext}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 10. CTA Pivot */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <CTAPivot
+                      value={ctaPivot}
+                      onChange={setCtaPivot}
+                      disabled={busy}
+                      maxDuration={duration}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -321,6 +809,109 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
                 value={energyLevel}
                 onChange={setEnergyLevel}
               />
+            </div>
+
+            {/* Street Interview Enhancements Section */}
+            <div className="border-t border-zinc-800 pt-6 mt-6">
+              <button
+                type="button"
+                onClick={() => setShowStreetEnhancements(!showStreetEnhancements)}
+                disabled={busy}
+                className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors mb-4"
+              >
+                <MapPin className="h-4 w-4" />
+                <span>Street Interview Enhancements</span>
+                {showStreetEnhancements ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+
+              {showStreetEnhancements && (
+                <div className="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                  {/* 7. Neighborhood Selector */}
+                  <NeighborhoodSelector
+                    value={neighborhood}
+                    onChange={setNeighborhood}
+                    disabled={busy}
+                  />
+
+                  {/* 1. Multi-Location Journey */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <StreetJourneyBuilder
+                      value={streetMultiLocationJourney}
+                      onChange={setStreetMultiLocationJourney}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 2. Street Crowd Dynamics */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <StreetCrowdPanel
+                      value={streetCrowdConfig}
+                      onChange={setStreetCrowdConfig}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 3. Urban Soundscape */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <UrbanSoundscapeSelector
+                      value={urbanSoundscape}
+                      onChange={setUrbanSoundscape}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 4. Street Plot Twist */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <StreetPlotTwistSelector
+                      value={streetPlotTwist}
+                      onChange={setStreetPlotTwist}
+                      disabled={busy}
+                      maxDuration={duration}
+                    />
+                  </div>
+
+                  {/* 6. Street Poll */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <StreetPoll
+                      value={streetPoll}
+                      onChange={setStreetPoll}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 8. Street Dramatic Moment */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <StreetDramaticMoment
+                      value={streetDramaticMoment}
+                      onChange={setStreetDramaticMoment}
+                      disabled={busy}
+                      maxDuration={duration}
+                    />
+                  </div>
+
+                  {/* 9. Street Seasonal Context */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <StreetSeasonalSelector
+                      value={streetSeasonalContext}
+                      onChange={setStreetSeasonalContext}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 10. Cross-Street Pivot */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <CrossStreetPivot
+                      value={crossStreetPivot}
+                      onChange={setCrossStreetPivot}
+                      disabled={busy}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -423,7 +1014,109 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
                   onChange={setInterviewStyle}
                   disabled={busy}
                 />
+
+                {/* Subway Line Selector */}
+                <SubwayLineSelector
+                  value={subwayLine}
+                  onChange={setSubwayLine}
+                  disabled={busy}
+                />
               </div>
+            </div>
+
+            {/* Subway Enhancements Section */}
+            <div className="border-t border-zinc-800 pt-6">
+              <button
+                type="button"
+                onClick={() => setShowEnhancements(!showEnhancements)}
+                disabled={busy}
+                className="flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors mb-4"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>Subway Enhancements</span>
+                {showEnhancements ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+
+              {showEnhancements && (
+                <div className="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                  {/* 1. Multi-Stop Journey */}
+                  <JourneyBuilder
+                    value={multiStopJourney}
+                    onChange={setMultiStopJourney}
+                    disabled={busy}
+                  />
+
+                  {/* 2. Crowd Reactions */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <CrowdReactionPanel
+                      value={crowdReactions}
+                      onChange={setCrowdReactions}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 3. Soundscape */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <SoundscapeSelector
+                      value={soundscape}
+                      onChange={setSoundscape}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 4. Plot Twist */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <PlotTwistSelector
+                      value={plotTwist}
+                      onChange={setPlotTwist}
+                      disabled={busy}
+                      maxDuration={duration}
+                    />
+                  </div>
+
+                  {/* 6. Platform Poll */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <PlatformPoll
+                      value={platformPoll}
+                      onChange={setPlatformPoll}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 8. Train Arrival Timer */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <TrainArrivalTimer
+                      value={trainArrival}
+                      onChange={setTrainArrival}
+                      disabled={busy}
+                      selectedLine={subwayLine}
+                    />
+                  </div>
+
+                  {/* 9. Seasonal Context */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <SeasonalContextSelector
+                      value={seasonalContext}
+                      onChange={setSeasonalContext}
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {/* 10. Transfer Point */}
+                  <div className="border-t border-zinc-800 pt-4">
+                    <TransferPointBuilder
+                      value={transferPoint}
+                      onChange={setTransferPoint}
+                      disabled={busy}
+                      currentLine={subwayLine}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -459,6 +1152,76 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* NEW FEATURES - Advanced Options Section */}
+        <div className="border-t border-zinc-800 pt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="h-4 w-4 text-purple-500" />
+            <span className="text-sm font-medium text-purple-400">Advanced Options</span>
+          </div>
+
+          <div className="space-y-6">
+            {/* Interview Format & Duration */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <InterviewFormatSelector
+                value={interviewFormat}
+                onChange={setInterviewFormat}
+                disabled={busy}
+              />
+              <DurationSelector
+                value={durationPreset}
+                onChange={setDurationPreset}
+                disabled={busy}
+              />
+            </div>
+
+            {/* Language & Niche */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <LanguageSelector
+                value={language}
+                onChange={setLanguage}
+                disabled={busy}
+              />
+              <NicheSelector
+                value={niche}
+                onChange={setNiche}
+                disabled={busy}
+              />
+            </div>
+
+            {/* Captions & Export */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <CaptionStyleSelector
+                value={captionStyle}
+                onChange={setCaptionStyle}
+                disabled={busy}
+              />
+              <PlatformExportSelector
+                value={exportPlatforms}
+                onChange={setExportPlatforms}
+                disabled={busy}
+              />
+            </div>
+
+            {/* Product Placement */}
+            <ProductPlacementPanel
+              config={productPlacement}
+              onChange={setProductPlacement}
+              disabled={busy}
+            />
+
+            {/* Keyword Generator */}
+            <KeywordGenerator
+              keyword={keyword}
+              onKeywordChange={setKeyword}
+              niche={niche}
+              onNicheChange={setNiche}
+              onGenerate={() => setIsGeneratingKeywords(true)}
+              isGenerating={isGeneratingKeywords}
+              disabled={busy}
+            />
           </div>
         </div>
 
@@ -508,8 +1271,21 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
           ? 'Cinematic motivational speaker clips. Choose your speaker style, setting, and camera work for maximum impact.'
           : isStreet
           ? 'Street interview clips. Pick your scene, style, and time of day for authentic vox pop content.'
+          : isWisdom
+          ? 'Wisdom interview clips for 55+ audience. Life lessons, retirement advice, and heartfelt conversations.'
           : 'SubwayTakes-style viral clips. Pick a trending question and scene for maximum engagement.'}
       </p>
+      {/* Effects Customization Modal */}
+      <EffectsCustomizeModal
+        isOpen={showEffectsModal}
+        onClose={() => setShowEffectsModal(false)}
+        clipType={clipType}
+        effects={effects}
+        onSave={(newEffects) => {
+          setEffects(newEffects);
+          setShowEffectsModal(false);
+        }}
+      />
     </div>
   );
 }

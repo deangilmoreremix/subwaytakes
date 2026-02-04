@@ -282,7 +282,9 @@ export async function listClips(filters?: {
   }
 
   if (filters?.search) {
-    query = query.or(`topic.ilike.%${filters.search}%,angle_prompt.ilike.%${filters.search}%,interview_question.ilike.%${filters.search}%`);
+    // Use parameterized queries to prevent SQL injection
+    const searchTerm = `%${filters.search}%`;
+    query = query.or(`topic.ilike.${searchTerm},angle_prompt.ilike.${searchTerm},interview_question.ilike.${searchTerm}`);
   }
 
   if (filters?.limit) {

@@ -8,6 +8,8 @@ import type {
   EpisodeStatus,
   ShotType,
   CameraDirection,
+  Beat,
+  InterviewMode,
 } from './types';
 import { generateUserId } from './format';
 import { getOrCreateDefaultHost, generateRandomGuest, DEFAULT_HOST } from './characters';
@@ -57,6 +59,8 @@ export interface CreateEpisodeOptions {
   hostCharacterId?: string;
   guestCharacterId?: string;
   customScript?: EpisodeScript;
+  beats?: Beat[];
+  interviewMode?: InterviewMode;
 }
 
 export async function createEpisode(options: CreateEpisodeOptions): Promise<Episode> {

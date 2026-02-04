@@ -1,4 +1,4 @@
-import { Sparkles, Users, Train } from 'lucide-react';
+import { Sparkles, Users, Train, Video, Heart } from 'lucide-react';
 import type { ClipType } from '../lib/types';
 import { CLIP_TYPE_INFO } from '../lib/constants';
 import { clsx } from '../lib/format';
@@ -13,17 +13,19 @@ const ICONS: Record<ClipType, React.ReactNode> = {
   motivational: <Sparkles className="h-5 w-5" />,
   street_interview: <Users className="h-5 w-5" />,
   subway_interview: <Train className="h-5 w-5" />,
+  studio_interview: <Video className="h-5 w-5" />,
+  wisdom_interview: <Heart className="h-5 w-5" />,
 };
 
 export function ClipTypeSelector({ value, onChange, disabled }: ClipTypeSelectorProps) {
-  const types: ClipType[] = ['motivational', 'street_interview', 'subway_interview'];
+  const types: ClipType[] = ['motivational', 'street_interview', 'subway_interview', 'studio_interview', 'wisdom_interview'];
 
   return (
     <div>
       <label className="block text-sm font-medium text-zinc-300 mb-3">
         Clip Type
       </label>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {types.map((type) => {
           const info = CLIP_TYPE_INFO[type];
           const isActive = value === type;

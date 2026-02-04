@@ -38,6 +38,21 @@ interface GenerateRequest {
   speech_script?: string;
   is_episode_shot?: boolean;
   episode_id?: string;
+  effects?: {
+    thumbnail?: {
+      enabled: boolean;
+      style: string;
+      emoji: string;
+      overlayText?: string;
+    };
+  };
+}
+
+interface ThumbnailConfig {
+  enabled: boolean;
+  style: string;
+  emoji: string;
+  overlayText?: string;
 }
 
 interface ModelConfig {
@@ -71,6 +86,118 @@ const MODEL_CONFIGS: Record<VideoModel, ModelConfig> = {
 
 function getModelForTier(tier: ModelTier): VideoModel {
   return tier === 'premium' ? 'veo-3.1-fast' : 'hailuo-2.3-fast';
+}
+
+// FFmpeg-based thumbnail generation
+// For Supabase Edge Functions, we use an external service
+// In a full deployment, you'd run FFmpeg via a Node.js container or use a service
+async function generateThumbnailWithFFmpeg(
+  videoUrl: string,
+  config: ThumbnailConfig
+): Promise<string | null> {
+  if (!config.enabled || !config.emoji) {
+    return null;
+  }
+
+  // Option 1: Use the FFmpeg thumbnail service (recommended for Edge Functions)
+  const ffmpegServiceUrl = Deno.env.get("FFMPEG_SERVICE_URL") || Deno.env.get("THUMBNAIL_SERVICE_URL");
+  const ffmpegServiceKey = Deno.env.get("FFMPEG_SERVICE_KEY") || Deno.env.get("THUMBNAIL_SERVICE_KEY");
+
+  if (ffmpegServiceUrl && ffmpegServiceKey) {
+    try {
+      const response = await fetch(`${ffmpegServiceUrl}/generate-thumbnail`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${ffmpegServiceKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          videoUrl: videoUrl,
+          options: {
+            width: 1280,
+            height: 720,
+            timestamp: "00:00:01",
+            emoji: config.emoji,
+            emojiPosition: { x: 640, y: 360 },
+            emojiSize: 120,
+            text: config.overlayText,
+            textPosition: { x: 640, y: 550 },
+            textFontSize: 48,
+            textColor: "white",
+            quality: 2,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // The service returns base64 data URL, return it directly
+        return data.thumbnail;
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("FFmpeg service error:", response.status, errorData);
+      }
+    } catch (error) {
+      console.error("FFmpeg service request error:", error);
+    }
+  }
+
+  // Option 2: Use Cloudinary for video thumbnails (recommended)
+  const cloudinaryCloudName = Deno.env.get("CLOUDINARY_CLOUD_NAME");
+  const cloudinaryApiKey = Deno.env.get("CLOUDINARY_API_KEY");
+  const cloudinaryApiSecret = Deno.env.get("CLOUDINARY_API_SECRET");
+
+  if (cloudinaryCloudName && cloudinaryApiKey && cloudinaryApiSecret) {
+    try {
+      // Extract public ID from video URL or use clip_id
+      const publicId = `thumbnail_${Date.now()}`;
+      
+      // Generate transformation URL for Cloudinary
+      // This creates a thumbnail with emoji overlay
+      const transformations = [
+        "w_1280,h_720,c_fill",
+        "q_auto",
+        "so_0", // Start at 0 seconds
+        "du_5", // 5 second duration for animated thumbnail
+      ];
+      
+      if (config.emoji) {
+        // Use Cloudinary text overlay for emoji
+        transformations.push(`l_text:Arial_72:${encodeURIComponent(config.emoji)},fl_layer_apply,g_center`);
+      }
+
+      if (config.overlayText) {
+        transformations.push(`l_text:Arial_36:${encodeURIComponent(config.overlayText)},fl_layer_apply,g_south`);
+      }
+
+      const transformationStr = transformations.join(",");
+      const thumbnailUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/video/upload/${transformationStr}/${encodeURIComponent(videoUrl)}`;
+      
+      // For static thumbnail (not animated)
+      const staticThumbnailUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/video/upload/so_2,w_1280,h_720,c_fill,l_text:Arial_72:${encodeURIComponent(config.emoji)},fl_layer_apply,g_center/${encodeURIComponent(videoUrl)}.jpg`;
+      
+      return staticThumbnailUrl;
+    } catch (error) {
+      console.error("Cloudinary error:", error);
+    }
+  }
+
+  // Option 3: Fallback - generate SVG placeholder (current implementation)
+  console.log('Thumbnail config:', config);
+  return `data:image/svg+xml,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#1a1a2e"/>
+          <stop offset="100%" style="stop-color:#16213e"/>
+        </linearGradient>
+      </defs>
+      <rect fill="url(#bg)" width="1280" height="720"/>
+      <text x="50%" y="45%" text-anchor="middle" font-size="160" font-family="Arial">${config.emoji}</text>
+      ${config.overlayText ? `<text x="50%" y="70%" text-anchor="middle" font-size="48" fill="white" font-family="Arial">${config.overlayText}</text>` : ''}
+      <text x="50%" y="92%" text-anchor="middle" font-size="24" fill="#888" font-family="Arial" text-transform="uppercase">${config.style}</text>
+    </svg>
+  `)}`;
 }
 
 async function generateWithMiniMax(
@@ -271,7 +398,16 @@ Deno.serve(async (req: Request) => {
       speech_script,
       is_episode_shot = false,
       episode_id,
+      effects,
     } = body;
+
+    // Extract thumbnail config
+    const thumbnailConfig: ThumbnailConfig = {
+      enabled: effects?.thumbnail?.enabled ?? false,
+      style: effects?.thumbnail?.style ?? 'viral',
+      emoji: effects?.thumbnail?.emoji ?? '',
+      overlayText: effects?.thumbnail?.overlayText,
+    };
 
     if (!clip_id) {
       return new Response(
@@ -383,11 +519,15 @@ Deno.serve(async (req: Request) => {
         }
       }
     } else {
+      // Generate thumbnail if enabled
+      const thumbnailUrl = await generateThumbnailWithFFmpeg(resultUrl, thumbnailConfig);
+      
       const { error: updateError } = await supabase
         .from("clips")
         .update({
           status: "done",
           result_url: resultUrl,
+          thumbnail_url: thumbnailUrl,
         })
         .eq("id", clip_id);
 
@@ -396,11 +536,14 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const thumbnailUrl = await generateThumbnailWithFFmpeg(resultUrl, thumbnailConfig);
+
     return new Response(
       JSON.stringify({
         success: true,
         clip_id,
         result_url: resultUrl,
+        thumbnail_url: thumbnailUrl,
         model_used: selectedModel,
         is_episode_shot,
       }),

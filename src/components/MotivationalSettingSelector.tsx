@@ -33,6 +33,8 @@ export function MotivationalSettingSelector({ value, onChange, disabled }: Motiv
               type="button"
               onClick={() => onChange(setting.value)}
               disabled={disabled}
+              aria-label={`Select ${SETTING_ICONS[setting.value]} as motivational setting`}
+              aria-pressed={isSelected}
               className={`px-3 py-2.5 rounded-lg border transition-all text-center ${
                 isSelected
                   ? 'bg-amber-500/15 border-amber-500/50 text-amber-400'

@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { Film, Sparkles, Users, Play, ChevronRight, ChevronLeft, Loader2, Flame } from 'lucide-react';
+import { Film, Sparkles, Users, Play, ChevronRight, ChevronLeft, Loader2, Flame, Music } from 'lucide-react';
 import { CityStyleSelector } from '../components/CityStyleSelector';
 import { TopicSelector } from '../components/TopicSelector';
 import { ScriptEditor } from '../components/ScriptEditor';
 import { QuestionPicker } from '../components/QuestionPicker';
+import { BeatBuilder } from '../components/BeatBuilder';
+import { InterviewModeSelector } from '../components/InterviewModeSelector';
 import { createEpisode, calculateEpisodeCost, getEstimatedGenerationTime } from '../lib/episodes';
 import { generateScript } from '../lib/scriptEngine';
 import { generateRandomGuest, DEFAULT_HOST } from '../lib/characters';
 import { incrementUsageCount } from '../lib/questionBank';
-import type { CityStyle, EpisodeScript, CharacterBible } from '../lib/types';
+import type { CityStyle, EpisodeScript, CharacterBible, Beat, InterviewMode } from '../lib/types';
 
 interface EpisodeBuilderPageProps {
   onEpisodeCreated: (episodeId: string) => void;
@@ -16,7 +18,7 @@ interface EpisodeBuilderPageProps {
   onOpenQuestionBank?: () => void;
 }
 
-type WizardStep = 'topic' | 'script' | 'characters' | 'preview' | 'generating';
+type WizardStep = 'topic' | 'script' | 'beats' | 'characters' | 'preview' | 'generating';
 
 export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBank }: EpisodeBuilderPageProps) {
   const [step, setStep] = useState<WizardStep>('topic');
@@ -30,6 +32,8 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
   const [error, setError] = useState<string | null>(null);
   const [customHookQuestion, setCustomHookQuestion] = useState('');
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+  const [beats, setBeats] = useState<Beat[]>([]);
+  const [interviewMode, setInterviewMode] = useState<InterviewMode>('none');
 
   const totalDuration = 36;
   const estimatedCost = calculateEpisodeCost(totalDuration, 'premium');
@@ -76,6 +80,8 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
         topic: selectedTopic,
         cityStyle,
         customScript: script,
+        beats: beats.length > 0 ? beats : undefined,
+        interviewMode,
       });
       onEpisodeCreated(episode.id);
     } catch (err) {
@@ -180,6 +186,45 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
           </button>
 
           <button
+            onClick={() => setStep('beats')}
+            className="flex items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400"
+          >
+            Next: Beats
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderBeatsStep() {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold text-zinc-100 mb-2">Conversation Beats</h2>
+          <p className="text-sm text-zinc-400">Structure your episode flow with beats (Take → Reaction → Discussion)</p>
+        </div>
+
+        <InterviewModeSelector
+          value={interviewMode}
+          onChange={setInterviewMode}
+        />
+
+        <BeatBuilder
+          beats={beats}
+          onChange={setBeats}
+        />
+
+        <div className="flex items-center justify-between pt-4">
+          <button
+            onClick={() => setStep('script')}
+            className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </button>
+
+          <button
             onClick={() => setStep('characters')}
             className="flex items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400"
           >
@@ -210,7 +255,7 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
 
         <div className="flex items-center justify-between pt-4">
           <button
-            onClick={() => setStep('script')}
+            onClick={() => setStep('beats')}
             className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -247,6 +292,27 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
           <h2 className="text-xl font-semibold text-zinc-100 mb-2">Episode Preview</h2>
           <p className="text-sm text-zinc-400">Review your 6-shot episode before generating</p>
         </div>
+
+        {interviewMode !== 'none' && (
+          <div className="rounded-xl border border-pink-500/30 bg-pink-500/10 p-3 flex items-center gap-3">
+            <Music className="h-4 w-4 text-pink-400" />
+            <span className="text-sm text-pink-400">
+              Interview Mode: <span className="font-medium capitalize">{interviewMode.replace(/_/g, ' ')}</span>
+            </span>
+          </div>
+        )}
+
+        {beats.length > 0 && (
+          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Music className="h-4 w-4 text-blue-400" />
+              <span className="text-sm font-medium text-blue-400">Custom Beats ({beats.length})</span>
+            </div>
+            <div className="text-xs text-blue-300/70">
+              {beats.reduce((sum, b) => sum + b.duration, 0)}s total duration
+            </div>
+          </div>
+        )}
 
         <div className="rounded-xl border border-zinc-700 bg-zinc-800/30 overflow-hidden">
           <div className="grid grid-cols-6 gap-px bg-zinc-700">
@@ -387,23 +453,23 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
 
       {step !== 'generating' && (
         <div className="flex items-center gap-2 mb-8">
-          {(['topic', 'script', 'characters', 'preview'] as const).map((s, i) => (
+          {(['topic', 'script', 'beats', 'characters', 'preview'] as const).map((s, i) => (
             <div key={s} className="flex items-center">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition ${
                   step === s
                     ? 'bg-amber-500 text-black'
-                    : ['topic', 'script', 'characters', 'preview'].indexOf(step) > i
+                    : ['topic', 'script', 'beats', 'characters', 'preview'].indexOf(step) > i
                     ? 'bg-amber-500/20 text-amber-400'
                     : 'bg-zinc-800 text-zinc-500'
                 }`}
               >
                 {i + 1}
               </div>
-              {i < 3 && (
+              {i < 4 && (
                 <div
                   className={`w-12 h-0.5 ${
-                    ['topic', 'script', 'characters', 'preview'].indexOf(step) > i
+                    ['topic', 'script', 'beats', 'characters', 'preview'].indexOf(step) > i
                       ? 'bg-amber-500/30'
                       : 'bg-zinc-800'
                   }`}
@@ -417,6 +483,7 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6">
         {step === 'topic' && renderTopicStep()}
         {step === 'script' && renderScriptStep()}
+        {step === 'beats' && renderBeatsStep()}
         {step === 'characters' && renderCharactersStep()}
         {step === 'preview' && renderPreviewStep()}
         {step === 'generating' && renderGeneratingStep()}

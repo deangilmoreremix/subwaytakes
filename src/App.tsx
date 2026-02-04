@@ -6,15 +6,17 @@ import { LibraryPage } from './pages/LibraryPage';
 import { EpisodeBuilderPage } from './pages/EpisodeBuilderPage';
 import { EpisodePage } from './pages/EpisodePage';
 import { QuestionBankPage } from './pages/QuestionBankPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
-type Page = 'create' | 'library' | 'clip' | 'episode-builder' | 'episode' | 'question-bank';
+type Page = 'dashboard' | 'create' | 'library' | 'clip' | 'episode-builder' | 'episode' | 'question-bank';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('create');
+  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
 
-  function handleNavigate(page: 'create' | 'library') {
+  function handleNavigate(page: 'dashboard' | 'create' | 'library') {
     setCurrentPage(page);
     setSelectedClipId(null);
     setSelectedEpisodeId(null);
@@ -66,52 +68,77 @@ function App() {
     setCurrentPage('episode-builder');
   }
 
+  function handleGoToDashboard() {
+    setCurrentPage('dashboard');
+    setSelectedClipId(null);
+    setSelectedEpisodeId(null);
+  }
+
+  const getHeaderPage = (): 'dashboard' | 'create' | 'library' | 'clip' => {
+    if (currentPage === 'episode-builder' || currentPage === 'question-bank') return 'create';
+    if (currentPage === 'episode') return 'library';
+    if (currentPage === 'clip') return 'create';
+    return currentPage;
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <AppHeader
-        currentPage={currentPage === 'episode-builder' ? 'create' : currentPage === 'episode' ? 'library' : currentPage === 'clip' ? 'create' : currentPage}
+        currentPage={getHeaderPage()}
         onNavigate={handleNavigate}
         onEpisodeBuilder={handleGoToEpisodeBuilder}
       />
 
       <main>
-        {currentPage === 'create' && (
-          <CreatePage onClipCreated={handleClipCreated} />
-        )}
+        <ErrorBoundary>
+          {currentPage === 'dashboard' && (
+            <DashboardPage
+              onCreateClip={() => setCurrentPage('create')}
+              onViewLibrary={() => setCurrentPage('library')}
+              onViewClip={handleSelectClip}
+              onViewEpisode={handleSelectEpisode}
+              onEpisodeBuilder={handleGoToEpisodeBuilder}
+            />
+          )}
 
-        {currentPage === 'clip' && selectedClipId && (
-          <ClipPage
-            clipId={selectedClipId}
-            onBack={handleBackFromClip}
-            onNavigateToClip={handleSelectClip}
-          />
-        )}
+          {currentPage === 'create' && (
+            <CreatePage onClipCreated={handleClipCreated} />
+          )}
 
-        {currentPage === 'library' && (
-          <LibraryPage
-            onSelectClip={handleSelectClip}
-            onSelectEpisode={handleSelectEpisode}
-          />
-        )}
+          {currentPage === 'clip' && selectedClipId && (
+            <ClipPage
+              clipId={selectedClipId}
+              onBack={handleBackFromClip}
+              onNavigateToClip={handleSelectClip}
+            />
+          )}
 
-        {currentPage === 'episode-builder' && (
-          <EpisodeBuilderPage
-            onEpisodeCreated={handleEpisodeCreated}
-            onBack={handleBackFromEpisodeBuilder}
-            onOpenQuestionBank={handleGoToQuestionBank}
-          />
-        )}
+          {currentPage === 'library' && (
+            <LibraryPage
+              onSelectClip={handleSelectClip}
+              onSelectEpisode={handleSelectEpisode}
+            />
+          )}
 
-        {currentPage === 'question-bank' && (
-          <QuestionBankPage onBack={handleBackFromQuestionBank} />
-        )}
+          {currentPage === 'episode-builder' && (
+            <EpisodeBuilderPage
+              onEpisodeCreated={handleEpisodeCreated}
+              onBack={handleBackFromEpisodeBuilder}
+              onOpenQuestionBank={handleGoToQuestionBank}
+            />
+          )}
 
-        {currentPage === 'episode' && selectedEpisodeId && (
-          <EpisodePage
-            episodeId={selectedEpisodeId}
-            onBack={handleBackFromEpisode}
-          />
-        )}
+          {currentPage === 'question-bank' && (
+            <QuestionBankPage onBack={handleBackFromQuestionBank} />
+          )}
+
+          {currentPage === 'episode' && selectedEpisodeId && (
+            <EpisodePage
+              episodeId={selectedEpisodeId}
+              onBack={handleBackFromEpisode}
+            />
+          )}
+        </ErrorBoundary>
       </main>
     </div>
   );

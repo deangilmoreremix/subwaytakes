@@ -9,16 +9,24 @@ interface TimeOfDaySelectorProps {
 }
 
 const TIME_ICONS: Record<TimeOfDay, typeof Sun> = {
-  morning: Sunrise,
+  early_morning: Sunrise,
+  morning_rush: Sunrise,
   midday: Sun,
+  evening_rush: Sunset,
+  late_night: Moon,
+  weekend: Sun,
   golden_hour: Sunset,
   dusk: CloudMoon,
   night: Moon,
 };
 
 const TIME_COLORS: Record<TimeOfDay, { bg: string; border: string; text: string }> = {
-  morning: { bg: 'bg-sky-500/15', border: 'border-sky-500/50', text: 'text-sky-400' },
+  early_morning: { bg: 'bg-indigo-500/15', border: 'border-indigo-500/50', text: 'text-indigo-400' },
+  morning_rush: { bg: 'bg-sky-500/15', border: 'border-sky-500/50', text: 'text-sky-400' },
   midday: { bg: 'bg-yellow-500/15', border: 'border-yellow-500/50', text: 'text-yellow-400' },
+  evening_rush: { bg: 'bg-orange-500/15', border: 'border-orange-500/50', text: 'text-orange-400' },
+  late_night: { bg: 'bg-purple-500/15', border: 'border-purple-500/50', text: 'text-purple-400' },
+  weekend: { bg: 'bg-teal-500/15', border: 'border-teal-500/50', text: 'text-teal-400' },
   golden_hour: { bg: 'bg-amber-500/15', border: 'border-amber-500/50', text: 'text-amber-400' },
   dusk: { bg: 'bg-rose-500/15', border: 'border-rose-500/50', text: 'text-rose-400' },
   night: { bg: 'bg-slate-500/15', border: 'border-slate-500/50', text: 'text-slate-300' },

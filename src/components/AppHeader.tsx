@@ -1,8 +1,8 @@
-import { Film, Library, Plus, Clapperboard } from 'lucide-react';
+import { Film, Library, Plus, Clapperboard, LayoutDashboard } from 'lucide-react';
 
 interface AppHeaderProps {
-  currentPage: 'create' | 'library' | 'clip';
-  onNavigate: (page: 'create' | 'library') => void;
+  currentPage: 'dashboard' | 'create' | 'library' | 'clip';
+  onNavigate: (page: 'dashboard' | 'create' | 'library') => void;
   onEpisodeBuilder?: () => void;
 }
 
@@ -12,7 +12,7 @@ export function AppHeader({ currentPage, onNavigate, onEpisodeBuilder }: AppHead
       <div className="mx-auto max-w-6xl px-4 py-4">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => onNavigate('create')}
+            onClick={() => onNavigate('dashboard')}
             className="flex items-center gap-2 text-zinc-100 hover:text-white transition"
           >
             <Film className="h-6 w-6 text-amber-400" />
@@ -20,6 +20,17 @@ export function AppHeader({ currentPage, onNavigate, onEpisodeBuilder }: AppHead
           </button>
 
           <nav className="flex items-center gap-2">
+            <button
+              onClick={() => onNavigate('dashboard')}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
+                currentPage === 'dashboard'
+                  ? 'bg-zinc-800 text-white'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+              }`}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Dashboard
+            </button>
             <button
               onClick={() => onNavigate('create')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
