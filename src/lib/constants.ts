@@ -2,6 +2,7 @@ import type {
   ClipType,
   SubwaySceneType,
   CityStyle,
+  TransitCardType,
   EnergyLevel,
   QuestionCategory,
   ModelTier,
@@ -664,29 +665,8 @@ export const STREET_SCENES: { value: StreetScene; label: string; description: st
   { value: 'quiet_neighborhood', label: 'Quiet Neighborhood', description: 'Residential, intimate feel' },
 ];
 
-export const INTERVIEW_STYLES: { value: InterviewStyle; label: string; description: string }[] = [
-  { value: 'quick_fire', label: 'Quick Fire', description: 'Rapid questions, punchy answers' },
-  { value: 'deep_conversation', label: 'Deep Conversation', description: 'Thoughtful, philosophical exchange' },
-  { value: 'man_on_street', label: 'Man on Street', description: 'Classic vox pop approach' },
-  { value: 'ambush_style', label: 'Ambush Style', description: 'Catch them off guard, raw reactions' },
-  { value: 'friendly_chat', label: 'Friendly Chat', description: 'Warm, conversational tone' },
-  { value: 'hot_take', label: 'Hot Take', description: 'Bold opinions, controversial stances' },
-  { value: 'confessional', label: 'Confessional', description: 'Intimate, vulnerable personal sharing' },
-  { value: 'debate_challenge', label: 'Debate Challenge', description: 'Confrontational, defending positions' },
-  { value: 'reaction_test', label: 'Reaction Test', description: 'Testing responses to scenarios' },
-  { value: 'serious_probe', label: 'Serious Probe', description: 'Investigative, pressing for truth' },
-  { value: 'storytelling', label: 'Storytelling', description: 'Narrative focus, personal stories' },
-  { value: 'unpopular_opinion', label: 'Unpopular Opinion', description: 'Share controversial takes' },
-  { value: 'exposed_callout', label: 'Exposed/Callout', description: 'Reveal industry secrets' },
-  { value: 'red_flag_detector', label: 'Red Flag Detector', description: 'Spot warning signs' },
-  { value: 'hot_take_react', label: 'Hot Take React', description: 'React to trending topics' },
-  { value: 'confessions', label: 'Confessions', description: 'Share personal stories' },
-  { value: 'before_after_story', label: 'Before & After', description: 'Transformation journey' },
-  { value: 'finish_sentence', label: 'Finish Sentence', description: 'Complete the prompt' },
-  { value: 'one_piece_advice', label: 'One Piece of Advice', description: 'Single powerful tip' },
-  { value: 'would_you_rather', label: 'Would You Rather', description: 'Choose between options' },
-  { value: 'street_quiz', label: 'Street Quiz', description: 'Test knowledge, trick questions' },
-];
+// Re-export for backward compatibility - canonical source is interviewStyleSpecs.ts
+export { INTERVIEW_STYLES } from './interviewStyleSpecs';
 
 // Interview Formats
 export const INTERVIEW_FORMATS: { value: InterviewFormat; label: string; description: string; icon: string }[] = [
@@ -1855,4 +1835,96 @@ export function filterModesByAge(modes: { value: InterviewMode; label: string; d
     const rule = MODE_AGE_RULES.find(r => r.mode === mode.value);
     return rule && (rule.allowedAgeGroups.includes(ageGroup) || rule.allowedAgeGroups.includes('all_ages'));
   });
+}
+
+// ============================================================================
+// CITY-SPECIFIC TRANSIT CARD TYPES
+// ============================================================================
+
+// Maps city style to authentic transit card type
+export const CITY_TRANSIT_CARDS: Record<CityStyle, TransitCardType> = {
+  nyc: 'metrocard',
+  london: 'oyster',
+  tokyo: 'suica',
+  paris: 'navigo',
+  generic: 'generic',
+};
+
+// Transit card descriptions for UI and prompts
+export const CARD_DESCRIPTIONS: Record<TransitCardType, string> = {
+  metrocard: 'NYC MetroCard - rectangular white plastic card with blue/orange stripe',
+  oyster: 'London Oyster - distinctive brown rounded rectangular card with contactless symbol',
+  suica: 'Tokyo Suica/ICOCA - thin RFID card with cartoon character branding',
+  navigo: 'Paris Navigo - rectangular card with weekly/monthly pass display window',
+  octopus: 'Hong Kong Octopus - orange-themed card with wave logo design',
+  ezlink: 'Singapore EZ-Link - colorful card with heritage Singapore imagery',
+  ventra: 'Chicago Ventra - modern blue/white card with contactless payment',
+  clipper: 'San Francisco Clipper - navy blue card with Golden Gate bridge logo',
+  presto: 'Toronto Presto - distinctive red and white card design',
+  generic: 'Generic transit card - plain rectangular card without prominent branding',
+};
+
+// City-specific card visual anchors for prompts
+export const CARD_VISUAL_ANCHORS: Record<TransitCardType, string[]> = {
+  metrocard: [
+    'Interviewer holds MetroCard by the edge, tapping it against fare reader',
+    'Card is visible in hand, showing the blue/orange stripe',
+    'Casual NYC commuter gesture with the card',
+  ],
+  oyster: [
+    'Interviewer shows Oyster card in palm, ready to tap',
+    'Brown rounded card clearly visible between fingers',
+    'Iconic London Underground gesture with the card',
+  ],
+  suica: [
+    'Interviewer holds Suica card between thumb and finger',
+    'Quick tap motion typical of Japanese transit users',
+    'Card shows cute character design (if applicable)',
+  ],
+  navigo: [
+    'Interviewer displays Navigo card showing pass window',
+    'Card held to show the weekly/monthly validation strip',
+    'Classic French transit card handling',
+  ],
+  octopus: [
+    'Interviewer shows Octopus card with wave logo',
+    'Orange card prominently displayed',
+    'Hong Kong transit style card gesture',
+  ],
+  ezlink: [
+    'Interviewer holds EZ-Link card with Singapore imagery',
+    'Colorful card visible in frame',
+    'Southeast Asian transit card handling',
+  ],
+  ventra: [
+    'Interviewer displays Ventra card with Chicago skyline hint',
+    'Modern blue/white card design visible',
+    'Midwest transit card style',
+  ],
+  clipper: [
+    'Interviewer shows Clipper card with Golden Gate logo',
+    'Navy blue card prominently displayed',
+    'Bay Area transit card gesture',
+  ],
+  presto: [
+    'Interviewer holds Presto card with distinctive red/white design',
+    'Ontario transit card handling',
+    'Canadian transit card gesture',
+  ],
+  generic: [
+    'Interviewer holds plain rectangular transit card',
+    'Card used as microphone without specific branding',
+    'Generic transit card or single-ride ticket',
+  ],
+};
+
+// Helper to get card description for UI
+export function getCardDescriptionForCity(cityStyle: CityStyle): string {
+  const cardType = CITY_TRANSIT_CARDS[cityStyle];
+  return CARD_DESCRIPTIONS[cardType];
+}
+
+// Helper to get card type for a city
+export function getTransitCardForCity(cityStyle: CityStyle): TransitCardType {
+  return CITY_TRANSIT_CARDS[cityStyle];
 }

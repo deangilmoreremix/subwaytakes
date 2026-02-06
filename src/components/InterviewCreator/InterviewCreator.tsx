@@ -8,8 +8,8 @@ import type {
   DurationPreset,
   SupportedLanguage,
 } from '../../lib/types';
+import { INTERVIEW_STYLES } from '../../lib/interviewStyleSpecs';
 import { 
-  INTERVIEW_STYLES, 
   TOPICS,
   INTERVIEW_FORMATS,
   DURATION_PRESETS,
@@ -490,6 +490,14 @@ function Step1Create({ state, onChange, onAddClip }: Step1CreateProps) {
             </button>
           ))}
         </div>
+        {/* Subway Card Mic Brand Hint */}
+        {state.contentType === 'subway_interview' && (
+          <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <p className="text-xs text-amber-400">
+              💡 Subway interviews use a card or ticket as the microphone — this is intentional and part of the brand style.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Interview Style Selection */}

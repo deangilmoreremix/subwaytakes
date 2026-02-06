@@ -28,9 +28,48 @@ import { generateEnhancedSubwayPrompt } from './subwayJourneyEngine';
 import { generateStreetEnhancementPrompt } from './streetJourneyEngine';
 import { generateMotivationalEnhancementPrompt } from './motivationalEngine';
 import { buildWisdomPrompt } from './wisdomPromptEngine';
-import { LINE_PERSONALITIES, NEIGHBORHOOD_PERSONALITIES } from './constants';
+import { LINE_PERSONALITIES, NEIGHBORHOOD_PERSONALITIES, CARD_VISUAL_ANCHORS } from './constants';
+import { hardenPrompt, mergeNegativePrompt, shouldApplyWisdomRules } from './promptHardening';
+import { buildInterviewStyleHardening } from './interviewStyleHardening';
 
 const NEGATIVE_PROMPT = 'no distorted faces, no extra limbs, no unreadable text, no watermarks, no logos, no celebrity lookalikes, no text overlays in video';
+
+// === SUBWAY CARD MIC BRAND RULE ===
+const SUBWAY_CARD_MIC_RULE = `
+MICROPHONE RULE (MANDATORY):
+- The interviewer MUST hold a flat rectangular card (subway ticket, metro card, transit pass).
+- The card is used AS the microphone and is clearly visible in the frame.
+- The card is held in the interviewer's hand and extended toward the subject.
+- NO traditional microphones, lavaliers, headsets, boom mics, or phones used as microphones.
+- The card should be plain, minimal, and realistic (no logos unless specified).
+- Camera framing must clearly show the card between interviewer and subject.
+`;
+
+const SUBWAY_NEGATIVE_PROMPT = 'no handheld microphone, no lavalier mic, no boom mic, no headset mic, no visible audio equipment, no phone used as microphone, no traditional podcast microphone';
+
+// Subway Card Mic visual anchors - reinforces the card mic in generated output
+const SUBWAY_CARD_MIC_ANCHORS = `
+- Interviewer's hand holding the subway card/ticket is visible and centered like a microphone.
+- The card stays in frame for most of the clip.
+- Use medium shot or tight two-shot; do NOT crop out hands.
+- Subject speaks naturally toward the card.
+`.trim();
+
+const SUBWAY_FORBIDDEN = `
+- No handheld microphones
+- No lavalier microphones
+- No boom microphones
+- No headset microphones
+- No phones used as microphones
+- No podcast mics
+`.trim();
+
+// Generic interview anchors that help all interview types
+const INTERVIEW_VISUAL_ANCHORS = `
+- Hands visible when interviewer is interacting with subject.
+- Documentary framing: mid-shot to close-up.
+- Natural motion and authentic reactions.
+`.trim();
 
 // 55+ WISDOM DEFAULTS - Applied to ALL interview types by default
 export const WISDOM_SYSTEM_RULES = `
@@ -142,18 +181,18 @@ const TIME_OF_DAY_PROMPTS: Record<TimeOfDay, string> = {
 };
 
 const INTERVIEWER_TYPE_PROMPTS: Record<InterviewerType, string> = {
-  podcaster: 'Professional podcast host with branded microphone, confident media presence, practiced interviewing style',
-  documentary_journalist: 'Serious documentary journalist, handheld reporter mic, press credentials visible, investigative demeanor',
-  casual_creator: 'Casual content creator, smartphone or small camera visible, influencer energy, approachable vibe',
-  news_reporter: 'Broadcast news reporter style, professional appearance, news microphone with logo, formal interviewing technique',
-  hidden_voice_only: 'Interviewer off-camera, only microphone and hand visible extending toward subject, POV perspective',
+  podcaster: 'Professional host vibe, confident media presence, practiced interviewing style (no visible traditional mic hardware).',
+  documentary_journalist: 'Serious documentary interviewer demeanor, authentic street journalism energy (no visible traditional mic hardware).',
+  casual_creator: 'Casual creator vibe, approachable, authentic energy, natural conversation flow (no visible traditional mic hardware).',
+  news_reporter: 'Broadcast reporter vibe and delivery, confident and professional (no visible traditional mic hardware).',
+  hidden_voice_only: 'Interviewer off-camera; only hand is visible extending the subway card/ticket toward subject.',
 };
 
 const INTERVIEWER_POSITION_PROMPTS: Record<InterviewerPosition, string> = {
-  holding_mic: 'Interviewer holding microphone extended toward subject, classic interview framing, mic visible in shot',
-  handheld_pov: 'First-person POV from interviewer perspective, camera moving with interviewer, immersive documentary feel',
-  two_shot_visible: 'Wide two-shot showing both interviewer and subject, conversation framing, both faces visible',
-  over_shoulder: 'Over-the-shoulder shot from behind interviewer, focus on subject face, interviewer partially visible',
+  holding_mic: 'Interviewer holding a flat subway card or transit pass in hand, extending it toward the subject AS the microphone. The card is clearly visible and central in the frame.',
+  handheld_pov: "First-person POV from interviewer perspective. The interviewer's hand is visible holding a subway card or transit pass forward like a microphone.",
+  two_shot_visible: 'Wide two-shot showing both interviewer and subject. Interviewer\'s hand holding a subway card is clearly visible between them, used as the mic.',
+  over_shoulder: 'Over-the-shoulder shot from behind interviewer. Focus on subject face but interviewer\'s hand holding the subway card mic is visible in frame.',
 };
 
 const SUBJECT_DEMOGRAPHIC_PROMPTS: Record<SubjectDemographic, string> = {
@@ -192,11 +231,11 @@ const SCENE_PROMPTS: Record<SubwaySceneType, string> = {
 };
 
 const CITY_VISUAL_CUES: Record<CityStyle, string> = {
-  nyc: 'New York City MTA subway aesthetic, white tile walls with colored trim, yellow platform edge safety line, classic NYC station signage, green globe lights at entrance',
-  london: 'London Underground aesthetic, rounded tunnel walls, Mind the Gap platform warning, roundel logo visible, deep escalators, brown and cream tiles',
-  tokyo: 'Tokyo Metro aesthetic, ultra-clean platforms, organized queuing lines on floor, digital screens, bright white lighting, orderly commuters',
-  paris: 'Paris Metro aesthetic, Art Nouveau entrance style, dark green railings, vintage tilework, Metropolitain signage, narrow platforms',
-  generic: 'Generic modern urban subway station, concrete pillars, fluorescent lighting, standard transit infrastructure',
+  nyc: `New York City MTA subway aesthetic, white tile walls with colored trim, yellow platform edge safety line, classic NYC station signage, green globe lights at entrance.\n\nINTERVIEWER CARD MIC: Hold MetroCard - rectangular white plastic card with blue/orange stripe, tapped against fare reader. Card is visible in hand showing the stripe. Casual NYC commuter gesture.`,
+  london: `London Underground aesthetic, rounded tunnel walls, Mind the Gap platform warning, roundel logo visible, deep escalators, brown and cream tiles.\n\nINTERVIEWER CARD MIC: Hold Oyster card - distinctive brown rounded rectangular card with contactless symbol, shown in palm ready to tap. Iconic London Underground gesture.`,
+  tokyo: `Tokyo Metro aesthetic, ultra-clean platforms, organized queuing lines on floor, digital screens, bright white lighting, orderly commuters.\n\nINTERVIEWER CARD MIC: Hold Suica/ICOCA/Pasmo - thin RFID card, quick tap motion between thumb and finger. Card shows cute character design.`,
+  paris: `Paris Metro aesthetic, Art Nouveau entrance style, dark green railings, vintage tilework, Metropolitain signage, narrow platforms.\n\nINTERVIEWER CARD MIC: Hold Navigo card - rectangular card with weekly/monthly pass display window, displayed to show validation strip. Classic French transit card handling.`,
+  generic: `Generic modern urban subway station, concrete pillars, fluorescent lighting, standard transit infrastructure.\n\nINTERVIEWER CARD MIC: Hold generic transit card - plain rectangular card without prominent branding, used as microphone.`,
 };
 
 const ENERGY_DESCRIPTIONS: Record<EnergyLevel, string> = {
@@ -428,7 +467,11 @@ function buildEnhancedSubwayPrompt(
     ? `Being asked: "${question}" - capture authentic reaction to this specific question.`
     : `Candid interview moment about ${topic.toLowerCase()}, authentic reactions.`;
 
-  const basePrompt = `Realistic viral subway interview clip, SubwayTakes documentary style, ${duration} seconds.
+  // Get city-specific card visual anchors
+  // Subway card mic camera framing rules
+  const CARD_MIC_CAMERA_RULES = `\nVisual Anchor (CRITICAL):\n- Close or medium shot clearly showing the interviewer's hand holding a subway card.\n- The card is positioned where a microphone would normally be.\n- Subject speaks toward the card naturally.\n- Card remains visible for most of the clip.\n\nCamera Framing (CRITICAL):\n- Medium close-up or tight two-shot showing interviewer and subject.\n- Interviewer's hand holding the subway card MUST be visible in frame.\n- Avoid extreme close-ups that hide the interviewer's hand.\n- Hands must be visible in frame - the card must NOT be cropped out.\n`;
+
+  const basePrompt = `${SUBWAY_CARD_MIC_RULE}\n\nRealistic viral subway interview clip, SubwayTakes documentary style, ${duration} seconds.
 Vertical 9:16 format. Handheld camera, raw authentic feel.
 
 Location: ${cityVisuals}
@@ -441,6 +484,7 @@ Topic: ${questionContext}
 ${energyDesc}
 
 Visual elements: Include subway ambience - train sounds, announcement echoes, commuters passing, platform activity.
+${CARD_MIC_CAMERA_RULES}
 Camera: Handheld documentary style, shallow depth of field, intimate framing, slight natural shake.
 Lighting: Natural station lighting, harsh fluorescent mixed with warmer tones.
 Mood: Urban, raw, authentic, spontaneous, real city life, viral-worthy moment.
@@ -463,7 +507,16 @@ No text inside the video frame. Single continuous shot. Capture genuine human mo
   if (angle) {
     finalPrompt += `\n\nSpecific creative direction: ${angle}`;
   }
-  
+
+  // Apply interview style hardening
+  const styleHardening = buildInterviewStyleHardening(interviewStyle);
+  if (styleHardening) {
+    finalPrompt += styleHardening;
+  }
+
+  // Add QA self-check
+  finalPrompt += `\n\nFinal QA Check (CRITICAL):\n- If the card used as the microphone is not clearly visible, regenerate the scene.\n- Do not proceed unless the subway card is present and being used as the mic.`;
+
   return finalPrompt;
 }
 
@@ -606,14 +659,46 @@ function generateVariationHint(type: ClipType): string {
 
   const options = hints[type];
   return options[Math.floor(Math.random() * options.length)];
+
 }
 
 export function createClipPlan(request: GenerateRequest): ClipPlan {
   const { videoType, topic, durationSeconds } = request;
 
+  // 1) Build the base prompt (your existing builder)
+  let base = buildProviderPrompt(request);
+
+  // 2) Apply wisdom rules only when appropriate
+  if (shouldApplyWisdomRules(request)) {
+    base = `${WISDOM_SYSTEM_RULES}\n\n${base}`;
+  }
+
+  // 3) Harden prompt with consistent sections + strong anchors/forbidden
+  let provider_prompt = base;
+
+  if (videoType === 'subway_interview') {
+    provider_prompt = hardenPrompt(provider_prompt, request, {
+      systemRules: SUBWAY_CARD_MIC_RULE.trim(),
+      visualAnchors: `${SUBWAY_CARD_MIC_ANCHORS}\n${INTERVIEW_VISUAL_ANCHORS}`,
+      forbidden: SUBWAY_FORBIDDEN,
+    });
+  } else if (videoType === 'street_interview' || videoType === 'studio_interview') {
+    provider_prompt = hardenPrompt(provider_prompt, request, {
+      visualAnchors: INTERVIEW_VISUAL_ANCHORS,
+    });
+  } else {
+    provider_prompt = hardenPrompt(provider_prompt, request);
+  }
+
+  // 4) Negative prompts - make subway stricter
+  const negative_prompt =
+    videoType === 'subway_interview'
+      ? mergeNegativePrompt(NEGATIVE_PROMPT, SUBWAY_NEGATIVE_PROMPT)
+      : NEGATIVE_PROMPT;
+
   return {
-    provider_prompt: buildProviderPrompt(request),
-    negative_prompt: NEGATIVE_PROMPT,
+    provider_prompt,
+    negative_prompt,
     video_type: videoType,
     topic,
     duration_seconds: durationSeconds,
@@ -623,7 +708,12 @@ export function createClipPlan(request: GenerateRequest): ClipPlan {
 }
 
 export function createVariationPrompt(originalPrompt: string): string {
-  return `${originalPrompt}\nVariation: change camera angle, background elements, and micro-movements; keep style and mood consistent; keep it realistic.`;
+  return `${originalPrompt}
+\nVARIATION RULES:
+- Change camera angle, background elements, micro-movements.
+- KEEP all mandatory system rules and visual anchors unchanged.
+- Keep it realistic and documentary.
+`.trim();
 }
 
 export function createBatchVariationPrompt(basePrompt: string, sequence: number, total: number): string {
@@ -641,7 +731,11 @@ export function createBatchVariationPrompt(basePrompt: string, sequence: number,
   ];
 
   const variationIndex = (sequence - 1) % variations.length;
-  return `${basePrompt}\nBatch variation ${sequence}/${total}: ${variations[variationIndex]}`;
+  return `${basePrompt}
+\nBATCH VARIATION ${sequence}/${total}:
+${variations[variationIndex]}
+\nRULE: Do not violate mandatory rules/anchors.
+`.trim();
 }
 
 // === AGE-APPROPRIATE PROMPT GENERATION ===

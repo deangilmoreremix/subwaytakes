@@ -189,6 +189,19 @@ export type SubwaySceneType =
 
 export type CityStyle = 'nyc' | 'london' | 'tokyo' | 'paris' | 'generic';
 
+// Transit card types - maps to city for authentic card mic visuals
+export type TransitCardType =
+  | 'metrocard'        // NYC
+  | 'oyster'           // London
+  | 'suica'            // Tokyo
+  | 'navigo'           // Paris
+  | 'octopus'          // Hong Kong
+  | 'ezlink'           // Singapore
+  | 'ventra'           // Chicago
+  | 'clipper'          // San Francisco
+  | 'presto'           // Toronto
+  | 'generic';         // Default
+
 export type EnergyLevel = 'calm' | 'conversational' | 'high_energy' | 'chaotic';
 
 export type SpeakerStyle =

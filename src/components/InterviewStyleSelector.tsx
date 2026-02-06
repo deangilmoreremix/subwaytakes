@@ -1,35 +1,11 @@
 import type { InterviewStyle } from '../lib/types';
-import { INTERVIEW_STYLES } from '../lib/constants';
+import { INTERVIEW_STYLES } from '../lib/interviewStyleSpecs';
 
 interface InterviewStyleSelectorProps {
   value: InterviewStyle;
   onChange: (value: InterviewStyle) => void;
   disabled?: boolean;
 }
-
-const STYLE_COLORS: Record<InterviewStyle, { bg: string; border: string; text: string }> = {
-  quick_fire: { bg: 'bg-orange-500/15', border: 'border-orange-500/50', text: 'text-orange-400' },
-  deep_conversation: { bg: 'bg-blue-500/15', border: 'border-blue-500/50', text: 'text-blue-400' },
-  man_on_street: { bg: 'bg-green-500/15', border: 'border-green-500/50', text: 'text-green-400' },
-  ambush_style: { bg: 'bg-red-500/15', border: 'border-red-500/50', text: 'text-red-400' },
-  friendly_chat: { bg: 'bg-teal-500/15', border: 'border-teal-500/50', text: 'text-teal-400' },
-  hot_take: { bg: 'bg-rose-500/15', border: 'border-rose-500/50', text: 'text-rose-400' },
-  confessional: { bg: 'bg-pink-500/15', border: 'border-pink-500/50', text: 'text-pink-400' },
-  debate_challenge: { bg: 'bg-amber-500/15', border: 'border-amber-500/50', text: 'text-amber-400' },
-  reaction_test: { bg: 'bg-cyan-500/15', border: 'border-cyan-500/50', text: 'text-cyan-400' },
-  serious_probe: { bg: 'bg-slate-500/15', border: 'border-slate-500/50', text: 'text-slate-400' },
-  storytelling: { bg: 'bg-emerald-500/15', border: 'border-emerald-500/50', text: 'text-emerald-400' },
-  unpopular_opinion: { bg: 'bg-violet-500/15', border: 'border-violet-500/50', text: 'text-violet-400' },
-  exposed_callout: { bg: 'bg-red-600/15', border: 'border-red-600/50', text: 'text-red-600' },
-  red_flag_detector: { bg: 'bg-yellow-500/15', border: 'border-yellow-500/50', text: 'text-yellow-400' },
-  hot_take_react: { bg: 'bg-orange-600/15', border: 'border-orange-600/50', text: 'text-orange-600' },
-  confessions: { bg: 'bg-pink-600/15', border: 'border-pink-600/50', text: 'text-pink-600' },
-  before_after_story: { bg: 'bg-teal-600/15', border: 'border-teal-600/50', text: 'text-teal-600' },
-  finish_sentence: { bg: 'bg-indigo-500/15', border: 'border-indigo-500/50', text: 'text-indigo-400' },
-  one_piece_advice: { bg: 'bg-amber-600/15', border: 'border-amber-600/50', text: 'text-amber-600' },
-  would_you_rather: { bg: 'bg-emerald-600/15', border: 'border-emerald-600/50', text: 'text-emerald-600' },
-  street_quiz: { bg: 'bg-blue-600/15', border: 'border-blue-600/50', text: 'text-blue-600' },
-};
 
 export function InterviewStyleSelector({ value, onChange, disabled }: InterviewStyleSelectorProps) {
   return (
@@ -40,7 +16,7 @@ export function InterviewStyleSelector({ value, onChange, disabled }: InterviewS
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {INTERVIEW_STYLES.map((style) => {
           const isSelected = value === style.value;
-          const colors = STYLE_COLORS[style.value];
+          const colors = style.colors;
 
           return (
             <button
@@ -53,6 +29,7 @@ export function InterviewStyleSelector({ value, onChange, disabled }: InterviewS
                   ? `${colors.bg} ${colors.border} ring-1 ring-current/30`
                   : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800'
               } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={style.description}
             >
               <span className={`text-sm font-medium whitespace-nowrap ${isSelected ? colors.text : 'text-white'}`}>
                 {style.label}
