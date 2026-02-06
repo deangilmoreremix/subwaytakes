@@ -1,201 +1,261 @@
 import { useMemo, useState } from "react";
-import type { ClipBuilderState } from "./clipBuilder.types";
+import type { WizardState, WizardStepId } from "./clipBuilder.types";
 import { StepVideoType } from "./steps/StepVideoType";
+import { StepAudienceVibe } from "./steps/StepAudienceVibe";
+import { StepTopicQuestion } from "./steps/StepTopicQuestion";
 import { StepInterviewStyle } from "./steps/StepInterviewStyle";
-import { SubwayCardMicPanel, DEFAULT_SUBWAY_CARD_MIC } from "./ui/SubwayCardMicPanel";
-
-type StepId = "type" | "style" | "prompt" | "summary";
+import { ClipSummaryCard } from "./ui/ClipSummaryCard";
+import { SubwayCardMicPanel } from "./ui/SubwayCardMicPanel";
+import { PERSONAS } from "./data/personas";
+import { VIBES } from "./data/vibes";
+import { DEFAULT_SUBWAY_CARD_MIC } from "./clipBuilder.types";
 
 export function ClipBuilderWizard() {
-  const [state, setState] = useState<ClipBuilderState>({
+  const [state, setState] = useState<WizardState>({
     durationSeconds: 6,
   });
-  const [step, setStep] = useState<StepId>("type");
+  const [step, setStep] = useState<WizardStepId>("type");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const canGoStyle = !!state.videoType;
-  const canGoPrompt = !!state.videoType && !!state.interviewStyle;
-  const canGoSummary = canGoPrompt && !!state.topic?.trim();
+  // Step navigation logic
+  const canGoAudience = !!state.videoType;
+  const canGoTopic = !!(state.personaId && state.vibeId);
+  const canGoStyle = !!(state.topic && state.question);
+  const canGoSummary = canGoStyle;
 
   const nextEnabled = useMemo(() => {
-    if (step === "type") return canGoStyle;
-    if (step === "style") return canGoPrompt;
-    if (step === "prompt") return canGoSummary;
+    if (step === "type") return canGoAudience;
+    if (step === "audience") return canGoTopic;
+    if (step === "topic") return canGoStyle;
     return false;
-  }, [step, canGoStyle, canGoPrompt, canGoSummary]);
+  }, [step, canGoAudience, canGoTopic, canGoStyle]);
 
   const goNext = () => {
     if (!nextEnabled) return;
     setStep((s) => {
-      if (s === "type") return "style";
-      if (s === "style") return "prompt";
-      if (s === "prompt") return "summary";
+      if (s === "type") return "audience";
+      if (s === "audience") return "topic";
+      if (s === "topic") return "style";
+      if (s === "style") return "summary";
       return s;
     });
   };
 
   const goBack = () => {
     setStep((s) => {
-      if (s === "summary") return "prompt";
-      if (s === "prompt") return "style";
-      if (s === "style") return "type";
+      if (s === "summary") return "style";
+      if (s === "style") return "topic";
+      if (s === "topic") return "audience";
+      if (s === "audience") return "type";
       return s;
     });
   };
 
+  // Handle persona/vibe changes with auto-derivation
+  const handleAudienceVibeChange = (data: { personaId: string; vibeId: string }) => {
+    const persona = PERSONAS.find((p) => p.id === data.personaId);
+    const vibe = VIBES.find((v) => v.id === data.vibeId);
+
+    setState((prev) => ({
+      ...prev,
+      ...data,
+      ageGroup: persona?.ageGroup,
+      energyLevel: persona?.energyLevel || vibe?.energyLevel,
+      tone: persona?.tone,
+      durationSeconds: vibe?.durationRange[0] || prev.durationSeconds,
+    }));
+  };
+
+  // Handle topic/question changes
+  const handleTopicQuestionChange = (data: { topic: string; question: string; spiceTags: string[] }) => {
+    setState((prev) => ({
+      ...prev,
+      ...data,
+    }));
+  };
+
+  // Summary state check
+  const isComplete = !!(state.videoType && state.personaId && state.vibeId && state.topic && state.question);
+
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6">
-      {/* Top stepper */}
-      <div className="mb-6 flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
-        <div className="flex items-center gap-2 text-sm">
-          <StepDot label="Type" active={step === "type"} done={!!state.videoType} />
-          <StepDot label="Style" active={step === "style"} done={!!state.interviewStyle} />
-          <StepDot label="Prompt" active={step === "prompt"} done={!!state.topic?.trim()} />
-          <StepDot label="Summary" active={step === "summary"} done={step === "summary"} />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={goBack}
-            disabled={step === "type"}
-            className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 disabled:opacity-40"
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={goNext}
-            disabled={!nextEnabled}
-            className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-
-      {/* Step: Video Type */}
-      {step === "type" && (
-        <StepVideoType
-          value={state.videoType}
-          onChange={(videoType) => {
-            setState((prev) => ({
-              ...prev,
-              videoType,
-              interviewStyle: undefined,
-              topic: prev.topic,
-            }));
-          }}
-        />
-      )}
-
-      {/* Step: Interview Style */}
-      {step === "style" && state.videoType && (
-        <StepInterviewStyle
-          videoType={state.videoType}
-          value={state.interviewStyle}
-          onChange={(interviewStyle) => setState((prev) => ({ ...prev, interviewStyle }))}
-        />
-      )}
-
-      {/* Step: Prompt */}
-      {step === "prompt" && (
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold text-white">What should we ask about?</h2>
-            <p className="text-sm text-zinc-400">
-              Give us a topic, and optionally some direction.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-2">
-                Topic or Question
-              </label>
-              <textarea
-                value={state.topic ?? ""}
-                onChange={(e) => setState((prev) => ({ ...prev, topic: e.target.value }))}
-                placeholder="e.g., What's the best advice you've ever received?"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:border-white/20 focus:outline-none"
-                rows={3}
-              />
+    <div className="mx-auto w-full max-w-6xl px-4 py-6">
+      {/* Two-column layout for larger screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main content area */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Top stepper */}
+          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm overflow-x-auto">
+              <StepDot label="Type" active={step === "type"} done={!!state.videoType} />
+              <StepDot label="Audience" active={step === "audience"} done={!!state.personaId} />
+              <StepDot label="Topic" active={step === "topic"} done={!!state.question} />
+              <StepDot label="Style" active={step === "style"} done={!!state.interviewStyle} />
+              <StepDot label="Generate" active={step === "summary"} done={isComplete} />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-2">
-                Direction (optional)
-              </label>
-              <textarea
-                value={state.direction ?? ""}
-                onChange={(e) => setState((prev) => ({ ...prev, direction: e.target.value }))}
-                placeholder="e.g., Push for a controversial answer"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:border-white/20 focus:outline-none"
-                rows={2}
-              />
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={goBack}
+                disabled={step === "type"}
+                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 disabled:opacity-40"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={!nextEnabled}
+                className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-40"
+              >
+                {step === "style" ? "Review" : step === "summary" ? "✓" : "Next"}
+              </button>
             </div>
           </div>
 
-          {/* Subway Card Mic Panel (only for subway) */}
-          {state.videoType === "subway_interview" && (
-            <SubwayCardMicPanel
-              value={state.subwayCardMic ?? DEFAULT_SUBWAY_CARD_MIC}
-              onChange={(patch) =>
+          {/* Step: Video Type */}
+          {step === "type" && (
+            <StepVideoType
+              value={state.videoType}
+              onChange={(videoType) => {
                 setState((prev) => ({
                   ...prev,
-                  subwayCardMic: { ...(prev.subwayCardMic ?? DEFAULT_SUBWAY_CARD_MIC), ...patch },
-                }))
-              }
+                  videoType,
+                  // Reset dependent fields
+                  personaId: undefined,
+                  vibeId: undefined,
+                  topic: undefined,
+                  question: undefined,
+                }));
+              }}
             />
           )}
 
-          {/* Next step hint */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 text-sm text-zinc-300">
-            <span className="font-semibold text-white">Next:</span> review your settings and generate.
+          {/* Step: Audience & Vibe */}
+          {step === "audience" && (
+            <StepAudienceVibe
+              personaId={state.personaId}
+              vibeId={state.vibeId}
+              onChange={handleAudienceVibeChange}
+            />
+          )}
+
+          {/* Step: Topic & Question */}
+          {step === "topic" && (
+            <StepTopicQuestion
+              topic={state.topic}
+              question={state.question}
+              spiceTags={state.spiceTags}
+              onChange={handleTopicQuestionChange}
+            />
+          )}
+
+          {/* Step: Interview Style */}
+          {step === "style" && (
+            <div className="space-y-6">
+              <StepInterviewStyle
+                videoType={state.videoType!}
+                value={state.interviewStyle}
+                onChange={(interviewStyle) => setState((prev) => ({ ...prev, interviewStyle }))}
+              />
+
+              {/* Advanced Settings Toggle */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white"
+                >
+                  <span>{showAdvanced ? "▼" : "▶"}</span>
+                  Advanced Settings (Optional)
+                </button>
+
+                {showAdvanced && (
+                  <div className="mt-4 space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+                    {/* Model Tier */}
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-2">
+                        Model Quality
+                      </label>
+                      <select
+                        value={state.modelTier || "standard"}
+                        onChange={(e) => setState((prev) => ({ ...prev, modelTier: e.target.value as WizardState["modelTier"] }))}
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200"
+                      >
+                        <option value="standard">Standard</option>
+                        <option value="premium">Premium</option>
+                      </select>
+                    </div>
+
+                    {/* Duration */}
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-2">
+                        Duration: {state.durationSeconds}s
+                      </label>
+                      <input
+                        type="range"
+                        min="3"
+                        max="15"
+                        value={state.durationSeconds || 6}
+                        onChange={(e) => setState((prev) => ({ ...prev, durationSeconds: parseInt(e.target.value) }))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    {/* Subway Card Mic Panel */}
+                    {state.videoType === "subway_interview" && (
+                      <SubwayCardMicPanel
+                        value={state.subwayCardMic ?? DEFAULT_SUBWAY_CARD_MIC}
+                        onChange={(patch) =>
+                          setState((prev) => ({
+                            ...prev,
+                            subwayCardMic: { ...(prev.subwayCardMic ?? DEFAULT_SUBWAY_CARD_MIC), ...patch },
+                          }))
+                        }
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Step: Summary */}
+          {step === "summary" && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Ready to generate</h2>
+                <p className="text-sm text-zinc-400">
+                  Review your settings and click generate to create your clip.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="w-full rounded-xl bg-white py-4 text-base font-semibold text-zinc-900 hover:bg-zinc-100 flex items-center justify-center gap-2"
+                onClick={() => {
+                  // TODO: Implement generation with prompt hardening
+                  alert("Generation would start here with the following state:\n\n" + JSON.stringify(state, null, 2));
+                }}
+              >
+                <span className="text-lg">⚡</span>
+                Generate My Clip
+              </button>
+
+              <div className="text-center text-xs text-zinc-500">
+                ~{state.durationSeconds || 6} seconds • 1 vertical clip • Captions included
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar - Summary Card (sticky) */}
+        <div className="hidden lg:block">
+          <div className="sticky top-4">
+            <ClipSummaryCard state={state} />
           </div>
         </div>
-      )}
-
-      {/* Step: Summary */}
-      {step === "summary" && (
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold text-white">Ready to generate</h2>
-            <p className="text-sm text-zinc-400">
-              Review your settings before creating the clip.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
-            <div className="flex justify-between">
-              <span className="text-zinc-400">Type</span>
-              <span className="text-white font-medium">{state.videoType}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-400">Style</span>
-              <span className="text-white font-medium">{state.interviewStyle}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-400">Topic</span>
-              <span className="text-white font-medium">{state.topic}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-400">Duration</span>
-              <span className="text-white font-medium">{state.durationSeconds}s</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="w-full rounded-xl bg-white py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-100"
-            onClick={() => {
-              // TODO: Implement generation
-              alert("Generation not implemented yet");
-            }}
-          >
-            Generate Clip
-          </button>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -205,11 +265,11 @@ function StepDot({ label, active, done }: { label: string; active: boolean; done
     <div className="flex items-center gap-2">
       <span
         className={[
-          "h-2.5 w-2.5 rounded-full",
+          "h-2.5 w-2.5 rounded-full shrink-0",
           done ? "bg-emerald-400" : active ? "bg-white" : "bg-zinc-700",
         ].join(" ")}
       />
-      <span className={active ? "text-white" : "text-zinc-400"}>{label}</span>
+      <span className={active ? "text-white" : "text-zinc-400 whitespace-nowrap"}>{label}</span>
     </div>
   );
 }
