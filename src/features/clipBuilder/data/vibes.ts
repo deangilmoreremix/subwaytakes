@@ -60,8 +60,4 @@ export function getVibeById(id: string): VibePreset | undefined {
   return VIBES.find((v) => v.id === id);
 }
 
-export function getVibesForVideoType(_videoType: string): VibePreset[] {
-  // Filter vibes based on video type if needed
-  // For now, return all vibes
-  return VIBES;
-}
+export { VIBES as default };

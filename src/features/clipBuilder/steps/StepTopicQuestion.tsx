@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { TopicOption, SpiceOption } from "../data/topics";
+import type { TopicOption } from "../data/topics";
 import { TOPICS, SPICE_OPTIONS } from "../data/topics";
 
 export interface StepTopicQuestionProps {

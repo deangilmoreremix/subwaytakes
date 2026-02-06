@@ -89,8 +89,4 @@ export function getPersonaById(id: string): Persona | undefined {
   return PERSONAS.find((p) => p.id === id);
 }
 
-export function getPersonasForVideoType(_videoType: string): Persona[] {
-  // Filter personas based on video type if needed
-  // For now, return all personas
-  return PERSONAS;
-}
+export { PERSONAS as default };

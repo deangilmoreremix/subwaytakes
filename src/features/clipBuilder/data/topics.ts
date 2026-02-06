@@ -117,12 +117,6 @@ export function getTopicById(id: string): TopicOption | undefined {
   return TOPICS.find((t) => t.id === id);
 }
 
-export function getTopicsForAgeGroup(_ageGroup: string): TopicOption[] {
-  // Filter topics based on age group if needed
-  // For now, return all topics
-  return TOPICS;
-}
-
 /**
  * Spice modifiers for questions.
  */

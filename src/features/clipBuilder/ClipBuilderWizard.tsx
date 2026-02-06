@@ -21,7 +21,6 @@ export function ClipBuilderWizard() {
   const canGoAudience = !!state.videoType;
   const canGoTopic = !!(state.personaId && state.vibeId);
   const canGoStyle = !!(state.topic && state.question);
-  const canGoSummary = canGoStyle;
 
   const nextEnabled = useMemo(() => {
     if (step === "type") return canGoAudience;
