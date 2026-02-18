@@ -59,7 +59,20 @@ export function TemplatePreviewCard({ template, compact = false }: TemplatePrevi
         }}
       >
         {template.logo_enabled && (
-          <span style={{ fontSize: 10 * scale }}>🚇</span>
+          template.logo_url ? (
+            <img
+              src={template.logo_url}
+              alt=""
+              style={{
+                width: (template.logo_width || 40) * scale * 0.65,
+                height: (template.logo_height || 40) * scale * 0.65,
+                objectFit: 'contain',
+                borderRadius: 4,
+              }}
+            />
+          ) : (
+            <span style={{ fontSize: 10 * scale }}>🚇</span>
+          )
         )}
         <span
           style={{

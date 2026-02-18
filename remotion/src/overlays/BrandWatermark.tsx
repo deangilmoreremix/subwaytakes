@@ -9,6 +9,9 @@ interface BrandWatermarkProps {
   fontSize?: number;
   opacity?: number;
   showLogo?: boolean;
+  logoUrl?: string | null;
+  logoWidth?: number;
+  logoHeight?: number;
 }
 
 export const BrandWatermark: React.FC<BrandWatermarkProps> = ({
@@ -19,6 +22,9 @@ export const BrandWatermark: React.FC<BrandWatermarkProps> = ({
   fontSize = 18,
   opacity = 0.85,
   showLogo = true,
+  logoUrl = null,
+  logoWidth = 40,
+  logoHeight = 40,
 }) => {
   const fadeIn = interpolate(frame, [0, fps * 0.5], [0, 1], {
     extrapolateRight: "clamp",
@@ -54,21 +60,34 @@ export const BrandWatermark: React.FC<BrandWatermarkProps> = ({
       }}
     >
       {showLogo && (
-        <div
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            background: "rgba(255,255,255,0.15)",
-            backdropFilter: "blur(8px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 16,
-          }}
-        >
-          🚇
-        </div>
+        logoUrl ? (
+          <img
+            src={logoUrl}
+            style={{
+              width: logoWidth,
+              height: logoHeight,
+              objectFit: "contain",
+              borderRadius: 6,
+              filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.5))",
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              background: "rgba(255,255,255,0.15)",
+              backdropFilter: "blur(8px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 16,
+            }}
+          >
+            🚇
+          </div>
+        )
       )}
       <span
         style={{

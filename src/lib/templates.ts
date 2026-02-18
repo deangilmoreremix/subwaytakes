@@ -16,6 +16,9 @@ export interface VideoTemplate {
   watermark_opacity: number;
   logo_enabled: boolean;
   logo_position: string;
+  logo_url: string | null;
+  logo_width: number;
+  logo_height: number;
   episode_prefix_format: string;
   caption_font: string;
   caption_font_size: number;
@@ -132,6 +135,38 @@ export async function duplicateTemplate(
     user_id: userId,
     is_default: false,
   });
+}
+
+export async function uploadTemplateLogo(
+  templateId: string,
+  file: File
+): Promise<string | null> {
+  const ext = file.name.split('.').pop() || 'png';
+  const path = `logos/${templateId}/${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('template-logos')
+    .upload(path, file, {
+      contentType: file.type,
+      upsert: true,
+    });
+
+  if (uploadError) {
+    console.error('Logo upload error:', uploadError);
+    return null;
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('template-logos')
+    .getPublicUrl(path);
+
+  await updateTemplate(templateId, { logo_url: publicUrl } as Partial<VideoTemplate>);
+  return publicUrl;
+}
+
+export async function removeTemplateLogo(templateId: string): Promise<boolean> {
+  const result = await updateTemplate(templateId, { logo_url: null } as Partial<VideoTemplate>);
+  return result !== null;
 }
 
 export async function triggerComposeOverlay(episodeId: string): Promise<void> {

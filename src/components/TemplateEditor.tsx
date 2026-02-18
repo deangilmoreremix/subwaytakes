@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   ArrowLeft,
   Save,
@@ -7,10 +7,13 @@ import {
   Crosshair,
   Thermometer,
   BarChart3,
+  Upload,
+  X,
+  Image,
 } from 'lucide-react';
 import { clsx } from '../lib/format';
 import type { VideoTemplate } from '../lib/templates';
-import { createTemplate, updateTemplate } from '../lib/templates';
+import { createTemplate, updateTemplate, uploadTemplateLogo, removeTemplateLogo } from '../lib/templates';
 import { TemplatePreviewCard } from './TemplatePreviewCard';
 
 interface TemplateEditorProps {
@@ -50,6 +53,9 @@ export function TemplateEditor({ template, onBack, onSaved }: TemplateEditorProp
     watermark_opacity: template?.watermark_opacity || 0.85,
     logo_enabled: template?.logo_enabled ?? true,
     logo_position: template?.logo_position || 'top-left',
+    logo_url: template?.logo_url || null,
+    logo_width: template?.logo_width || 40,
+    logo_height: template?.logo_height || 40,
     episode_prefix_format: template?.episode_prefix_format || 'Episode {number}:',
     caption_font: template?.caption_font || 'Inter',
     caption_font_size: template?.caption_font_size || 40,
@@ -69,6 +75,26 @@ export function TemplateEditor({ template, onBack, onSaved }: TemplateEditorProp
   });
 
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleLogoUpload(file: File) {
+    if (!template?.id) return;
+    setUploading(true);
+    const url = await uploadTemplateLogo(template.id, file);
+    if (url) {
+      setForm((prev) => ({ ...prev, logo_url: url }));
+    }
+    setUploading(false);
+  }
+
+  async function handleLogoRemove() {
+    if (!template?.id) return;
+    setUploading(true);
+    await removeTemplateLogo(template.id);
+    setForm((prev) => ({ ...prev, logo_url: null }));
+    setUploading(false);
+  }
 
   const previewTemplate: VideoTemplate = {
     id: template?.id || '',
@@ -231,13 +257,98 @@ export function TemplateEditor({ template, onBack, onSaved }: TemplateEditorProp
                 <span className="text-xs text-zinc-500">{Math.round(form.watermark_opacity * 100)}%</span>
               </Field>
             </div>
-            <Field label="Show Logo Icon">
+            <Field label="Show Logo">
               <ToggleSwitch
                 enabled={form.logo_enabled}
                 onChange={(v) => update('logo_enabled', v)}
                 disabled={isReadOnly}
               />
             </Field>
+            {form.logo_enabled && (
+              <div className="space-y-3">
+                <Field label="Custom Logo Image">
+                  {form.logo_url ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-lg bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center">
+                        <img
+                          src={form.logo_url}
+                          alt="Logo"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-zinc-400 truncate">{form.logo_url.split('/').pop()}</p>
+                      </div>
+                      {!isReadOnly && (
+                        <button
+                          onClick={handleLogoRemove}
+                          disabled={uploading}
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleLogoUpload(file);
+                        }}
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isReadOnly || uploading || isNew}
+                        className={clsx(
+                          'flex items-center gap-2 px-4 py-3 rounded-lg border border-dashed text-sm transition-colors w-full justify-center',
+                          isNew
+                            ? 'border-zinc-700 text-zinc-600 cursor-not-allowed'
+                            : 'border-zinc-600 text-zinc-400 hover:border-amber-500/50 hover:text-amber-400'
+                        )}
+                      >
+                        {uploading ? (
+                          <span className="text-amber-400">Uploading...</span>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            {isNew ? 'Save template first to upload' : 'Upload Logo (PNG, JPG, SVG)'}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Logo Width">
+                    <input
+                      type="number"
+                      min={16}
+                      max={120}
+                      value={form.logo_width}
+                      onChange={(e) => update('logo_width', Number(e.target.value))}
+                      disabled={isReadOnly}
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm focus:outline-none focus:border-amber-500"
+                    />
+                  </Field>
+                  <Field label="Logo Height">
+                    <input
+                      type="number"
+                      min={16}
+                      max={120}
+                      value={form.logo_height}
+                      onChange={(e) => update('logo_height', Number(e.target.value))}
+                      disabled={isReadOnly}
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm focus:outline-none focus:border-amber-500"
+                    />
+                  </Field>
+                </div>
+              </div>
+            )}
           </Section>
 
           <Section title="Captions" icon={<Crosshair className="w-4 h-4" />}>

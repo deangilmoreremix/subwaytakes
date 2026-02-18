@@ -74,14 +74,29 @@ function buildOverlayEntries(
   template: VideoTemplate,
   episodeNumber: number | null,
   hookQuestion: string,
+  reactionLine: string | null,
   shots: Array<{
     dialogue: string | null;
     speaker: string | null;
     duration_seconds: number;
     sequence: number;
+    shot_type: string | null;
   }>
 ): OverlayTextEntry[] {
   const entries: OverlayTextEntry[] = [];
+
+  const sortedShots = [...shots].sort((a, b) => a.sequence - b.sequence);
+
+  const shotTimestamps: Array<{ start: number; end: number }> = [];
+  let cumulative = 0;
+  for (const shot of sortedShots) {
+    shotTimestamps.push({
+      start: cumulative,
+      end: cumulative + shot.duration_seconds,
+    });
+    cumulative += shot.duration_seconds;
+  }
+  const totalDuration = cumulative;
 
   const watermarkPos = positionToXY(template.watermark_position, 1080, 1920);
   entries.push({
@@ -91,7 +106,7 @@ function buildOverlayEntries(
     fontSize: template.watermark_font_size,
     color: template.watermark_color,
     startTime: 0,
-    endTime: 9999,
+    endTime: totalDuration,
     boxEnabled: false,
   });
 
@@ -103,6 +118,7 @@ function buildOverlayEntries(
     : `${template.watermark_text} ${hookQuestion}`;
 
   const captionPos = positionToXY(template.caption_position, 1080, 1920);
+  const titleEnd = Math.min(14, totalDuration);
   entries.push({
     text: titleText,
     x: captionPos.x,
@@ -110,36 +126,45 @@ function buildOverlayEntries(
     fontSize: template.caption_font_size,
     color: template.caption_color,
     startTime: 0,
-    endTime: 14,
+    endTime: titleEnd,
     boxEnabled: true,
     boxColor: `black@${template.caption_bg_opacity}`,
   });
 
   if (template.reaction_text_enabled) {
-    let currentTime = 0;
-    for (const shot of shots) {
-      if (
-        shot.speaker === "host" &&
-        shot.dialogue &&
-        (shot.sequence === 4 || shot.sequence === 6)
-      ) {
-        const reactionPos = positionToXY(
-          template.reaction_text_position,
-          1080,
-          1920
-        );
+    const reactionPos = positionToXY(
+      template.reaction_text_position,
+      1080,
+      1920
+    );
+
+    for (let i = 0; i < sortedShots.length; i++) {
+      const shot = sortedShots[i];
+      const ts = shotTimestamps[i];
+
+      if (shot.shot_type === "reaction" && reactionLine) {
+        entries.push({
+          text: reactionLine,
+          x: reactionPos.x,
+          y: reactionPos.y,
+          fontSize: template.reaction_text_font_size,
+          color: template.caption_color,
+          startTime: ts.start + 0.5,
+          endTime: ts.end - 0.3,
+          boxEnabled: false,
+        });
+      } else if (shot.shot_type === "close" && shot.dialogue) {
         entries.push({
           text: shot.dialogue,
           x: reactionPos.x,
           y: reactionPos.y,
           fontSize: template.reaction_text_font_size,
           color: template.caption_color,
-          startTime: currentTime + 0.5,
-          endTime: currentTime + shot.duration_seconds - 0.5,
+          startTime: ts.start + 1,
+          endTime: ts.end - 0.5,
           boxEnabled: false,
         });
       }
-      currentTime += shot.duration_seconds;
     }
   }
 
@@ -278,17 +303,20 @@ Deno.serve(async (req: Request) => {
 
     const { data: shots } = await supabase
       .from("episode_shots")
-      .select("dialogue, speaker, duration_seconds, sequence")
+      .select("dialogue, speaker, duration_seconds, sequence, shot_type")
       .eq("episode_id", episode_id)
       .order("sequence");
 
     const hookQuestion =
       episode.episode_scripts?.hook_question || "Subway interview";
+    const reactionLine =
+      episode.episode_scripts?.reaction_line || null;
 
     const overlays = buildOverlayEntries(
       template,
       episode.episode_number,
       hookQuestion,
+      reactionLine,
       shots || []
     );
 

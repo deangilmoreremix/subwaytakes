@@ -1567,11 +1567,15 @@ export interface Episode {
   error: string | null;
   created_at: string;
   completed_at: string | null;
+  template_id: string | null;
+  episode_number: number | null;
+  overlay_status: string | null;
+  composed_video_url: string | null;
+  thumbnail_variants: Record<string, string> | null;
   script?: EpisodeScript;
   host_character?: CharacterBible;
   guest_character?: CharacterBible;
   shots?: EpisodeShot[];
-  // New fields for beats
   beats?: Beat[];
 }
 
