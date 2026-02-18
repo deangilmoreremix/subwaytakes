@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Thumbnail Service with FFmpeg
+  thumbnail-service:
+    build:
+      context: ./thumbnail-service
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - FFMPEG_PATH=/usr/bin/ffmpeg
+      - FFPROBE_PATH=/usr/bin/ffprobe
+      - NODE_ENV=production
+    volumes:
+      - thumbnail-temp:/tmp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Main Application (Vite + React)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_THUMBNAIL_SERVICE_URL=http://thumbnail-service:3001
+    depends_on:
+      - thumbnail-service
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    restart: unless-stopped
+
+volumes:
+  thumbnail-temp:
+    driver: local

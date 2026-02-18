@@ -363,6 +363,300 @@ app.post('/add-watermark', upload.single('video'), async (req: Request, res: Res
   }
 });
 
+// POST /stitch-videos - Stitch multiple videos together
+app.post('/stitch-videos', async (req: Request, res: Response): Promise<void> => {
+  const { videoUrls, transitionType, transitionDuration } = req.body as {
+    videoUrls: string[];
+    transitionType?: 'fade' | 'crossfade' | 'none';
+    transitionDuration?: number;
+  };
+
+  if (!videoUrls || videoUrls.length === 0) {
+    res.status(400).json({ error: 'videoUrls array is required' });
+    return;
+  }
+
+  const stitchId = uuidv4();
+  const outputPath = `/tmp/outputs/${stitchId}.mp4`;
+  const downloadedPaths: string[] = [];
+
+  try {
+    // Download all videos
+    for (const url of videoUrls) {
+      const path = await downloadVideo(url);
+      downloadedPaths.push(path);
+    }
+
+    // Create concat file
+    const concatFile = `/tmp/${stitchId}_concat.txt`;
+    const concatContent = downloadedPaths.map(p => `file '${p}'`).join('\n');
+    fs.writeFileSync(concatFile, concatContent);
+
+    // Stitch videos
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg()
+        .input(concatFile)
+        .inputOptions(['-f', 'concat', '-safe', '0'])
+        .outputOptions(['-c', 'copy', '-y'])
+        .output(outputPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+
+    // Read result
+    const videoBuffer = fs.readFileSync(outputPath);
+    const base64Video = videoBuffer.toString('base64');
+
+    // Cleanup
+    downloadedPaths.forEach(p => fs.existsSync(p) && fs.unlinkSync(p));
+    fs.existsSync(concatFile) && fs.unlinkSync(concatFile);
+    fs.existsSync(outputPath) && fs.unlinkSync(outputPath);
+
+    res.json({
+      success: true,
+      video: `data:video/mp4;base64,${base64Video}`,
+      stitchId,
+      videoCount: videoUrls.length
+    });
+
+  } catch (error: any) {
+    console.error('Error stitching videos:', error);
+    downloadedPaths.forEach(p => fs.existsSync(p) && fs.unlinkSync(p));
+    res.status(500).json({ error: error.message || 'Failed to stitch videos' });
+  }
+});
+
+// POST /add-captions - Burn captions into video
+app.post('/add-captions', async (req: Request, res: Response): Promise<void> => {
+  const { videoUrl, captionText, captionStyle } = req.body as {
+    videoUrl: string;
+    captionText: string;
+    captionStyle?: {
+      fontSize?: number;
+      fontColor?: string;
+      position?: 'top' | 'bottom' | 'center';
+      backgroundColor?: string;
+    };
+  };
+
+  if (!videoUrl || !captionText) {
+    res.status(400).json({ error: 'videoUrl and captionText are required' });
+    return;
+  }
+
+  const captionId = uuidv4();
+  const outputPath = `/tmp/outputs/${captionId}.mp4`;
+  let inputPath: string | undefined;
+
+  try {
+    inputPath = await downloadVideo(videoUrl);
+
+    const fontSize = captionStyle?.fontSize || 48;
+    const fontColor = captionStyle?.fontColor || 'white';
+    const bgColor = captionStyle?.backgroundColor || 'black@0.5';
+
+    // Calculate position
+    let yPosition = '(h-text_h)/2'; // center
+    if (captionStyle?.position === 'top') {
+      yPosition = '50';
+    } else if (captionStyle?.position === 'bottom') {
+      yPosition = 'h-text_h-50';
+    }
+
+    const drawtext = `drawtext=text='${captionText.replace(/'/g, "\\'")}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2:y=${yPosition}:box=1:boxcolor=${bgColor}:boxborderw=10`;
+
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(inputPath!)
+        .videoFilters(drawtext)
+        .outputOptions(['-c:a', 'copy', '-y'])
+        .output(outputPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+
+    const videoBuffer = fs.readFileSync(outputPath);
+    const base64Video = videoBuffer.toString('base64');
+
+    // Cleanup
+    fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+    fs.existsSync(outputPath) && fs.unlinkSync(outputPath);
+
+    res.json({
+      success: true,
+      video: `data:video/mp4;base64,${base64Video}`,
+      captionId
+    });
+
+  } catch (error: any) {
+    console.error('Error adding captions:', error);
+    inputPath && fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+    res.status(500).json({ error: error.message || 'Failed to add captions' });
+  }
+});
+
+// POST /convert-video - Convert video format
+app.post('/convert-video', async (req: Request, res: Response): Promise<void> => {
+  const { videoUrl, format, quality } = req.body as {
+    videoUrl: string;
+    format: 'mp4' | 'webm' | 'mov' | 'avi';
+    quality?: 'low' | 'medium' | 'high';
+  };
+
+  if (!videoUrl || !format) {
+    res.status(400).json({ error: 'videoUrl and format are required' });
+    return;
+  }
+
+  const convertId = uuidv4();
+  const outputPath = `/tmp/outputs/${convertId}.${format}`;
+  let inputPath: string | undefined;
+
+  try {
+    inputPath = await downloadVideo(videoUrl);
+
+    const crf = quality === 'low' ? '28' : quality === 'high' ? '18' : '23';
+
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(inputPath!)
+        .outputOptions(['-crf', crf, '-y'])
+        .output(outputPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+
+    const videoBuffer = fs.readFileSync(outputPath);
+    const base64Video = videoBuffer.toString('base64');
+
+    // Cleanup
+    fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+    fs.existsSync(outputPath) && fs.unlinkSync(outputPath);
+
+    res.json({
+      success: true,
+      video: `data:video/${format};base64,${base64Video}`,
+      convertId,
+      format
+    });
+
+  } catch (error: any) {
+    console.error('Error converting video:', error);
+    inputPath && fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+    res.status(500).json({ error: error.message || 'Failed to convert video' });
+  }
+});
+
+// POST /trim-video - Trim video to specific time range
+app.post('/trim-video', async (req: Request, res: Response): Promise<void> => {
+  const { videoUrl, startTime, endTime } = req.body as {
+    videoUrl: string;
+    startTime: string;
+    endTime: string;
+  };
+
+  if (!videoUrl || !startTime || !endTime) {
+    res.status(400).json({ error: 'videoUrl, startTime, and endTime are required' });
+    return;
+  }
+
+  const trimId = uuidv4();
+  const outputPath = `/tmp/outputs/${trimId}.mp4`;
+  let inputPath: string | undefined;
+
+  try {
+    inputPath = await downloadVideo(videoUrl);
+
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(inputPath!)
+        .setStartTime(startTime)
+        .setDuration(endTime)
+        .outputOptions(['-c', 'copy', '-y'])
+        .output(outputPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+
+    const videoBuffer = fs.readFileSync(outputPath);
+    const base64Video = videoBuffer.toString('base64');
+
+    // Cleanup
+    fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+    fs.existsSync(outputPath) && fs.unlinkSync(outputPath);
+
+    res.json({
+      success: true,
+      video: `data:video/mp4;base64,${base64Video}`,
+      trimId,
+      startTime,
+      endTime
+    });
+
+  } catch (error: any) {
+    console.error('Error trimming video:', error);
+    inputPath && fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+    res.status(500).json({ error: error.message || 'Failed to trim video' });
+  }
+});
+
+// POST /get-video-info - Get video metadata
+app.post('/get-video-info', async (req: Request, res: Response): Promise<void> => {
+  const { videoUrl } = req.body as { videoUrl: string };
+
+  if (!videoUrl) {
+    res.status(400).json({ error: 'videoUrl is required' });
+    return;
+  }
+
+  let inputPath: string | undefined;
+
+  try {
+    inputPath = await downloadVideo(videoUrl);
+
+    const metadata = await new Promise<any>((resolve, reject) => {
+      ffmpeg.ffprobe(inputPath!, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    const videoStream = metadata.streams.find((s: any) => s.codec_type === 'video');
+    const audioStream = metadata.streams.find((s: any) => s.codec_type === 'audio');
+
+    // Cleanup
+    fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+
+    res.json({
+      success: true,
+      info: {
+        duration: metadata.format.duration,
+        size: metadata.format.size,
+        bitrate: metadata.format.bit_rate,
+        format: metadata.format.format_name,
+        video: videoStream ? {
+          codec: videoStream.codec_name,
+          width: videoStream.width,
+          height: videoStream.height,
+          fps: eval(videoStream.r_frame_rate),
+          aspectRatio: videoStream.display_aspect_ratio,
+        } : null,
+        audio: audioStream ? {
+          codec: audioStream.codec_name,
+          sampleRate: audioStream.sample_rate,
+          channels: audioStream.channels,
+        } : null,
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Error getting video info:', error);
+    inputPath && fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+    res.status(500).json({ error: error.message || 'Failed to get video info' });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'healthy', service: 'thumbnail-service' });
