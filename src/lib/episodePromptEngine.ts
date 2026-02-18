@@ -7,8 +7,18 @@ import type {
 } from './types';
 import { buildCharacterBibleBlock } from './characters';
 
+const SUBWAYTAKES_BRAND_RULES = `
+SUBWAYTAKES BRAND IDENTITY (MANDATORY FOR ALL SHOTS):
+- Interviewer (HOST) MUST wear dark sunglasses at all times. Never removed during filming.
+- Interviewer holds a flat MetroCard/transit card AS the microphone. No traditional mics.
+- Natural subway fluorescent lighting only. No studio lights, no ring lights, no filters.
+- Warm color temperature from real subway fluorescents.
+- Documentary-style handheld: authentic, not staged, real commuters in background.
+- Real subway car interior with natural imperfections, movement, ambient noise.
+`;
+
 const CITY_VISUAL_CUES: Record<CityStyle, string> = {
-  nyc: 'New York City MTA subway aesthetic, white tile walls with colored trim, yellow platform edge safety line, classic NYC station signage, green globe lights at entrance',
+  nyc: 'New York City MTA subway car interior: blue plastic seats, silver handrails, subway route map on wall, white tile station walls with colored trim, yellow platform edge safety line, classic NYC station signage',
   london: 'London Underground aesthetic, rounded tunnel walls, Mind the Gap platform warning, roundel logo visible, deep escalators, brown and cream tiles',
   tokyo: 'Tokyo Metro aesthetic, ultra-clean platforms, organized queuing lines on floor, digital screens, bright white lighting, orderly commuters',
   paris: 'Paris Metro aesthetic, Art Nouveau entrance style, dark green railings, vintage tilework, Metropolitain signage, narrow platforms',
@@ -63,33 +73,36 @@ export function buildColdOpenPrompt(config: ShotPromptConfig): string {
 
   return `${buildShotHeader('cold_open', 1, duration)}
 
+${SUBWAYTAKES_BRAND_RULES}
+
 ${characterBible}
 
 [SCENE]
-Location: Subway platform. ${cityVisuals}
-Atmosphere: Urban energy, commuters in background, platform sounds, train announcements
-Lighting: Natural station lighting, harsh fluorescent mixed with warmer tones
-Time: Midday rush
+Location: Inside NYC subway car. ${cityVisuals}
+Atmosphere: Urban energy, commuters seated nearby, train in motion, subway map visible on wall
+Lighting: Natural subway fluorescent lighting, warm yellow cast, no studio lights
+Time: Midday
 
 [CAMERA]
 ${camera}
 Handheld documentary style, slight natural shake, intimate but captures both subjects
 Start slightly wider, subtle push-in as question lands
+HOST's sunglasses and MetroCard mic clearly visible in frame
 
 [ACTION]
-The HOST approaches the GUEST on the platform.
-HOST makes eye contact, microphone extended.
-HOST asks the hook question with genuine curiosity.
+The HOST (wearing dark sunglasses) is seated next to the GUEST inside the subway car.
+HOST holds a flat MetroCard extended toward GUEST like a microphone.
+HOST asks the hook question with genuine curiosity and comedic warmth.
 GUEST's initial reaction - slight surprise, then engagement.
 ${buildDialogueBlock('HOST', script.hook_question)}
 
 [AUDIO]
-Ambient subway sounds: distant train rumble, announcement echoes, footsteps
+Ambient subway sounds: train rumble, track noise, distant announcements, door chimes
 Dialogue clear and crisp above ambient
-Natural city reverb
+Natural subway reverb
 
 [MOOD]
-Viral interview energy, authentic street documentary, SubwayTakes signature style
+Viral interview energy, authentic documentary, SubwayTakes signature style
 Capture the moment the question lands - the hook that stops scrolling
 
 Vertical 9:16 format. Single continuous shot. No text overlays.`;
@@ -103,18 +116,21 @@ export function buildGuestAnswerPrompt(config: ShotPromptConfig): string {
 
   return `${buildShotHeader('guest_answer', 2, duration)}
 
+${SUBWAYTAKES_BRAND_RULES}
+
 ${characterBible}
 
 [SCENE]
-Location: Subway platform. ${cityVisuals}
-Same location as previous shot, continuous scene
-Background activity: commuters passing, platform life continues
+Location: Inside subway car. ${cityVisuals}
+Same subway car as previous shot, continuous scene
+Background: other passengers, subway windows showing tunnel motion
 
 [CAMERA]
 ${camera}
 Focus entirely on GUEST's face and expression
 Capture every micro-expression, the authenticity of the response
-Shallow depth of field, host slightly visible as blur
+Shallow depth of field, HOST with sunglasses slightly visible as blur
+MetroCard mic visible at edge of frame
 
 [ACTION]
 GUEST delivers their main answer with authentic energy
@@ -125,8 +141,8 @@ ${buildDialogueBlock('GUEST', script.guest_answer)}
 
 [AUDIO]
 GUEST's voice prominent, ${guest.voice_style}
-Subway ambience subdued but present
-Natural room tone
+Subway train rumble subdued but present
+Natural subway car acoustics
 
 [MOOD]
 This is THE answer - the one people screenshot and share
@@ -144,20 +160,24 @@ export function buildFollowUpPrompt(config: ShotPromptConfig): string {
 
   return `${buildShotHeader('follow_up', 3, duration)}
 
+${SUBWAYTAKES_BRAND_RULES}
+
 ${characterBible}
 
 [SCENE]
-Location: Subway platform. ${cityVisuals}
+Location: Inside subway car. ${cityVisuals}
 Continuous from previous shot, energy building
+Same seats, same car, conversation intensifying
 
 [CAMERA]
 ${camera}
 Capture the back-and-forth dynamic
 Quick focus shifts between speakers
+HOST's sunglasses and MetroCard mic visible between them
 Conversational tennis match energy
 
 [ACTION]
-HOST reacts to the answer, asks follow-up
+HOST (sunglasses on, MetroCard in hand) reacts to the answer, asks follow-up
 Quick exchange, natural conversation rhythm
 GUEST responds to follow-up with even more conviction
 ${buildDialogueBlock('HOST', script.follow_up_question)}
@@ -165,7 +185,7 @@ ${buildDialogueBlock('GUEST', script.follow_up_answer)}
 
 [AUDIO]
 Both voices clear, natural overlap and rhythm
-Subway sounds punctuate the exchange
+Train sounds punctuate the exchange
 Energy rising in the audio
 
 [MOOD]
@@ -184,29 +204,31 @@ export function buildReactionPrompt(config: ShotPromptConfig): string {
 
   return `${buildShotHeader('reaction', 4, duration)}
 
+${SUBWAYTAKES_BRAND_RULES}
+
 ${characterBible}
 
 [SCENE]
-Location: Subway platform. ${cityVisuals}
-Same scene, reaction moment
+Location: Inside subway car. ${cityVisuals}
+Same car, reaction moment
 
 [CAMERA]
 ${camera}
-Focus on HOST's genuine reaction
+Focus on HOST's genuine reaction, dark sunglasses reflecting light
 Capture the authentic response to what was just said
 Quick cut energy
 
 [ACTION]
-HOST's genuine reaction to the guest's answer
+HOST (wearing dark sunglasses) reacts genuinely to the guest's answer
 Could be: surprise, amusement, disbelief, respect
 Natural reaction, not performed
-HOST might laugh, nod, or shake head
+HOST might laugh, nod, or shake head while holding the MetroCard
 ${buildDialogueBlock('HOST', script.reaction_line)}
 
 [AUDIO]
 HOST's reaction vocalization
 Any laugh or exclamation authentic
-Subway ambient continues
+Subway ambient continues, train rumble
 
 [MOOD]
 The relatable moment - viewer sees themselves in the host's reaction
@@ -224,28 +246,29 @@ export function buildBRollPrompt(config: ShotPromptConfig): string {
   return `${buildShotHeader('b_roll', 5, duration)}
 
 [SCENE]
-Location: Subway environment. ${cityVisuals}
-Pure atmosphere shot - no dialogue, no subjects
+Location: NYC subway environment. ${cityVisuals}
+Pure atmosphere shot - no dialogue, no interview subjects
 Cinematic moment between interview segments
+Natural subway fluorescent lighting, warm tones
 
 [CAMERA]
 ${camera}
 Artistic composition, finds beauty in the mundane
-Train doors closing, or platform emptying, or lights flickering
+Train car interior detail, or doors closing, or tunnel lights streaking past windows
 Cinematic movement - slow pan or subtle dolly
 
 [ACTION]
 NO PEOPLE SPEAKING
 Environmental storytelling:
-- Train arriving or departing
-- Commuters in motion (silhouettes, anonymous)
-- Station architecture details
-- Light and shadow interplay
-- The rhythm of the subway
+- Subway car interior: seats, handrails, route map, windows
+- Train in motion, tunnel lights streaking past
+- Commuters in silhouette, anonymous
+- Light and shadow from fluorescent fixtures
+- The rhythm and rattle of the subway
 
 [AUDIO]
 Pure ambient soundscape
-Train sounds, platform announcements, city rhythm
+Train rumble, track clatter, door chimes, distant announcements
 No dialogue, let the environment speak
 
 [MOOD]
@@ -265,30 +288,32 @@ export function buildClosePrompt(config: ShotPromptConfig): string {
 
   return `${buildShotHeader('close', 6, duration)}
 
+${SUBWAYTAKES_BRAND_RULES}
+
 ${characterBible}
 
 [SCENE]
-Location: Subway platform. ${cityVisuals}
-Final moment, same location
-Train might be arriving or departing in background
+Location: Inside subway car. ${cityVisuals}
+Final moment, same car
+Train approaching next station or doors about to open
 
 [CAMERA]
 ${camera}
-Final framing, captures both for the sendoff
-Might pull slightly wider to include environment
-The iconic SubwayTakes ending frame
+Final framing, captures both HOST (sunglasses, MetroCard) and GUEST for the sendoff
+Might pull slightly wider to include subway car environment
+The iconic SubwayTakes ending frame - both laughing or reacting
 
 [ACTION]
-HOST delivers the closing line - the punchline, the "That's a TAKE"
+HOST (sunglasses on, MetroCard in hand) delivers the closing line - the punchline
 Both HOST and GUEST react to the conclusion
-Natural ending energy - laugh, handshake, or just knowing nod
+Natural ending energy - laugh, fist bump, or just knowing nod
 The moment that makes people hit follow
 ${buildDialogueBlock('HOST', script.close_punchline)}
 
 [AUDIO]
 HOST's close delivery prominent
 Any natural laughter or reactions
-Subway sounds swell slightly - train arriving perhaps
+Train sounds swell slightly - approaching station
 Ending with energy
 
 [MOOD]

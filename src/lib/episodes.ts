@@ -61,6 +61,7 @@ export interface CreateEpisodeOptions {
   customScript?: EpisodeScript;
   beats?: Beat[];
   interviewMode?: InterviewMode;
+  templateId?: string | null;
 }
 
 export async function createEpisode(options: CreateEpisodeOptions): Promise<Episode> {
@@ -106,17 +107,22 @@ export async function createEpisode(options: CreateEpisodeOptions): Promise<Epis
   const shotPrompts = buildAllShotPrompts(cityStyle, hostCharacter, guestCharacter, script);
   const totalDuration = shotPrompts.reduce((sum, s) => sum + s.duration, 0);
 
+  const episodeInsert: Record<string, unknown> = {
+    user_id: userId,
+    script_id: script.id,
+    host_character_id: hostId,
+    guest_character_id: guestId,
+    status: 'queued',
+    city_style: cityStyle,
+    total_duration_seconds: totalDuration,
+  };
+  if (options.templateId) {
+    episodeInsert.template_id = options.templateId;
+  }
+
   const { data: episode, error: episodeError } = await supabase
     .from('episodes')
-    .insert({
-      user_id: userId,
-      script_id: script.id,
-      host_character_id: hostId,
-      guest_character_id: guestId,
-      status: 'queued',
-      city_style: cityStyle,
-      total_duration_seconds: totalDuration,
-    })
+    .insert(episodeInsert)
     .select()
     .single();
 

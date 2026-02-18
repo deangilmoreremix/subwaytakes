@@ -34,6 +34,27 @@ import { buildInterviewStyleHardening } from './interviewStyleHardening';
 
 const NEGATIVE_PROMPT = 'no distorted faces, no extra limbs, no unreadable text, no watermarks, no logos, no celebrity lookalikes, no text overlays in video';
 
+// === SUBWAYTAKES VISUAL IDENTITY ===
+const SUBWAYTAKES_INTERVIEWER_IDENTITY = `
+INTERVIEWER IDENTITY (MANDATORY):
+- The interviewer MUST wear dark sunglasses at all times (signature brand element).
+- Sunglasses style: dark, rectangular or aviator, always worn indoors on the subway.
+- Clothing: casual blazer or jacket over a relaxed shirt, put-together but not formal.
+- Hair: natural/curly texture.
+- Energy: confident, warm, comedic timing, genuine curiosity.
+- The interviewer's sunglasses are NEVER removed during filming.
+`;
+
+const SUBWAYTAKES_VISUAL_STYLE = `
+VISUAL STYLE (MANDATORY):
+- Natural ambient subway fluorescent lighting only. No studio lights, no ring lights.
+- Warm color temperature with slight yellow cast from subway fluorescents.
+- NYC MTA subway car interior: blue plastic seats, silver handrails, subway route map on wall.
+- Documentary-style handheld framing: authentic, not staged, real commuters in background.
+- No heavy color grading, no filters, no green screen.
+- Real subway car environment with natural imperfections (movement, noise, other passengers).
+`;
+
 // === SUBWAY CARD MIC BRAND RULE ===
 const SUBWAY_CARD_MIC_RULE = `
 MICROPHONE RULE (MANDATORY):
@@ -45,7 +66,7 @@ MICROPHONE RULE (MANDATORY):
 - Camera framing must clearly show the card between interviewer and subject.
 `;
 
-const SUBWAY_NEGATIVE_PROMPT = 'no handheld microphone, no lavalier mic, no boom mic, no headset mic, no visible audio equipment, no phone used as microphone, no traditional podcast microphone';
+const SUBWAY_NEGATIVE_PROMPT = 'no handheld microphone, no lavalier mic, no boom mic, no headset mic, no visible audio equipment, no phone used as microphone, no traditional podcast microphone, no studio lighting, no ring light, no color filters, no green screen, no interviewer without sunglasses';
 
 // Subway Card Mic visual anchors - reinforces the card mic in generated output
 const SUBWAY_CARD_MIC_ANCHORS = `
@@ -471,7 +492,7 @@ function buildEnhancedSubwayPrompt(
   // Subway card mic camera framing rules
   const CARD_MIC_CAMERA_RULES = `\nVisual Anchor (CRITICAL):\n- Close or medium shot clearly showing the interviewer's hand holding a subway card.\n- The card is positioned where a microphone would normally be.\n- Subject speaks toward the card naturally.\n- Card remains visible for most of the clip.\n\nCamera Framing (CRITICAL):\n- Medium close-up or tight two-shot showing interviewer and subject.\n- Interviewer's hand holding the subway card MUST be visible in frame.\n- Avoid extreme close-ups that hide the interviewer's hand.\n- Hands must be visible in frame - the card must NOT be cropped out.\n`;
 
-  const basePrompt = `${SUBWAY_CARD_MIC_RULE}\n\nRealistic viral subway interview clip, SubwayTakes documentary style, ${duration} seconds.
+  const basePrompt = `${SUBWAYTAKES_INTERVIEWER_IDENTITY}\n${SUBWAY_CARD_MIC_RULE}\n${SUBWAYTAKES_VISUAL_STYLE}\n\nRealistic viral subway interview clip, SubwayTakes documentary style, ${duration} seconds.
 Vertical 9:16 format. Handheld camera, raw authentic feel.
 
 Location: ${cityVisuals}
@@ -486,7 +507,7 @@ ${energyDesc}
 Visual elements: Include subway ambience - train sounds, announcement echoes, commuters passing, platform activity.
 ${CARD_MIC_CAMERA_RULES}
 Camera: Handheld documentary style, shallow depth of field, intimate framing, slight natural shake.
-Lighting: Natural station lighting, harsh fluorescent mixed with warmer tones.
+Lighting: Natural subway fluorescent lighting, warm tones, no studio lights.
 Mood: Urban, raw, authentic, spontaneous, real city life, viral-worthy moment.
 
 No text inside the video frame. Single continuous shot. Capture genuine human moment.`;

@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Palette,
 } from 'lucide-react';
 import { clsx } from '../../lib/format';
 
@@ -26,6 +27,7 @@ export interface AppShellProps {
   onNavigateToDashboard?: () => void;
   onNavigateToLibrary?: () => void;
   onNavigateToCreate?: () => void;
+  onNavigateToTemplates?: () => void;
   children?: React.ReactNode;
 }
 
@@ -33,13 +35,14 @@ const NAV_SECTIONS: NavSection[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'create', label: 'Create', icon: PlusCircle, badge: 'New', badgeColor: 'amber' },
   { id: 'library', label: 'Library', icon: Library },
+  { id: 'templates', label: 'Templates', icon: Palette },
   { id: 'self-clone', label: 'Self-Clone', icon: User },
   { id: 'tools', label: 'Tools', icon: Wrench },
   { id: 'analytics', label: 'Analytics', icon: BarChart },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-export function AppShell({ onNavigateToDashboard, onNavigateToLibrary, children }: AppShellProps) {
+export function AppShell({ onNavigateToDashboard, onNavigateToLibrary, onNavigateToTemplates, children }: AppShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const toggleSidebar = useCallback(() => {
@@ -92,6 +95,8 @@ export function AppShell({ onNavigateToDashboard, onNavigateToLibrary, children 
                     onNavigateToDashboard();
                   } else if (section.id === 'library' && onNavigateToLibrary) {
                     onNavigateToLibrary();
+                  } else if (section.id === 'templates' && onNavigateToTemplates) {
+                    onNavigateToTemplates();
                   }
                 }}
                 className={clsx(

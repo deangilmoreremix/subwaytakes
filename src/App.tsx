@@ -7,9 +7,10 @@ import { EpisodeBuilderPage } from './pages/EpisodeBuilderPage';
 import { EpisodePage } from './pages/EpisodePage';
 import { QuestionBankPage } from './pages/QuestionBankPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { TemplateManagerPage } from './pages/TemplateManagerPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-type Page = 'shell' | 'dashboard' | 'create' | 'library' | 'clip' | 'episode-builder' | 'episode' | 'question-bank';
+type Page = 'shell' | 'dashboard' | 'create' | 'library' | 'clip' | 'episode-builder' | 'episode' | 'question-bank' | 'templates';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('shell');
@@ -74,9 +75,10 @@ function App() {
   if (currentPage === 'shell') {
     return (
       <div className="min-h-screen bg-zinc-950">
-        <AppShell 
+        <AppShell
           onNavigateToDashboard={handleGoToDashboard}
           onNavigateToLibrary={handleGoToLibrary}
+          onNavigateToTemplates={() => setCurrentPage('templates')}
         >
           <CreatePage onClipCreated={handleClipCreated} />
         </AppShell>
@@ -127,6 +129,10 @@ function App() {
 
           {currentPage === 'question-bank' && (
             <QuestionBankPage onBack={handleBackFromQuestionBank} />
+          )}
+
+          {currentPage === 'templates' && (
+            <TemplateManagerPage onBack={() => setCurrentPage('shell')} />
           )}
 
           {currentPage === 'episode' && selectedEpisodeId && (

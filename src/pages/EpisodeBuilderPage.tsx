@@ -6,6 +6,7 @@ import { ScriptEditor } from '../components/ScriptEditor';
 import { QuestionPicker } from '../components/QuestionPicker';
 import { BeatBuilder } from '../components/BeatBuilder';
 import { InterviewModeSelector } from '../components/InterviewModeSelector';
+import { TemplateSelector } from '../components/TemplateSelector';
 import { createEpisode, calculateEpisodeCost, getEstimatedGenerationTime } from '../lib/episodes';
 import { generateScript } from '../lib/scriptEngine';
 import { generateRandomGuest, DEFAULT_HOST } from '../lib/characters';
@@ -34,6 +35,7 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
   const [beats, setBeats] = useState<Beat[]>([]);
   const [interviewMode, setInterviewMode] = useState<InterviewMode>('none');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   const totalDuration = 36;
   const estimatedCost = calculateEpisodeCost(totalDuration, 'premium');
@@ -82,6 +84,7 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
         customScript: script,
         beats: beats.length > 0 ? beats : undefined,
         interviewMode,
+        templateId: selectedTemplateId,
       });
       onEpisodeCreated(episode.id);
     } catch (err) {
@@ -313,6 +316,11 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
             </div>
           </div>
         )}
+
+        <TemplateSelector
+          selectedId={selectedTemplateId}
+          onSelect={setSelectedTemplateId}
+        />
 
         <div className="rounded-xl border border-zinc-700 bg-zinc-800/30 overflow-hidden">
           <div className="grid grid-cols-6 gap-px bg-zinc-700">

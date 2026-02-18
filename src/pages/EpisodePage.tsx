@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Download, Share2, RefreshCw, Clock, DollarSign, Film, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Share2, RefreshCw, Clock, DollarSign, Film, CheckCircle, AlertCircle, Loader2, Layers, Sparkles } from 'lucide-react';
 import { getEpisodeById } from '../lib/episodes';
+import { triggerComposeOverlay } from '../lib/templates';
+import { clsx } from '../lib/format';
 import type { Episode, EpisodeShot } from '../lib/types';
 
 interface EpisodePageProps {
@@ -12,6 +14,8 @@ export function EpisodePage({ episodeId, onBack }: EpisodePageProps) {
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [videoView, setVideoView] = useState<'raw' | 'composed'>('composed');
+  const [composing, setComposing] = useState(false);
 
   useEffect(() => {
     loadEpisode();
@@ -137,13 +141,71 @@ export function EpisodePage({ episodeId, onBack }: EpisodePageProps) {
       )}
 
       {episode.status === 'done' && episode.final_video_url && (
-        <div className="rounded-xl border border-zinc-700 bg-zinc-900 overflow-hidden mb-6">
-          <video
-            src={episode.final_video_url}
-            controls
-            className="w-full aspect-[9/16] max-h-[600px] mx-auto bg-black"
-            poster={episode.thumbnail_url || undefined}
-          />
+        <div className="mb-6 space-y-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setVideoView('composed')}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                videoView === 'composed'
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-600'
+              )}
+            >
+              <Layers className="w-4 h-4" />
+              Final Cut
+            </button>
+            <button
+              onClick={() => setVideoView('raw')}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                videoView === 'raw'
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-600'
+              )}
+            >
+              <Film className="w-4 h-4" />
+              Raw Footage
+            </button>
+
+            {!episode.composed_video_url && episode.template_id && (
+              <button
+                onClick={async () => {
+                  setComposing(true);
+                  await triggerComposeOverlay(episodeId);
+                  setComposing(false);
+                }}
+                disabled={composing}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-50 transition-colors ml-auto"
+              >
+                {composing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                {composing ? 'Composing...' : 'Apply Overlay'}
+              </button>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900 overflow-hidden">
+            <video
+              src={
+                videoView === 'composed' && episode.composed_video_url
+                  ? episode.composed_video_url
+                  : episode.final_video_url
+              }
+              controls
+              className="w-full aspect-[9/16] max-h-[600px] mx-auto bg-black"
+              poster={episode.thumbnail_url || undefined}
+            />
+          </div>
+
+          {videoView === 'composed' && !episode.composed_video_url && (
+            <p className="text-xs text-zinc-500 text-center">
+              No composed version available yet. Click "Apply Overlay" to add branding.
+            </p>
+          )}
         </div>
       )}
 
