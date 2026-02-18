@@ -21,6 +21,18 @@ import type {
 } from './types';
 import { generateUserId } from './format';
 import { createClipPlan, createVariationPrompt, createBatchVariationPrompt } from './promptEngine';
+import {
+  validateClipCreationOptions,
+  validateBatchSize,
+  validateDuration,
+} from './validation';
+import {
+  sanitizeTopicInput,
+  sanitizeAnglePrompt,
+  sanitizeInterviewQuestion,
+  sanitizeSpeechScript,
+  containsDangerousContent,
+} from './sanitize';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -103,13 +115,42 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     subjectStyle,
   } = options;
 
+  // Validate inputs
+  const validation = validateClipCreationOptions({
+    topic,
+    anglePrompt,
+    interviewQuestion,
+    speechScript,
+    duration: durationSeconds,
+  });
+
+  if (!validation.valid) {
+    throw new Error(validation.error || 'Invalid input');
+  }
+
+  // Sanitize all text inputs to prevent XSS
+  const sanitizedTopic = sanitizeTopicInput(topic);
+  const sanitizedAngle = sanitizeAnglePrompt(anglePrompt);
+  const sanitizedQuestion = sanitizeInterviewQuestion(interviewQuestion);
+  const sanitizedScript = sanitizeSpeechScript(speechScript);
+
+  // Check for dangerous content
+  if (
+    containsDangerousContent(sanitizedTopic) ||
+    containsDangerousContent(sanitizedAngle) ||
+    containsDangerousContent(sanitizedQuestion) ||
+    containsDangerousContent(sanitizedScript)
+  ) {
+    throw new Error('Input contains potentially dangerous content');
+  }
+
   const userId = generateUserId();
   const plan = createClipPlan({
     videoType,
-    topic,
+    topic: sanitizedTopic,
     durationSeconds,
-    anglePrompt,
-    interviewQuestion,
+    anglePrompt: sanitizedAngle,
+    interviewQuestion: sanitizedQuestion,
     sceneType,
     cityStyle,
     energyLevel,
@@ -132,10 +173,10 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     .insert({
       user_id: userId,
       video_type: videoType,
-      topic,
+      topic: sanitizedTopic,
       duration_seconds: durationSeconds,
-      angle_prompt: anglePrompt || null,
-      interview_question: interviewQuestion || null,
+      angle_prompt: sanitizedAngle || null,
+      interview_question: sanitizedQuestion || null,
       scene_type: sceneType || null,
       city_style: cityStyle || null,
       energy_level: energyLevel || null,
@@ -156,8 +197,8 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
       provider_prompt: plan.provider_prompt,
       negative_prompt: plan.negative_prompt,
       model_tier: modelTier,
-      speech_script: speechScript || null,
-      has_speech: !!speechScript,
+      speech_script: sanitizedScript || null,
+      has_speech: !!sanitizedScript,
     })
     .select()
     .single();
@@ -165,7 +206,7 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
   if (error) throw new Error(error.message);
 
   const clip = data as Clip;
-  triggerGeneration(clip, modelTier, speechScript);
+  triggerGeneration(clip, modelTier, sanitizedScript);
 
   return clip;
 }
@@ -174,16 +215,52 @@ export async function createClipBatch(
   options: CreateClipOptions,
   batchSize: number
 ): Promise<Clip[]> {
+  // Validate batch size
+  const batchValidation = validateBatchSize(batchSize);
+  if (!batchValidation.valid) {
+    throw new Error(batchValidation.error || 'Invalid batch size');
+  }
+
+  // Validate inputs
+  const validation = validateClipCreationOptions({
+    topic: options.topic,
+    anglePrompt: options.anglePrompt,
+    interviewQuestion: options.interviewQuestion,
+    speechScript: options.speechScript,
+    duration: options.durationSeconds,
+    batchSize,
+  });
+
+  if (!validation.valid) {
+    throw new Error(validation.error || 'Invalid input');
+  }
+
+  // Sanitize all text inputs
+  const sanitizedTopic = sanitizeTopicInput(options.topic);
+  const sanitizedAngle = sanitizeAnglePrompt(options.anglePrompt);
+  const sanitizedQuestion = sanitizeInterviewQuestion(options.interviewQuestion);
+  const sanitizedScript = sanitizeSpeechScript(options.speechScript);
+
+  // Check for dangerous content
+  if (
+    containsDangerousContent(sanitizedTopic) ||
+    containsDangerousContent(sanitizedAngle) ||
+    containsDangerousContent(sanitizedQuestion) ||
+    containsDangerousContent(sanitizedScript)
+  ) {
+    throw new Error('Input contains potentially dangerous content');
+  }
+
   const userId = generateUserId();
   const batchId = crypto.randomUUID();
   const modelTier = options.modelTier || 'standard';
 
   const basePlan = createClipPlan({
     videoType: options.videoType,
-    topic: options.topic,
+    topic: sanitizedTopic,
     durationSeconds: options.durationSeconds,
-    anglePrompt: options.anglePrompt,
-    interviewQuestion: options.interviewQuestion,
+    anglePrompt: sanitizedAngle,
+    interviewQuestion: sanitizedQuestion,
     sceneType: options.sceneType,
     cityStyle: options.cityStyle,
     energyLevel: options.energyLevel,
@@ -210,10 +287,10 @@ export async function createClipBatch(
     return {
       user_id: userId,
       video_type: options.videoType,
-      topic: options.topic,
+      topic: sanitizedTopic,
       duration_seconds: options.durationSeconds,
-      angle_prompt: options.anglePrompt || null,
-      interview_question: options.interviewQuestion || null,
+      angle_prompt: sanitizedAngle || null,
+      interview_question: sanitizedQuestion || null,
       scene_type: options.sceneType || null,
       city_style: options.cityStyle || null,
       energy_level: options.energyLevel || null,
@@ -236,8 +313,8 @@ export async function createClipBatch(
       provider_prompt: prompt,
       negative_prompt: basePlan.negative_prompt,
       model_tier: modelTier,
-      speech_script: options.speechScript || null,
-      has_speech: !!options.speechScript,
+      speech_script: sanitizedScript || null,
+      has_speech: !!sanitizedScript,
     };
   });
 
@@ -249,7 +326,7 @@ export async function createClipBatch(
   if (error) throw new Error(error.message);
 
   const clips = data as Clip[];
-  clips.forEach(clip => triggerGeneration(clip, modelTier, options.speechScript));
+  clips.forEach(clip => triggerGeneration(clip, modelTier, sanitizedScript));
 
   return clips;
 }

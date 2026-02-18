@@ -521,7 +521,7 @@ Deno.serve(async (req: Request) => {
     } else {
       // Generate thumbnail if enabled
       const thumbnailUrl = await generateThumbnailWithFFmpeg(resultUrl, thumbnailConfig);
-      
+
       const { error: updateError } = await supabase
         .from("clips")
         .update({
@@ -536,14 +536,17 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const thumbnailUrl = await generateThumbnailWithFFmpeg(resultUrl, thumbnailConfig);
+    let responseThumbnailUrl: string | null = null;
+    if (!is_episode_shot) {
+      responseThumbnailUrl = await generateThumbnailWithFFmpeg(resultUrl, thumbnailConfig);
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
         clip_id,
         result_url: resultUrl,
-        thumbnail_url: thumbnailUrl,
+        thumbnail_url: responseThumbnailUrl,
         model_used: selectedModel,
         is_episode_shot,
       }),

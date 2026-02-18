@@ -15,8 +15,8 @@ export const MAX_LENGTHS = {
   speechScript: 2000,
   topicInput: 200,
   batchSize: 10,
-  minDuration: 2,
-  maxDuration: 8,
+  minDuration: 8,
+  maxDuration: 160,
 } as const;
 
 /**
