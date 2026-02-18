@@ -209,34 +209,36 @@ export async function trimVideo(
   }
 }
 
-/**
- * Get video metadata
- */
 export async function getVideoInfo(videoUrl: string): Promise<VideoInfo> {
   try {
-    // This would need a dedicated endpoint
-    // For now, return mock data
-    return {
-      duration: 30,
-      size: 5242880,
-      bitrate: 1400000,
-      format: 'mp4',
-      video: {
-        codec: 'h264',
-        width: 1080,
-        height: 1920,
-        fps: 30,
-        aspectRatio: '9:16',
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/process-video`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
       },
-      audio: {
-        codec: 'aac',
-        sampleRate: 44100,
-        channels: 2,
-      },
-    };
+      body: JSON.stringify({
+        operation: 'get_info',
+        videoUrl,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get video info');
+    }
+
+    const data = await response.json();
+    return data.result.info;
   } catch (error) {
     console.error('Error getting video info:', error);
-    throw error;
+    return {
+      duration: 0,
+      size: 0,
+      bitrate: 0,
+      format: 'unknown',
+      video: null,
+      audio: null,
+    };
   }
 }
 

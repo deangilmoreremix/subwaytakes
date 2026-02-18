@@ -11,33 +11,83 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const API_KEY = process.env.API_KEY || '';
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configure multer for file uploads
 const upload = multer({
   dest: '/tmp/uploads',
-  limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit
+  limits: { fileSize: 500 * 1024 * 1024 }
 });
 
-// FFmpeg paths - can be configured via environment
 const FFMPEG_PATH = process.env.FFMPEG_PATH || '/usr/bin/ffmpeg';
 const FFPROBE_PATH = process.env.FFPROBE_PATH || '/usr/bin/ffprobe';
 
 ffmpeg.setFfmpegPath(FFMPEG_PATH);
 ffmpeg.setFfprobePath(FFPROBE_PATH);
 
-// Ensure temp directories exist
-const tempDirs = ['/tmp/uploads', '/tmp/outputs', '/tmp/thumbnails'];
+const tempDirs = ['/tmp/uploads', '/tmp/outputs', '/tmp/thumbnails', '/tmp/downloads'];
 tempDirs.forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
 
-// Types
+const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10);
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10);
+
+const requestCounts = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimiter(req: Request, res: Response, next: NextFunction): void {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = requestCounts.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    requestCounts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    next();
+    return;
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX) {
+    res.status(429).json({ error: 'Too many requests. Please try again later.' });
+    return;
+  }
+
+  entry.count++;
+  next();
+}
+
+function authenticate(req: Request, res: Response, next: NextFunction): void {
+  if (!API_KEY) {
+    next();
+    return;
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing or invalid authorization header' });
+    return;
+  }
+
+  const token = authHeader.slice(7);
+  if (token !== API_KEY) {
+    res.status(403).json({ error: 'Invalid API key' });
+    return;
+  }
+
+  next();
+}
+
+app.use(rateLimiter);
+
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'healthy', service: 'thumbnail-service' });
+});
+
+app.use(authenticate);
+
 interface ThumbnailOptions {
   width?: number;
   height?: number;
@@ -60,11 +110,10 @@ interface WatermarkOptions {
   size?: number;
 }
 
-// Helper function to download video from URL
 async function downloadVideo(videoUrl: string): Promise<string> {
   const tempPath = `/tmp/downloads/${uuidv4()}.mp4`;
   const downloadDir = path.dirname(tempPath);
-  
+
   if (!fs.existsSync(downloadDir)) {
     fs.mkdirSync(downloadDir, { recursive: true });
   }
@@ -73,7 +122,7 @@ async function downloadVideo(videoUrl: string): Promise<string> {
     method: 'GET',
     url: videoUrl,
     responseType: 'stream',
-    timeout: 300000 // 5 minutes
+    timeout: 300000
   });
 
   const writer = fs.createWriteStream(tempPath);
@@ -85,7 +134,28 @@ async function downloadVideo(videoUrl: string): Promise<string> {
   });
 }
 
-// Helper function to calculate position
+function safeCleanup(...paths: (string | undefined)[]) {
+  for (const p of paths) {
+    if (p && fs.existsSync(p)) {
+      try { fs.unlinkSync(p); } catch {}
+    }
+  }
+}
+
+function parseFrameRate(rateStr: string): number {
+  if (!rateStr) return 0;
+  const parts = rateStr.split('/');
+  if (parts.length === 2) {
+    const num = parseFloat(parts[0]);
+    const den = parseFloat(parts[1]);
+    if (!isNaN(num) && !isNaN(den) && den !== 0) {
+      return Math.round((num / den) * 100) / 100;
+    }
+  }
+  const parsed = parseFloat(rateStr);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 function calculatePosition(
   videoWidth: number,
   videoHeight: number,
@@ -107,10 +177,9 @@ function calculatePosition(
   }
 }
 
-// POST /generate-thumbnail - Generate thumbnail from video URL with emoji overlay
 app.post('/generate-thumbnail', async (req: Request, res: Response): Promise<void> => {
   const { videoUrl, options } = req.body as { videoUrl: string; options?: ThumbnailOptions };
-  
+
   if (!videoUrl) {
     res.status(400).json({ error: 'videoUrl is required' });
     return;
@@ -118,98 +187,69 @@ app.post('/generate-thumbnail', async (req: Request, res: Response): Promise<voi
 
   const thumbnailId = uuidv4();
   const outputPath = `/tmp/thumbnails/${thumbnailId}.jpg`;
-  const tempVideoPath = `/tmp/downloads/${uuidv4()}.mp4`;
+  let inputPath: string | undefined;
 
   try {
-    // Download video
-    await downloadVideo(videoUrl);
+    inputPath = await downloadVideo(videoUrl);
 
     const width = options?.width || 1280;
     const height = options?.height || 720;
     const timestamp = options?.timestamp || '00:00:01';
     const quality = options?.quality || 2;
 
-    const command = ffmpeg(tempVideoPath)
-      .screenshots({
-        timestamps: [timestamp],
-        filename: `${thumbnailId}.jpg`,
-        folder: '/tmp/thumbnails',
-        size: `${width}x${height}`,
-        quality
-      });
-
     await new Promise<void>((resolve, reject) => {
-      command.on('end', resolve).on('error', reject);
+      ffmpeg(inputPath!)
+        .screenshots({
+          timestamps: [timestamp],
+          filename: `${thumbnailId}.jpg`,
+          folder: '/tmp/thumbnails',
+          size: `${width}x${height}`,
+          quality
+        })
+        .on('end', resolve)
+        .on('error', reject);
     });
 
-    // Get video dimensions for overlay positioning
-    const probeCmd = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-      ffmpeg.ffprobe(tempVideoPath, (err, metadata) => {
-        if (err) reject(err);
-        else resolve({ width: metadata.streams[0].width || width, height: metadata.streams[0].height || height });
-      });
-    });
-
-    // Add emoji overlay if provided
-    if (options?.emoji) {
-      const emojiPos = options.emojiPosition || { x: 100, y: 100 };
-      const emojiSize = options.emojiSize || 100;
-
-      await new Promise<void>((resolve, reject) => {
-        ffmpeg(outputPath)
-          .input('color=black:s=50x50')
-          .complexFilter([
-            `[0:v]scale=${width}:${height}[bg];` +
-            `[bg][1:v]overlay=${emojiPos.x}:${emojiPos.y}:format=auto[out]`
-          ])
-          .outputOptions(['-map', '[out]', '-y'])
-          .output(outputPath)
-          .on('end', resolve)
-          .on('error', reject)
-          .run();
-      });
-    }
-
-    // Add text overlay if provided
     if (options?.text) {
       const textPos = options.textPosition || { x: width / 2, y: height / 2 };
       const fontSize = options.textFontSize || 48;
       const textColor = options.textColor || 'white';
 
+      const overlayOutput = `/tmp/thumbnails/${thumbnailId}_overlay.jpg`;
       await new Promise<void>((resolve, reject) => {
         ffmpeg(outputPath)
-          .fontconfig(true)
-          .font('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
-          .drawtext(`text='${options.text}':x=${textPos.x}:y=${textPos.y}:fontsize=${fontSize}:fontcolor=${textColor}:box=1:boxcolor=black@0.5`)
+          .videoFilters(
+            `drawtext=text='${options.text!.replace(/'/g, "\\'")}':x=${textPos.x}:y=${textPos.y}:fontsize=${fontSize}:fontcolor=${textColor}:fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf:box=1:boxcolor=black@0.5:boxborderw=8`
+          )
           .outputOptions(['-y'])
-          .output(outputPath)
+          .output(overlayOutput)
           .on('end', resolve)
           .on('error', reject)
           .run();
       });
+
+      if (fs.existsSync(overlayOutput)) {
+        fs.renameSync(overlayOutput, outputPath);
+      }
     }
 
-    // Read and return the thumbnail
     const thumbnailBuffer = fs.readFileSync(outputPath);
     const base64Thumbnail = thumbnailBuffer.toString('base64');
 
-    // Cleanup
-    fs.unlinkSync(tempVideoPath);
-    fs.unlinkSync(outputPath);
+    safeCleanup(inputPath, outputPath);
 
     res.json({
       success: true,
       thumbnail: `data:image/jpeg;base64,${base64Thumbnail}`,
       thumbnailId
     });
-
   } catch (error: any) {
+    safeCleanup(inputPath, outputPath);
     console.error('Error generating thumbnail:', error);
     res.status(500).json({ error: error.message || 'Failed to generate thumbnail' });
   }
 });
 
-// POST /extract-frame - Extract a frame at specific timestamp
 app.post('/extract-frame', async (req: Request, res: Response): Promise<void> => {
   const { videoUrl, timestamp, width, height, quality: frameQuality } = req.body as {
     videoUrl: string;
@@ -226,18 +266,17 @@ app.post('/extract-frame', async (req: Request, res: Response): Promise<void> =>
 
   const frameId = uuidv4();
   const outputPath = `/tmp/thumbnails/${frameId}.jpg`;
-  const tempVideoPath = `/tmp/downloads/${uuidv4()}.mp4`;
+  let inputPath: string | undefined;
 
   try {
-    // Download video
-    await downloadVideo(videoUrl);
+    inputPath = await downloadVideo(videoUrl);
 
     const outputWidth = width || 1280;
     const outputHeight = height || 720;
     const quality = frameQuality || 2;
 
     await new Promise<void>((resolve, reject) => {
-      ffmpeg(tempVideoPath)
+      ffmpeg(inputPath!)
         .screenshots({
           timestamps: [timestamp],
           filename: `${frameId}.jpg`,
@@ -249,13 +288,10 @@ app.post('/extract-frame', async (req: Request, res: Response): Promise<void> =>
         .on('error', reject);
     });
 
-    // Read and return the frame
     const frameBuffer = fs.readFileSync(outputPath);
     const base64Frame = frameBuffer.toString('base64');
 
-    // Cleanup
-    fs.unlinkSync(tempVideoPath);
-    fs.unlinkSync(outputPath);
+    safeCleanup(inputPath, outputPath);
 
     res.json({
       success: true,
@@ -263,14 +299,13 @@ app.post('/extract-frame', async (req: Request, res: Response): Promise<void> =>
       frameId,
       timestamp
     });
-
   } catch (error: any) {
+    safeCleanup(inputPath, outputPath);
     console.error('Error extracting frame:', error);
     res.status(500).json({ error: error.message || 'Failed to extract frame' });
   }
 });
 
-// POST /add-watermark - Add emoji/text watermark to video
 app.post('/add-watermark', upload.single('video'), async (req: Request, res: Response): Promise<void> => {
   const { emoji, text, position, opacity, size } = req.body as WatermarkOptions;
   const videoFile = req.file;
@@ -290,7 +325,6 @@ app.post('/add-watermark', upload.single('video'), async (req: Request, res: Res
   let inputPath = videoFile?.path;
 
   try {
-    // Download video if URL provided
     if (req.body.videoUrl) {
       inputPath = await downloadVideo(req.body.videoUrl);
     }
@@ -300,7 +334,6 @@ app.post('/add-watermark', upload.single('video'), async (req: Request, res: Res
       return;
     }
 
-    // Get video dimensions
     const probeData = await new Promise<{ width: number; height: number }>((resolve, reject) => {
       ffmpeg.ffprobe(inputPath!, (err, metadata) => {
         if (err) reject(err);
@@ -312,22 +345,20 @@ app.post('/add-watermark', upload.single('video'), async (req: Request, res: Res
     const watermarkOpacity = opacity || 0.8;
     const watermarkSize = size || 50;
 
-    // Create command
     let command = ffmpeg(inputPath);
 
     if (emoji) {
-      // For emoji watermark, we create a simple text overlay
       command = command
-        .fontconfig(true)
-        .font('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
-        .drawtext(`text=${emoji}:x=${pos.x}:y=${pos.y}:fontsize=${watermarkSize}:fontcolor=white@${watermarkOpacity}`);
+        .videoFilters(
+          `drawtext=text='${emoji}':x=${pos.x}:y=${pos.y}:fontsize=${watermarkSize}:fontcolor=white@${watermarkOpacity}:fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf`
+        );
     }
 
     if (text) {
       command = command
-        .fontconfig(true)
-        .font('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
-        .drawtext(`text='${text}':x=${pos.x}:y=${pos.y + 60}:fontsize=${watermarkSize}:fontcolor=white@${watermarkOpacity}:box=1:boxcolor=black@0.3`);
+        .videoFilters(
+          `drawtext=text='${text.replace(/'/g, "\\'")}':x=${pos.x}:y=${pos.y + 60}:fontsize=${watermarkSize}:fontcolor=white@${watermarkOpacity}:fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf:box=1:boxcolor=black@0.3`
+        );
     }
 
     await new Promise<void>((resolve, reject) => {
@@ -339,31 +370,23 @@ app.post('/add-watermark', upload.single('video'), async (req: Request, res: Res
         .run();
     });
 
-    // Read and return the video
     const videoBuffer = fs.readFileSync(outputPath);
     const base64Video = videoBuffer.toString('base64');
 
-    // Cleanup
-    if (inputPath && fs.existsSync(inputPath)) {
-      fs.unlinkSync(inputPath);
-    }
-    if (fs.existsSync(outputPath)) {
-      fs.unlinkSync(outputPath);
-    }
+    safeCleanup(inputPath, outputPath);
 
     res.json({
       success: true,
       video: `data:video/mp4;base64,${base64Video}`,
       watermarkId
     });
-
   } catch (error: any) {
+    safeCleanup(inputPath, outputPath);
     console.error('Error adding watermark:', error);
     res.status(500).json({ error: error.message || 'Failed to add watermark' });
   }
 });
 
-// POST /stitch-videos - Stitch multiple videos together
 app.post('/stitch-videos', async (req: Request, res: Response): Promise<void> => {
   const { videoUrls, transitionType, transitionDuration } = req.body as {
     videoUrls: string[];
@@ -379,23 +402,21 @@ app.post('/stitch-videos', async (req: Request, res: Response): Promise<void> =>
   const stitchId = uuidv4();
   const outputPath = `/tmp/outputs/${stitchId}.mp4`;
   const downloadedPaths: string[] = [];
+  let concatFile: string | undefined;
 
   try {
-    // Download all videos
     for (const url of videoUrls) {
-      const path = await downloadVideo(url);
-      downloadedPaths.push(path);
+      const dlPath = await downloadVideo(url);
+      downloadedPaths.push(dlPath);
     }
 
-    // Create concat file
-    const concatFile = `/tmp/${stitchId}_concat.txt`;
+    concatFile = `/tmp/${stitchId}_concat.txt`;
     const concatContent = downloadedPaths.map(p => `file '${p}'`).join('\n');
     fs.writeFileSync(concatFile, concatContent);
 
-    // Stitch videos
     await new Promise<void>((resolve, reject) => {
       ffmpeg()
-        .input(concatFile)
+        .input(concatFile!)
         .inputOptions(['-f', 'concat', '-safe', '0'])
         .outputOptions(['-c', 'copy', '-y'])
         .output(outputPath)
@@ -404,14 +425,10 @@ app.post('/stitch-videos', async (req: Request, res: Response): Promise<void> =>
         .run();
     });
 
-    // Read result
     const videoBuffer = fs.readFileSync(outputPath);
     const base64Video = videoBuffer.toString('base64');
 
-    // Cleanup
-    downloadedPaths.forEach(p => fs.existsSync(p) && fs.unlinkSync(p));
-    fs.existsSync(concatFile) && fs.unlinkSync(concatFile);
-    fs.existsSync(outputPath) && fs.unlinkSync(outputPath);
+    safeCleanup(...downloadedPaths, concatFile, outputPath);
 
     res.json({
       success: true,
@@ -419,15 +436,13 @@ app.post('/stitch-videos', async (req: Request, res: Response): Promise<void> =>
       stitchId,
       videoCount: videoUrls.length
     });
-
   } catch (error: any) {
+    safeCleanup(...downloadedPaths, concatFile, outputPath);
     console.error('Error stitching videos:', error);
-    downloadedPaths.forEach(p => fs.existsSync(p) && fs.unlinkSync(p));
     res.status(500).json({ error: error.message || 'Failed to stitch videos' });
   }
 });
 
-// POST /add-captions - Burn captions into video
 app.post('/add-captions', async (req: Request, res: Response): Promise<void> => {
   const { videoUrl, captionText, captionStyle } = req.body as {
     videoUrl: string;
@@ -456,15 +471,14 @@ app.post('/add-captions', async (req: Request, res: Response): Promise<void> => 
     const fontColor = captionStyle?.fontColor || 'white';
     const bgColor = captionStyle?.backgroundColor || 'black@0.5';
 
-    // Calculate position
-    let yPosition = '(h-text_h)/2'; // center
+    let yPosition = '(h-text_h)/2';
     if (captionStyle?.position === 'top') {
       yPosition = '50';
     } else if (captionStyle?.position === 'bottom') {
       yPosition = 'h-text_h-50';
     }
 
-    const drawtext = `drawtext=text='${captionText.replace(/'/g, "\\'")}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2:y=${yPosition}:box=1:boxcolor=${bgColor}:boxborderw=10`;
+    const drawtext = `drawtext=text='${captionText.replace(/'/g, "\\'")}':fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2:y=${yPosition}:box=1:boxcolor=${bgColor}:boxborderw=10`;
 
     await new Promise<void>((resolve, reject) => {
       ffmpeg(inputPath!)
@@ -479,24 +493,20 @@ app.post('/add-captions', async (req: Request, res: Response): Promise<void> => 
     const videoBuffer = fs.readFileSync(outputPath);
     const base64Video = videoBuffer.toString('base64');
 
-    // Cleanup
-    fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
-    fs.existsSync(outputPath) && fs.unlinkSync(outputPath);
+    safeCleanup(inputPath, outputPath);
 
     res.json({
       success: true,
       video: `data:video/mp4;base64,${base64Video}`,
       captionId
     });
-
   } catch (error: any) {
+    safeCleanup(inputPath, outputPath);
     console.error('Error adding captions:', error);
-    inputPath && fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
     res.status(500).json({ error: error.message || 'Failed to add captions' });
   }
 });
 
-// POST /convert-video - Convert video format
 app.post('/convert-video', async (req: Request, res: Response): Promise<void> => {
   const { videoUrl, format, quality } = req.body as {
     videoUrl: string;
@@ -530,9 +540,7 @@ app.post('/convert-video', async (req: Request, res: Response): Promise<void> =>
     const videoBuffer = fs.readFileSync(outputPath);
     const base64Video = videoBuffer.toString('base64');
 
-    // Cleanup
-    fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
-    fs.existsSync(outputPath) && fs.unlinkSync(outputPath);
+    safeCleanup(inputPath, outputPath);
 
     res.json({
       success: true,
@@ -540,15 +548,13 @@ app.post('/convert-video', async (req: Request, res: Response): Promise<void> =>
       convertId,
       format
     });
-
   } catch (error: any) {
+    safeCleanup(inputPath, outputPath);
     console.error('Error converting video:', error);
-    inputPath && fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
     res.status(500).json({ error: error.message || 'Failed to convert video' });
   }
 });
 
-// POST /trim-video - Trim video to specific time range
 app.post('/trim-video', async (req: Request, res: Response): Promise<void> => {
   const { videoUrl, startTime, endTime } = req.body as {
     videoUrl: string;
@@ -582,9 +588,7 @@ app.post('/trim-video', async (req: Request, res: Response): Promise<void> => {
     const videoBuffer = fs.readFileSync(outputPath);
     const base64Video = videoBuffer.toString('base64');
 
-    // Cleanup
-    fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
-    fs.existsSync(outputPath) && fs.unlinkSync(outputPath);
+    safeCleanup(inputPath, outputPath);
 
     res.json({
       success: true,
@@ -593,15 +597,13 @@ app.post('/trim-video', async (req: Request, res: Response): Promise<void> => {
       startTime,
       endTime
     });
-
   } catch (error: any) {
+    safeCleanup(inputPath, outputPath);
     console.error('Error trimming video:', error);
-    inputPath && fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
     res.status(500).json({ error: error.message || 'Failed to trim video' });
   }
 });
 
-// POST /get-video-info - Get video metadata
 app.post('/get-video-info', async (req: Request, res: Response): Promise<void> => {
   const { videoUrl } = req.body as { videoUrl: string };
 
@@ -625,8 +627,7 @@ app.post('/get-video-info', async (req: Request, res: Response): Promise<void> =
     const videoStream = metadata.streams.find((s: any) => s.codec_type === 'video');
     const audioStream = metadata.streams.find((s: any) => s.codec_type === 'audio');
 
-    // Cleanup
-    fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
+    safeCleanup(inputPath);
 
     res.json({
       success: true,
@@ -639,7 +640,7 @@ app.post('/get-video-info', async (req: Request, res: Response): Promise<void> =
           codec: videoStream.codec_name,
           width: videoStream.width,
           height: videoStream.height,
-          fps: eval(videoStream.r_frame_rate),
+          fps: parseFrameRate(videoStream.r_frame_rate),
           aspectRatio: videoStream.display_aspect_ratio,
         } : null,
         audio: audioStream ? {
@@ -649,30 +650,24 @@ app.post('/get-video-info', async (req: Request, res: Response): Promise<void> =
         } : null,
       }
     });
-
   } catch (error: any) {
+    safeCleanup(inputPath);
     console.error('Error getting video info:', error);
-    inputPath && fs.existsSync(inputPath) && fs.unlinkSync(inputPath);
     res.status(500).json({ error: error.message || 'Failed to get video info' });
   }
 });
 
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'healthy', service: 'thumbnail-service' });
-});
-
-// Error handling middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`Thumbnail service running on port ${PORT}`);
   console.log(`FFmpeg path: ${FFMPEG_PATH}`);
   console.log(`FFprobe path: ${FFPROBE_PATH}`);
+  console.log(`Auth: ${API_KEY ? 'enabled' : 'disabled (no API_KEY set)'}`);
+  console.log(`Rate limit: ${RATE_LIMIT_MAX} requests per ${RATE_LIMIT_WINDOW_MS / 1000}s`);
 });
 
 export default app;

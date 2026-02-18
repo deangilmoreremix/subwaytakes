@@ -20,6 +20,77 @@ interface EpisodeShot {
   speaker: string | null;
 }
 
+function getServiceConfig() {
+  const serviceUrl = Deno.env.get("THUMBNAIL_SERVICE_URL") || Deno.env.get("FFMPEG_SERVICE_URL");
+  const serviceKey = Deno.env.get("THUMBNAIL_SERVICE_KEY") || Deno.env.get("FFMPEG_SERVICE_KEY");
+  return { serviceUrl, serviceKey };
+}
+
+async function stitchWithFFmpegService(
+  videoUrls: string[],
+  serviceUrl: string,
+  serviceKey: string | undefined
+): Promise<string | null> {
+  try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (serviceKey) {
+      headers["Authorization"] = `Bearer ${serviceKey}`;
+    }
+
+    const response = await fetch(`${serviceUrl}/stitch-videos`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ videoUrls }),
+    });
+
+    if (!response.ok) {
+      console.error("FFmpeg stitch error:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.video && data.video.startsWith("data:")) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      const base64Data = data.video.split(",")[1];
+      if (!base64Data) return null;
+
+      const binaryStr = atob(base64Data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      const fileName = `episode_stitch_${Date.now()}.mp4`;
+      const { data: uploadData, error } = await supabase.storage
+        .from("videos")
+        .upload(`episodes/${fileName}`, bytes, {
+          contentType: "video/mp4",
+          upsert: true,
+        });
+
+      if (error) {
+        console.error("Storage upload error:", error);
+        return null;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("videos")
+        .getPublicUrl(uploadData.path);
+
+      return publicUrlData.publicUrl;
+    }
+
+    return data.videoUrl || null;
+  } catch (err) {
+    console.error("FFmpeg service stitch error:", err);
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -74,9 +145,9 @@ Deno.serve(async (req: Request) => {
       .sort((a: EpisodeShot, b: EpisodeShot) => a.sequence - b.sequence)
       .map((shot: EpisodeShot) => shot.result_url);
 
-    let finalVideoUrl: string;
-    const shotgunApiKey = Deno.env.get("SHOTGUN_API_KEY");
+    let finalVideoUrl: string | null = null;
 
+    const shotgunApiKey = Deno.env.get("SHOTGUN_API_KEY");
     if (shotgunApiKey) {
       try {
         const stitchResponse = await fetch("https://api.shotgun.video/v1/stitch", {
@@ -101,7 +172,6 @@ Deno.serve(async (req: Request) => {
 
         if (stitchResponse.ok) {
           const stitchResult = await stitchResponse.json();
-
           let attempts = 0;
           const maxAttempts = 60;
 
@@ -123,24 +193,36 @@ Deno.serve(async (req: Request) => {
                 finalVideoUrl = statusData.output_url;
                 break;
               } else if (statusData.status === "failed") {
-                throw new Error("Stitching failed");
+                throw new Error("Shotgun stitching failed");
               }
             }
-
             attempts++;
           }
 
-          if (!finalVideoUrl!) {
-            throw new Error("Stitching timed out");
+          if (!finalVideoUrl) {
+            throw new Error("Shotgun stitching timed out");
           }
         } else {
-          throw new Error("Failed to start stitching job");
+          throw new Error("Failed to start Shotgun stitching job");
         }
-      } catch (stitchError) {
-        console.error("Shotgun API error:", stitchError);
-        finalVideoUrl = videoUrls[0] as string;
+      } catch (shotgunError) {
+        console.error("Shotgun API error, falling through to FFmpeg:", shotgunError);
+        finalVideoUrl = null;
       }
-    } else {
+    }
+
+    if (!finalVideoUrl) {
+      const { serviceUrl, serviceKey } = getServiceConfig();
+      if (serviceUrl) {
+        finalVideoUrl = await stitchWithFFmpegService(
+          videoUrls as string[],
+          serviceUrl,
+          serviceKey
+        );
+      }
+    }
+
+    if (!finalVideoUrl) {
       finalVideoUrl = videoUrls[0] as string;
     }
 

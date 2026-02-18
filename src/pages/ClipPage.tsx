@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Layers, MessageCircle } from 'lucide-react';
 import { ClipActions } from '../components/ClipActions';
+import { VideoProcessingToolbar } from '../components/VideoProcessingToolbar';
 import { getClipById, regenerateClip, updateClipStatus } from '../lib/clips';
 import { prettyType, formatDate, clsx } from '../lib/format';
 import type { Clip } from '../lib/types';
@@ -189,7 +190,7 @@ export function ClipPage({ clipId, onBack, onNavigateToClip }: ClipPageProps) {
               )}
             </div>
 
-            <div className="mt-4">
+            <div className="mt-4 space-y-3">
               <ClipActions
                 busy={actionBusy}
                 canDownload={ready}
@@ -200,6 +201,9 @@ export function ClipPage({ clipId, onBack, onNavigateToClip }: ClipPageProps) {
               />
               {copied && (
                 <p className="mt-2 text-xs text-emerald-400">Link copied to clipboard!</p>
+              )}
+              {ready && clip.result_url && (
+                <VideoProcessingToolbar videoUrl={clip.result_url} />
               )}
             </div>
           </div>

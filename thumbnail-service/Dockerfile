@@ -25,7 +25,7 @@ FROM node:20-alpine AS production
 WORKDIR /app
 
 # Install FFmpeg
-RUN apk add --no-cache ffmpeg fontconfig fonts-ttf
+RUN apk add --no-cache ffmpeg fontconfig ttf-dejavu
 
 # Copy built files
 COPY --from=builder /app/dist ./dist
