@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { generateUserId } from './format';
+import { getUserId } from './auth';
 
 export interface QuestionBankItem {
   id: string;
@@ -39,7 +39,7 @@ export async function listQuestions(options?: {
   includeCustom?: boolean;
   limit?: number;
 }): Promise<QuestionBankItem[]> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   let query = supabase
     .from('question_bank')
@@ -90,7 +90,7 @@ export async function createQuestion(question: {
   energy_level?: string;
   notes?: string;
 }): Promise<QuestionBankItem> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   const { data, error } = await supabase
     .from('question_bank')
@@ -152,7 +152,7 @@ export async function toggleTrending(id: string, isTrending: boolean): Promise<Q
 }
 
 export async function searchQuestions(searchTerm: string): Promise<QuestionBankItem[]> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   const { data, error } = await supabase
     .from('question_bank')

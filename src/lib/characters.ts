@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
-import type { CharacterBible, CharacterRole, CityStyle } from './types';
-import { generateUserId } from './format';
+import type { CharacterBible, CharacterRole } from './types';
+import { getUserId } from './auth';
 
 export const DEFAULT_HOST: Omit<CharacterBible, 'id' | 'user_id' | 'created_at'> = {
   name: 'SubwayTakes Host',
@@ -114,7 +114,7 @@ ${buildCharacterPromptFragment(guest)}
 }
 
 export async function getOrCreateDefaultHost(): Promise<CharacterBible> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   const { data: existing } = await supabase
     .from('character_bibles')
@@ -144,7 +144,7 @@ export async function getOrCreateDefaultHost(): Promise<CharacterBible> {
 export async function createCharacter(
   character: Omit<CharacterBible, 'id' | 'user_id' | 'created_at'>
 ): Promise<CharacterBible> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   const { data, error } = await supabase
     .from('character_bibles')
@@ -160,7 +160,7 @@ export async function createCharacter(
 }
 
 export async function listCharacters(role?: CharacterRole): Promise<CharacterBible[]> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   let query = supabase
     .from('character_bibles')

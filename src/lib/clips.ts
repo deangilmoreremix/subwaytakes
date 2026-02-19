@@ -25,7 +25,7 @@ import type {
   WisdomDemographic,
   WisdomSetting,
 } from './types';
-import { generateUserId } from './format';
+import { getUserId } from './auth';
 import { createClipPlan, createVariationPrompt, createBatchVariationPrompt } from './promptEngine';
 import {
   validateClipCreationOptions,
@@ -45,6 +45,11 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 async function triggerGeneration(clip: Clip, modelTier?: ModelTier, speechScript?: string): Promise<void> {
   try {
+    await supabase
+      .from('clips')
+      .update({ status: 'running' })
+      .eq('id', clip.id);
+
     const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-video`, {
       method: 'POST',
       headers: {
@@ -59,14 +64,32 @@ async function triggerGeneration(clip: Clip, modelTier?: ModelTier, speechScript
         duration_seconds: clip.duration_seconds,
         model_tier: modelTier || clip.model_tier || 'standard',
         speech_script: speechScript || clip.speech_script || undefined,
+        interview_style: clip.interview_style,
+        energy_level: clip.energy_level,
+        scene_type: clip.scene_type,
+        city_style: clip.city_style,
+        camera_style: clip.camera_style,
+        lighting_mood: clip.lighting_mood,
+        speaker_style: clip.speaker_style,
+        studio_setup: clip.studio_setup,
+        studio_lighting: clip.studio_lighting,
+        time_of_day: clip.time_of_day,
       }),
     });
 
     if (!response.ok) {
-      console.error('Generation trigger failed:', await response.text());
+      const errorText = await response.text();
+      await supabase
+        .from('clips')
+        .update({ status: 'error', error: `Generation trigger failed: ${errorText}` })
+        .eq('id', clip.id);
     }
   } catch (error) {
-    console.error('Failed to trigger generation:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    await supabase
+      .from('clips')
+      .update({ status: 'error', error: `Failed to trigger generation: ${message}` })
+      .eq('id', clip.id);
   }
 }
 
@@ -162,7 +185,7 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     throw new Error('Input contains potentially dangerous content');
   }
 
-  const userId = generateUserId();
+  const userId = getUserId();
   const plan = createClipPlan({
     videoType,
     topic: sanitizedTopic,
@@ -281,7 +304,7 @@ export async function createClipBatch(
     throw new Error('Input contains potentially dangerous content');
   }
 
-  const userId = generateUserId();
+  const userId = getUserId();
   const batchId = crypto.randomUUID();
   const modelTier = options.modelTier || 'standard';
 
@@ -377,7 +400,7 @@ export async function listClips(filters?: {
   search?: string;
   limit?: number;
 }): Promise<Clip[]> {
-  const userId = generateUserId();
+  const userId = getUserId();
   let query = supabase
     .from('clips')
     .select('*')
@@ -455,7 +478,7 @@ export async function regenerateClip(
   const original = await getClipById(originalClipId);
   if (!original) throw new Error('Original clip not found');
 
-  const userId = generateUserId();
+  const userId = getUserId();
   let providerPrompt = original.provider_prompt || '';
   const modelTier = original.model_tier || 'standard';
 
@@ -504,6 +527,24 @@ export async function regenerateClip(
   triggerGeneration(clip, modelTier, original.speech_script || undefined);
 
   return clip;
+}
+
+export async function retryClip(clipId: string): Promise<Clip> {
+  const clip = await getClipById(clipId);
+  if (!clip) throw new Error('Clip not found');
+
+  const { data, error } = await supabase
+    .from('clips')
+    .update({ status: 'queued', error: null })
+    .eq('id', clipId)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  const updated = data as Clip;
+  triggerGeneration(updated, updated.model_tier || 'standard', updated.speech_script || undefined);
+  return updated;
 }
 
 export async function deleteBatch(batchId: string): Promise<void> {

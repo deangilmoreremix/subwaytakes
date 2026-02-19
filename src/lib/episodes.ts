@@ -11,7 +11,7 @@ import type {
   Beat,
   InterviewMode,
 } from './types';
-import { generateUserId } from './format';
+import { getUserId } from './auth';
 import { getOrCreateDefaultHost, generateRandomGuest, DEFAULT_HOST } from './characters';
 import { generateScript } from './scriptEngine';
 import { buildAllShotPrompts } from './episodePromptEngine';
@@ -30,7 +30,12 @@ const CAMERA_MAP: Record<ShotType, CameraDirection> = {
 
 async function triggerShotGeneration(shot: EpisodeShot): Promise<void> {
   try {
-    await fetch(`${SUPABASE_URL}/functions/v1/generate-video`, {
+    await supabase
+      .from('episode_shots')
+      .update({ status: 'running' })
+      .eq('id', shot.id);
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-video`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
@@ -48,8 +53,20 @@ async function triggerShotGeneration(shot: EpisodeShot): Promise<void> {
         episode_id: shot.episode_id,
       }),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      await supabase
+        .from('episode_shots')
+        .update({ status: 'error', error: errorText })
+        .eq('id', shot.id);
+    }
   } catch (error) {
-    console.error('Failed to trigger shot generation:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    await supabase
+      .from('episode_shots')
+      .update({ status: 'error', error: message })
+      .eq('id', shot.id);
   }
 }
 
@@ -65,7 +82,7 @@ export interface CreateEpisodeOptions {
 }
 
 export async function createEpisode(options: CreateEpisodeOptions): Promise<Episode> {
-  const userId = generateUserId();
+  const userId = getUserId();
   const { topic, cityStyle = 'nyc', hostCharacterId, guestCharacterId, customScript } = options;
 
   let script: EpisodeScript;
@@ -194,7 +211,7 @@ export async function listEpisodes(filters?: {
   status?: EpisodeStatus;
   limit?: number;
 }): Promise<Episode[]> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   let query = supabase
     .from('episodes')
@@ -266,7 +283,7 @@ export async function checkEpisodeCompletion(episodeId: string): Promise<boolean
 
 async function triggerStitching(episodeId: string): Promise<void> {
   try {
-    await fetch(`${SUPABASE_URL}/functions/v1/stitch-episode`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/stitch-episode`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
@@ -274,9 +291,32 @@ async function triggerStitching(episodeId: string): Promise<void> {
       },
       body: JSON.stringify({ episode_id: episodeId }),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      await updateEpisodeStatus(episodeId, 'error', { error: `Stitch failed: ${errorText}` });
+    }
   } catch (error) {
-    console.error('Failed to trigger stitching:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    await updateEpisodeStatus(episodeId, 'error', { error: `Stitch failed: ${message}` });
   }
+}
+
+export async function retryEpisodeShot(shotId: string): Promise<void> {
+  const { data: shot } = await supabase
+    .from('episode_shots')
+    .select('*')
+    .eq('id', shotId)
+    .maybeSingle();
+
+  if (!shot) throw new Error('Shot not found');
+
+  await supabase
+    .from('episode_shots')
+    .update({ status: 'queued', error: null })
+    .eq('id', shotId);
+
+  triggerShotGeneration(shot as EpisodeShot);
 }
 
 export async function deleteEpisode(id: string): Promise<void> {

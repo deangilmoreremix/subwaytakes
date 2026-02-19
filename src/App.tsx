@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { AuthProvider, useAuth } from './lib/auth';
 import { AppShell } from './components/AppLayout/AppShell';
+import { AuthPage } from './pages/AuthPage';
 import { CreatePage } from './pages/CreatePage';
 import { ClipPage } from './pages/ClipPage';
 import { LibraryPage } from './pages/LibraryPage';
@@ -9,14 +11,29 @@ import { QuestionBankPage } from './pages/QuestionBankPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { TemplateManagerPage } from './pages/TemplateManagerPage';
 import { EnhancePage } from './pages/EnhancePage';
+import { SettingsPage } from './pages/SettingsPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Loader2 } from 'lucide-react';
 
-type Page = 'shell' | 'dashboard' | 'create' | 'library' | 'clip' | 'episode-builder' | 'episode' | 'question-bank' | 'templates' | 'enhance-clip' | 'enhance-episode';
+type Page = 'shell' | 'dashboard' | 'create' | 'library' | 'clip' | 'episode-builder' | 'episode' | 'question-bank' | 'templates' | 'enhance-clip' | 'enhance-episode' | 'settings';
 
-function App() {
+function AppContent() {
+  const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('shell');
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
 
   function handleClipCreated(clipId: string) {
     setSelectedClipId(clipId);
@@ -48,34 +65,6 @@ function App() {
     setCurrentPage('episode');
   }
 
-  function handleGoToEpisodeBuilder() {
-    setCurrentPage('episode-builder');
-  }
-
-  function handleBackFromEpisodeBuilder() {
-    setCurrentPage('shell');
-  }
-
-  function handleGoToQuestionBank() {
-    setCurrentPage('question-bank');
-  }
-
-  function handleBackFromQuestionBank() {
-    setCurrentPage('shell');
-  }
-
-  function handleGoToDashboard() {
-    setCurrentPage('dashboard');
-  }
-
-  function handleGoToLibrary() {
-    setCurrentPage('library');
-  }
-
-  function handleGoToCreate() {
-    setCurrentPage('shell');
-  }
-
   function handleEnhanceClip(clipId: string) {
     setSelectedClipId(clipId);
     setCurrentPage('enhance-clip');
@@ -95,11 +84,11 @@ function App() {
       case 'dashboard':
         return (
           <DashboardPage
-            onCreateClip={handleGoToCreate}
-            onViewLibrary={handleGoToLibrary}
+            onCreateClip={() => setCurrentPage('shell')}
+            onViewLibrary={() => setCurrentPage('library')}
             onViewClip={handleSelectClip}
             onViewEpisode={handleSelectEpisode}
-            onEpisodeBuilder={handleGoToEpisodeBuilder}
+            onEpisodeBuilder={() => setCurrentPage('episode-builder')}
           />
         );
 
@@ -125,16 +114,16 @@ function App() {
         return (
           <EpisodeBuilderPage
             onEpisodeCreated={handleEpisodeCreated}
-            onBack={handleBackFromEpisodeBuilder}
-            onOpenQuestionBank={handleGoToQuestionBank}
+            onBack={() => setCurrentPage('shell')}
+            onOpenQuestionBank={() => setCurrentPage('question-bank')}
           />
         );
 
       case 'question-bank':
-        return <QuestionBankPage onBack={handleBackFromQuestionBank} />;
+        return <QuestionBankPage onBack={() => setCurrentPage('shell')} />;
 
       case 'templates':
-        return <TemplateManagerPage onBack={handleGoToCreate} />;
+        return <TemplateManagerPage onBack={() => setCurrentPage('shell')} />;
 
       case 'episode':
         return selectedEpisodeId ? (
@@ -163,6 +152,9 @@ function App() {
           />
         ) : null;
 
+      case 'settings':
+        return <SettingsPage onBack={() => setCurrentPage('shell')} />;
+
       default:
         return null;
     }
@@ -171,15 +163,24 @@ function App() {
   return (
     <AppShell
       activePage={currentPage}
-      onNavigateToDashboard={handleGoToDashboard}
-      onNavigateToLibrary={handleGoToLibrary}
-      onNavigateToCreate={handleGoToCreate}
+      onNavigateToDashboard={() => setCurrentPage('dashboard')}
+      onNavigateToLibrary={() => setCurrentPage('library')}
+      onNavigateToCreate={() => setCurrentPage('shell')}
       onNavigateToTemplates={() => setCurrentPage('templates')}
+      onNavigateToSettings={() => setCurrentPage('settings')}
     >
       <ErrorBoundary>
         {renderPage()}
       </ErrorBoundary>
     </AppShell>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

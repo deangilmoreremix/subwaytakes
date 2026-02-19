@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Layers, MessageCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Layers, MessageCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { ClipActions } from '../components/ClipActions';
 import { VideoProcessingToolbar } from '../components/VideoProcessingToolbar';
-import { getClipById, regenerateClip, updateClipStatus } from '../lib/clips';
+import { getClipById, regenerateClip, updateClipStatus, retryClip } from '../lib/clips';
 import { prettyType, formatDate, clsx } from '../lib/format';
+import { useRealtimeStatus } from '../hooks/useRealtimeStatus';
 import type { Clip } from '../lib/types';
 import {
   SUBWAY_SCENES,
@@ -53,6 +54,7 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const fetchClip = useCallback(async () => {
     try {
@@ -67,15 +69,16 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
 
   useEffect(() => {
     fetchClip();
+  }, [fetchClip]);
 
-    const interval = setInterval(() => {
-      if (clip && (clip.status === 'queued' || clip.status === 'running')) {
-        fetchClip();
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [fetchClip, clip?.status]);
+  useRealtimeStatus({
+    table: 'clips',
+    id: clipId,
+    enabled: !!clip && (clip.status === 'queued' || clip.status === 'running'),
+    onUpdate: (payload) => {
+      setClip(prev => prev ? { ...prev, ...payload } as Clip : null);
+    },
+  });
 
   async function handleRegenerate(mode: 'regenerate' | 'variation') {
     if (!clip) return;
@@ -89,6 +92,19 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
       console.error('Failed to regenerate:', error);
     } finally {
       setActionBusy(false);
+    }
+  }
+
+  async function handleRetry() {
+    if (!clip) return;
+    setRetrying(true);
+    try {
+      const updated = await retryClip(clip.id);
+      setClip(updated);
+    } catch (error) {
+      console.error('Retry failed:', error);
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -178,6 +194,14 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
                     <p className="mt-2 text-xs text-zinc-500 max-w-xs">
                       {clip.error || 'An error occurred during generation. Try regenerating.'}
                     </p>
+                    <button
+                      onClick={handleRetry}
+                      disabled={retrying}
+                      className="mt-4 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-amber-400 disabled:opacity-50 transition"
+                    >
+                      <RefreshCw className={clsx("h-4 w-4", retrying && "animate-spin")} />
+                      {retrying ? 'Retrying...' : 'Retry Generation'}
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -185,7 +209,7 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
                   <div>
                     <div className="mx-auto w-12 h-12 border-2 border-zinc-700 border-t-amber-400 rounded-full animate-spin" />
                     <p className="mt-4 text-sm font-medium text-zinc-100">Generating your clip...</p>
-                    <p className="mt-2 text-xs text-zinc-500">This usually takes a moment. We'll refresh automatically.</p>
+                    <p className="mt-2 text-xs text-zinc-500">This usually takes a moment. Updates appear in real time.</p>
                   </div>
                 </div>
               )}

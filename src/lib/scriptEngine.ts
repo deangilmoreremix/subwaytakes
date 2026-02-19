@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type { EpisodeScript } from './types';
-import { generateUserId } from './format';
+import { getUserId } from './auth';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -726,7 +726,7 @@ function getRandomTemplate(topic: string): ScriptTemplate {
 }
 
 export async function generateScript(topic: string): Promise<EpisodeScript> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   try {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-script`, {
@@ -781,7 +781,7 @@ export async function generateScript(topic: string): Promise<EpisodeScript> {
 export async function saveScript(
   script: Omit<EpisodeScript, 'id' | 'user_id' | 'created_at' | 'is_generated'>
 ): Promise<EpisodeScript> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   const { data, error } = await supabase
     .from('episode_scripts')
@@ -809,7 +809,7 @@ export async function getScriptById(id: string): Promise<EpisodeScript | null> {
 }
 
 export async function listScripts(topic?: string): Promise<EpisodeScript[]> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   let query = supabase
     .from('episode_scripts')
@@ -921,7 +921,7 @@ export async function saveAsTemplate(
   templateName: string,
   tone?: string
 ): Promise<SavedTemplate> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   const { data, error } = await supabase
     .from('episode_scripts')
@@ -948,7 +948,7 @@ export async function saveAsTemplate(
 }
 
 export async function listTemplates(): Promise<SavedTemplate[]> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   const { data, error } = await supabase
     .from('episode_scripts')

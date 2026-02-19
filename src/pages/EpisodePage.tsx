@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Download, Share2, Clock, DollarSign, Film, CheckCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
-import { getEpisodeById } from '../lib/episodes';
+import { ArrowLeft, Download, Share2, Clock, MapPin, Film, CheckCircle, AlertCircle, Loader2, Sparkles, RefreshCw } from 'lucide-react';
+import { getEpisodeById, retryEpisodeShot } from '../lib/episodes';
 import { triggerComposeOverlay } from '../lib/templates';
+import { useRealtimeStatus } from '../hooks/useRealtimeStatus';
 import type { Episode, EpisodeShot } from '../lib/types';
 
 interface EpisodePageProps {
@@ -18,17 +19,22 @@ export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) 
 
   useEffect(() => {
     loadEpisode();
-    const interval = setInterval(loadEpisode, 5000);
-    return () => clearInterval(interval);
   }, [episodeId]);
+
+  useRealtimeStatus({
+    table: 'episodes',
+    id: episodeId,
+    enabled: !!episode && ['queued', 'generating', 'stitching'].includes(episode.status),
+    onUpdate: () => {
+      loadEpisode();
+    },
+  });
 
   async function loadEpisode() {
     try {
       const data = await getEpisodeById(episodeId);
       setEpisode(data);
-      if (data?.status === 'done' || data?.status === 'error') {
-        setLoading(false);
-      }
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load episode');
       setLoading(false);
@@ -52,7 +58,7 @@ export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) 
     );
   }
 
-  if (!episode) {
+  if (!episode || loading) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10">
         <div className="flex items-center justify-center py-20">
@@ -156,8 +162,12 @@ export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) 
               <button
                 onClick={async () => {
                   setComposing(true);
-                  await triggerComposeOverlay(episodeId);
-                  setComposing(false);
+                  try {
+                    await triggerComposeOverlay(episodeId);
+                  } catch {
+                  } finally {
+                    setComposing(false);
+                  }
                 }}
                 disabled={composing}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-50 transition-colors"
@@ -214,7 +224,7 @@ export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) 
 
         <div className="rounded-xl border border-zinc-700 bg-zinc-800/30 p-4">
           <div className="flex items-center gap-2 text-zinc-400 mb-2">
-            <DollarSign className="h-4 w-4" />
+            <MapPin className="h-4 w-4" />
             <span className="text-sm">City Style</span>
           </div>
           <div className="text-xl font-semibold text-zinc-100 uppercase">{episode.city_style}</div>
@@ -225,7 +235,7 @@ export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) 
         <h3 className="font-medium text-zinc-200 mb-4">Shot Breakdown</h3>
         <div className="space-y-3">
           {episode.shots?.map((shot) => (
-            <ShotRow key={shot.id} shot={shot} />
+            <ShotRow key={shot.id} shot={shot} onRetry={loadEpisode} />
           ))}
         </div>
       </div>
@@ -262,7 +272,9 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function ShotRow({ shot }: { shot: EpisodeShot }) {
+function ShotRow({ shot, onRetry }: { shot: EpisodeShot; onRetry: () => void }) {
+  const [retrying, setRetrying] = useState(false);
+
   const shotLabels: Record<string, string> = {
     cold_open: 'Cold Open',
     guest_answer: 'Guest Answer',
@@ -271,6 +283,17 @@ function ShotRow({ shot }: { shot: EpisodeShot }) {
     b_roll: 'B-Roll',
     close: 'Close',
   };
+
+  async function handleRetryShot() {
+    setRetrying(true);
+    try {
+      await retryEpisodeShot(shot.id);
+      onRetry();
+    } catch {
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   return (
     <div className="flex items-center gap-4 p-3 rounded-lg bg-zinc-800/50">
@@ -295,11 +318,23 @@ function ShotRow({ shot }: { shot: EpisodeShot }) {
         )}
       </div>
 
-      <div className="shrink-0">
+      <div className="shrink-0 flex items-center gap-2">
         {shot.status === 'done' && <CheckCircle className="h-5 w-5 text-emerald-500" />}
         {shot.status === 'running' && <Loader2 className="h-5 w-5 text-amber-500 animate-spin" />}
         {shot.status === 'queued' && <Clock className="h-5 w-5 text-zinc-500" />}
-        {shot.status === 'error' && <AlertCircle className="h-5 w-5 text-red-500" />}
+        {shot.status === 'error' && (
+          <>
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <button
+              onClick={handleRetryShot}
+              disabled={retrying}
+              className="p-1 rounded hover:bg-zinc-700 transition"
+              title="Retry this shot"
+            >
+              <RefreshCw className={`h-4 w-4 text-amber-400 ${retrying ? 'animate-spin' : ''}`} />
+            </button>
+          </>
+        )}
       </div>
 
       {shot.status === 'done' && shot.result_url && (

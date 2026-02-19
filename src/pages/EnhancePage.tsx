@@ -18,7 +18,9 @@ import {
   triggerComposeOverlay,
   createVideoExport,
 } from '../lib/templates';
-import { generateUserId, prettyType, clsx } from '../lib/format';
+import { getUserId } from '../lib/auth';
+import { prettyType, clsx } from '../lib/format';
+import { useRealtimeStatus } from '../hooks/useRealtimeStatus';
 import type { Clip, Episode, EnhancementConfig, ClipType } from '../lib/types';
 
 interface EnhancePageProps {
@@ -147,49 +149,52 @@ export function EnhancePage({ contentType, contentId, onBack }: EnhancePageProps
     setPresetApplied(true);
   }, [content, contentType, presetApplied]);
 
-  useEffect(() => {
-    if (!content) return;
-    const overlayStatus = contentType === 'clip'
-      ? (content as Clip).overlay_status
-      : (content as Episode).overlay_status;
+  const overlayStatus = contentType === 'clip'
+    ? (content as Clip | null)?.overlay_status
+    : (content as Episode | null)?.overlay_status;
 
-    if (overlayStatus === 'composing') {
-      const interval = setInterval(loadContent, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [content, contentType, loadContent]);
+  useRealtimeStatus({
+    table: contentType === 'clip' ? 'clips' : 'episodes',
+    id: contentId,
+    enabled: overlayStatus === 'composing',
+    onUpdate: (payload) => {
+      const status = payload.overlay_status as string | undefined;
+      if (status === 'done' || status === 'error') {
+        setComposing(false);
+        setComposeStatus(status);
+        loadContent();
+      }
+    },
+  });
 
   async function handleCompose() {
     if (!content) return;
     setComposing(true);
     setComposeStatus('composing');
 
+    const config = {
+      watermark: enhancementConfig.watermark,
+      lowerThird: enhancementConfig.lowerThird,
+      lowerThirdStyle: enhancementConfig.lowerThirdStyle,
+      lowerThirdName: enhancementConfig.lowerThirdName,
+      lowerThirdTitle: enhancementConfig.lowerThirdTitle,
+      captions: enhancementConfig.captions,
+      captionAnimation: enhancementConfig.captionAnimation,
+      musicTrackId: enhancementConfig.musicTrackId,
+      musicVolume: enhancementConfig.musicVolume,
+      sfxEnabled: enhancementConfig.sfxEnabled,
+      colorGrade: enhancementConfig.colorGrade,
+      endcard: enhancementConfig.endcard,
+      endcardStyle: enhancementConfig.endcardStyle,
+      progressBar: enhancementConfig.progressBar,
+    };
+
     try {
       if (contentType === 'clip') {
-        await triggerClipCompose(contentId);
+        await triggerClipCompose(contentId, config);
       } else {
-        await triggerComposeOverlay(contentId);
+        await triggerComposeOverlay(contentId, config);
       }
-
-      const pollInterval = setInterval(async () => {
-        await loadContent();
-        const fresh = contentType === 'clip'
-          ? await getClipById(contentId)
-          : await getEpisodeById(contentId);
-
-        if (fresh) {
-          const status = contentType === 'clip'
-            ? (fresh as Clip).overlay_status
-            : (fresh as Episode).overlay_status;
-
-          if (status === 'done' || status === 'error') {
-            clearInterval(pollInterval);
-            setComposing(false);
-            setComposeStatus(status);
-            setContent(fresh);
-          }
-        }
-      }, 3000);
     } catch (err) {
       console.error('Compose failed:', err);
       setComposing(false);
@@ -201,7 +206,7 @@ export function EnhancePage({ contentType, contentId, onBack }: EnhancePageProps
     if (!content) return;
     setExporting(true);
     try {
-      const userId = generateUserId();
+      const userId = getUserId();
       await createVideoExport(contentId, contentType, platform, userId);
     } catch (err) {
       console.error('Export failed:', err);
@@ -239,9 +244,6 @@ export function EnhancePage({ contentType, contentId, onBack }: EnhancePageProps
   const hasComposed = contentType === 'clip'
     ? !!(content as Clip).composed_video_url
     : !!(content as Episode).composed_video_url;
-  const overlayStatus = contentType === 'clip'
-    ? (content as Clip).overlay_status
-    : (content as Episode).overlay_status;
 
   const title = contentType === 'clip'
     ? (content as Clip).topic

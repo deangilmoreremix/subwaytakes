@@ -169,28 +169,91 @@ export async function removeTemplateLogo(templateId: string): Promise<boolean> {
   return result !== null;
 }
 
-export async function triggerComposeOverlay(episodeId: string): Promise<void> {
-  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/compose-overlay`;
-  await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ episode_id: episodeId }),
-  });
+export interface ComposeConfig {
+  watermark?: boolean;
+  lowerThird?: boolean;
+  lowerThirdStyle?: string;
+  lowerThirdName?: string;
+  lowerThirdTitle?: string;
+  captions?: boolean;
+  captionAnimation?: string;
+  musicTrackId?: string | null;
+  musicVolume?: number;
+  sfxEnabled?: boolean;
+  colorGrade?: string;
+  endcard?: boolean;
+  endcardStyle?: string;
+  progressBar?: boolean;
 }
 
-export async function triggerClipCompose(clipId: string): Promise<void> {
-  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/compose-overlay`;
-  await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ clip_id: clipId }),
-  });
+export async function triggerComposeOverlay(episodeId: string, config?: ComposeConfig): Promise<void> {
+  try {
+    await supabase
+      .from('episodes')
+      .update({ overlay_status: 'composing' })
+      .eq('id', episodeId);
+
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/compose-overlay`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ episode_id: episodeId, enhancement_config: config }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      await supabase
+        .from('episodes')
+        .update({ overlay_status: 'error' })
+        .eq('id', episodeId);
+      throw new Error(`Compose failed: ${errorText}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Compose failed:')) throw error;
+    await supabase
+      .from('episodes')
+      .update({ overlay_status: 'error' })
+      .eq('id', episodeId);
+    throw error;
+  }
+}
+
+export async function triggerClipCompose(clipId: string, config?: ComposeConfig): Promise<void> {
+  try {
+    await supabase
+      .from('clips')
+      .update({ overlay_status: 'composing' })
+      .eq('id', clipId);
+
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/compose-overlay`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ clip_id: clipId, enhancement_config: config }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      await supabase
+        .from('clips')
+        .update({ overlay_status: 'error' })
+        .eq('id', clipId);
+      throw new Error(`Compose failed: ${errorText}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Compose failed:')) throw error;
+    await supabase
+      .from('clips')
+      .update({ overlay_status: 'error' })
+      .eq('id', clipId);
+    throw error;
+  }
 }
 
 export async function assignTemplateToClip(clipId: string, templateId: string): Promise<boolean> {
@@ -242,7 +305,34 @@ export async function createVideoExport(
     console.error('Error creating export:', error);
     return null;
   }
-  return data?.id || null;
+
+  const exportId = data?.id || null;
+
+  if (exportId) {
+    try {
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-video`;
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operation: 'convert',
+          export_id: exportId,
+          parent_id: parentId,
+          parent_type: parentType,
+          platform,
+          width: spec.width,
+          height: spec.height,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to trigger export processing:', err);
+    }
+  }
+
+  return exportId;
 }
 
 export async function getExportsForContent(

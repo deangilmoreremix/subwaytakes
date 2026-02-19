@@ -1,10 +1,10 @@
 import { supabase } from './supabase';
-import type { TokenBalance, TokenTransaction, SubscriptionTier } from './types';
+import type { TokenBalance, TokenTransaction } from './types';
 import { TOKEN_COSTS, SUBSCRIPTION_PLANS } from './constants';
-import { generateUserId } from './format';
+import { getUserId } from './auth';
 
 export async function getTokenBalance(): Promise<TokenBalance | null> {
-  const userId = generateUserId();
+  const userId = getUserId();
 
   const { data, error } = await supabase
     .from('token_balances')
@@ -37,7 +37,7 @@ export async function getTokenBalance(): Promise<TokenBalance | null> {
 }
 
 async function createDefaultTokenBalance(): Promise<TokenBalance> {
-  const userId = generateUserId();
+  const userId = getUserId();
   const now = new Date().toISOString();
   const freePlan = SUBSCRIPTION_PLANS.find(p => p.tier === 'free')!;
 
@@ -74,7 +74,7 @@ async function createDefaultTokenBalance(): Promise<TokenBalance> {
 }
 
 async function resetMonthlyTokens(): Promise<TokenBalance> {
-  const userId = generateUserId();
+  const userId = getUserId();
   const now = new Date().toISOString();
 
   const { data: sub } = await supabase
@@ -128,7 +128,7 @@ export async function deductTokens(
   const totalAvailable = balance.monthlyTokens + balance.purchasedTokens - balance.usedThisMonth;
   if (totalAvailable < amount) return false;
 
-  const userId = generateUserId();
+  const userId = getUserId();
   let remainingToDeduct = amount;
   let newMonthlyTokens = balance.monthlyTokens;
   let newPurchasedTokens = balance.purchasedTokens;
@@ -172,7 +172,7 @@ export async function deductTokens(
 async function recordTransaction(
   params: Omit<TokenTransaction, 'id' | 'userId' | 'createdAt'>
 ): Promise<void> {
-  const userId = generateUserId();
+  const userId = getUserId();
   await supabase.from('token_transactions').insert({
     user_id: userId,
     type: params.type,

@@ -3,7 +3,6 @@ import {
   Film,
   TrendingUp,
   Clock,
-  Zap,
   Plus,
   Library,
   Sparkles,
@@ -13,10 +12,10 @@ import {
   Flame,
 } from 'lucide-react';
 import { TokenDisplay } from '../components/TokenDisplay';
-import { ViralScoreCard } from '../components/ViralScoreCard';
 import type { Clip, Episode, TokenBalance, ViralScore } from '../lib/types';
 import { supabase } from '../lib/supabase';
 import { formatDistanceToNow } from '../lib/format';
+import { useAuth } from '../lib/auth';
 
 interface DashboardPageProps {
   onCreateClip: () => void;
@@ -40,9 +39,9 @@ export function DashboardPage({
   onViewEpisode,
   onEpisodeBuilder,
 }: DashboardPageProps) {
+  const { profile } = useAuth();
   const [clips, setClips] = useState<Clip[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
-  const [tokenBalance, setTokenBalance] = useState<TokenBalance | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalClips: 0,
     totalEpisodes: 0,
@@ -51,6 +50,16 @@ export function DashboardPage({
   });
   const [isLoading, setIsLoading] = useState(true);
 
+  const tokenBalance: TokenBalance | null = profile
+    ? {
+        userId: profile.id,
+        monthlyTokens: profile.credits_balance,
+        purchasedTokens: 0,
+        usedThisMonth: 0,
+        lastResetDate: profile.updated_at || profile.created_at,
+      }
+    : null;
+
   useEffect(() => {
     loadDashboardData();
   }, []);
@@ -58,21 +67,18 @@ export function DashboardPage({
   async function loadDashboardData() {
     setIsLoading(true);
     try {
-      // Load recent clips
       const { data: clipsData } = await supabase
         .from('clips')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(5);
 
-      // Load recent episodes
       const { data: episodesData } = await supabase
         .from('episodes')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(3);
 
-      // Load stats
       const { count: totalClips } = await supabase
         .from('clips')
         .select('*', { count: 'exact', head: true });
@@ -95,16 +101,7 @@ export function DashboardPage({
         totalClips: totalClips || 0,
         totalEpisodes: totalEpisodes || 0,
         clipsThisWeek: clipsThisWeek || 0,
-        averageViralScore: 0, // Would calculate from viral_scores table
-      });
-
-      // Mock token balance for now
-      setTokenBalance({
-        userId: 'user',
-        monthlyTokens: 200,
-        purchasedTokens: 50,
-        usedThisMonth: 75,
-        lastResetDate: new Date().toISOString(),
+        averageViralScore: 0,
       });
     } catch (error) {
       console.error('Failed to load dashboard data:', error);

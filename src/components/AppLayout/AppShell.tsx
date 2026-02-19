@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   LayoutDashboard,
   PlusCircle,
@@ -9,8 +9,10 @@ import {
   ChevronRight,
   Sparkles,
   Palette,
+  LogOut,
 } from 'lucide-react';
 import { clsx } from '../../lib/format';
+import { useAuth } from '../../lib/auth';
 
 interface NavSection {
   id: string;
@@ -25,6 +27,7 @@ export interface AppShellProps {
   onNavigateToLibrary?: () => void;
   onNavigateToCreate?: () => void;
   onNavigateToTemplates?: () => void;
+  onNavigateToSettings?: () => void;
   children?: React.ReactNode;
 }
 
@@ -47,6 +50,7 @@ const PAGE_TITLES: Record<string, string> = {
   'question-bank': 'Question Bank',
   'enhance-clip': 'Enhance Video',
   'enhance-episode': 'Enhance Episode',
+  settings: 'Settings',
 };
 
 export function AppShell({
@@ -55,16 +59,32 @@ export function AppShell({
   onNavigateToLibrary,
   onNavigateToCreate,
   onNavigateToTemplates,
+  onNavigateToSettings,
   children,
 }: AppShellProps) {
+  const { user, profile, signOut } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarCollapsed(prev => !prev);
   }, []);
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const resolvedActive = activePage === 'shell' ? 'create' : activePage;
-  const title = PAGE_TITLES[activePage] || 'SubwayTakes';
+  const title = PAGE_TITLES[activePage || ''] || 'SubwayTakes';
+  const displayInitial = profile?.display_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U';
+  const credits = profile?.credits_balance ?? 0;
 
   return (
     <div className="flex h-screen bg-zinc-950">
@@ -143,11 +163,9 @@ export function AppShell({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-medium text-white">Tokens</span>
+                  <span className="text-sm font-medium text-white">{credits} credits</span>
                 </div>
-                <button className="text-xs text-amber-400 hover:text-amber-300">
-                  + Top up
-                </button>
+                <span className="text-xs text-zinc-500 capitalize">{profile?.subscription_tier || 'free'}</span>
               </div>
             </div>
           </div>
@@ -160,11 +178,54 @@ export function AppShell({
             <h1 className="text-xl font-semibold text-white">{title}</h1>
           </div>
           <div className="flex items-center gap-4">
-            <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800 transition-colors">
+            <button
+              onClick={onNavigateToSettings}
+              className={clsx(
+                "p-2 rounded-lg transition-colors",
+                activePage === 'settings'
+                  ? "text-amber-400 bg-amber-500/10"
+                  : "text-gray-400 hover:text-white hover:bg-zinc-800"
+              )}
+            >
               <Settings className="w-5 h-5" />
             </button>
-            <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
-              <span className="text-sm font-medium text-amber-400">U</span>
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center hover:bg-amber-500/30 transition"
+              >
+                <span className="text-sm font-medium text-amber-400">{displayInitial}</span>
+              </button>
+              {showUserMenu && (
+                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl py-2 z-50">
+                  <div className="px-4 py-2 border-b border-zinc-800">
+                    <p className="text-sm font-medium text-zinc-200 truncate">
+                      {profile?.display_name || 'User'}
+                    </p>
+                    <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      onNavigateToSettings?.();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      signOut();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
