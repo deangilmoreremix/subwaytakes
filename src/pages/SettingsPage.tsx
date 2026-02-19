@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, MapPin, Clock, Save, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { CITY_STYLES } from '../lib/constants';
 import { clsx } from '../lib/format';
 
-interface SettingsPageProps {
-  onBack: () => void;
-}
-
-export function SettingsPage({ onBack }: SettingsPageProps) {
+export function SettingsPage() {
+  const navigate = useNavigate();
   const { profile, updateProfile, user } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
@@ -49,7 +47,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <button
-        onClick={onBack}
+        onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition mb-6"
       >
         <ArrowLeft className="h-4 w-4" />

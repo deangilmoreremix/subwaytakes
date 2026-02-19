@@ -24,6 +24,12 @@ import type {
   WisdomFormat,
   WisdomDemographic,
   WisdomSetting,
+  SupportedLanguage,
+  NicheCategory,
+  InterviewFormat,
+  DurationPreset,
+  ProductPlacementConfig,
+  ExportPlatform,
 } from './types';
 import { getUserId } from './auth';
 import { createClipPlan, createVariationPrompt, createBatchVariationPrompt } from './promptEngine';
@@ -122,6 +128,14 @@ export interface CreateClipOptions {
   wisdomFormat?: WisdomFormat;
   wisdomDemographic?: WisdomDemographic;
   wisdomSetting?: WisdomSetting;
+  // New feature fields
+  language?: SupportedLanguage;
+  niche?: NicheCategory;
+  interview_format?: InterviewFormat;
+  duration_preset?: DurationPreset;
+  caption_style?: string;
+  export_platforms?: ExportPlatform[];
+  product_placement?: ProductPlacementConfig;
 }
 
 export async function createClip(options: CreateClipOptions): Promise<Clip> {
@@ -154,6 +168,13 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     wisdomFormat,
     wisdomDemographic,
     wisdomSetting,
+    language,
+    niche,
+    interview_format,
+    duration_preset,
+    caption_style,
+    export_platforms,
+    product_placement,
   } = options;
 
   // Validate inputs
@@ -252,6 +273,13 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
       model_tier: modelTier,
       speech_script: sanitizedScript || null,
       has_speech: !!sanitizedScript,
+      language: language || null,
+      niche: niche || null,
+      interview_format: interview_format || null,
+      duration_preset: duration_preset || null,
+      caption_style: caption_style || null,
+      export_platforms: export_platforms || null,
+      product_placement: product_placement || null,
     })
     .select()
     .single();
@@ -368,6 +396,13 @@ export async function createClipBatch(
       model_tier: modelTier,
       speech_script: sanitizedScript || null,
       has_speech: !!sanitizedScript,
+      language: options.language || null,
+      niche: options.niche || null,
+      interview_format: options.interview_format || null,
+      duration_preset: options.duration_preset || null,
+      caption_style: options.caption_style || null,
+      export_platforms: options.export_platforms || null,
+      product_placement: options.product_placement || null,
     };
   });
 

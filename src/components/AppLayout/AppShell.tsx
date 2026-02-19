@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   PlusCircle,
@@ -10,6 +11,7 @@ import {
   Sparkles,
   Palette,
   LogOut,
+  BarChart3,
 } from 'lucide-react';
 import { clsx } from '../../lib/format';
 import { useAuth } from '../../lib/auth';
@@ -18,51 +20,54 @@ interface NavSection {
   id: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  path: string;
   badge?: string;
+  matchPaths?: string[];
 }
 
 export interface AppShellProps {
-  activePage?: string;
-  onNavigateToDashboard?: () => void;
-  onNavigateToLibrary?: () => void;
-  onNavigateToCreate?: () => void;
-  onNavigateToTemplates?: () => void;
-  onNavigateToSettings?: () => void;
   children?: React.ReactNode;
 }
 
 const NAV_SECTIONS: NavSection[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'create', label: 'Create', icon: PlusCircle, badge: 'New' },
-  { id: 'library', label: 'Library', icon: Library },
-  { id: 'templates', label: 'Templates', icon: Palette },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  {
+    id: 'create',
+    label: 'Create',
+    icon: PlusCircle,
+    path: '/create',
+    badge: 'New',
+    matchPaths: ['/create', '/clips', '/episodes', '/questions'],
+  },
+  { id: 'library', label: 'Library', icon: Library, path: '/library' },
+  { id: 'templates', label: 'Templates', icon: Palette, path: '/templates' },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/analytics' },
 ];
 
 const PAGE_TITLES: Record<string, string> = {
-  dashboard: 'Dashboard',
-  create: 'Create Interview',
-  shell: 'Create Interview',
-  library: 'Library',
-  templates: 'Templates',
-  clip: 'Clip Preview',
-  episode: 'Episode',
-  'episode-builder': 'Episode Builder',
-  'question-bank': 'Question Bank',
-  'enhance-clip': 'Enhance Video',
-  'enhance-episode': 'Enhance Episode',
-  settings: 'Settings',
+  '/dashboard': 'Dashboard',
+  '/create': 'Create Interview',
+  '/library': 'Library',
+  '/templates': 'Templates',
+  '/questions': 'Question Bank',
+  '/settings': 'Settings',
+  '/analytics': 'Analytics',
 };
 
-export function AppShell({
-  activePage = 'create',
-  onNavigateToDashboard,
-  onNavigateToLibrary,
-  onNavigateToCreate,
-  onNavigateToTemplates,
-  onNavigateToSettings,
-  children,
-}: AppShellProps) {
+function getTitleFromPath(pathname: string): string {
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  if (pathname.startsWith('/clips/') && pathname.endsWith('/enhance')) return 'Enhance Video';
+  if (pathname.startsWith('/clips/')) return 'Clip Preview';
+  if (pathname === '/episodes/new') return 'Episode Builder';
+  if (pathname.startsWith('/episodes/') && pathname.endsWith('/enhance')) return 'Enhance Episode';
+  if (pathname.startsWith('/episodes/')) return 'Episode';
+  return 'SubwayTakes';
+}
+
+export function AppShell({ children }: AppShellProps) {
   const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -81,10 +86,14 @@ export function AppShell({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const resolvedActive = activePage === 'shell' ? 'create' : activePage;
-  const title = PAGE_TITLES[activePage || ''] || 'SubwayTakes';
+  const title = getTitleFromPath(location.pathname);
   const displayInitial = profile?.display_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U';
   const credits = profile?.credits_balance ?? 0;
+
+  function isNavActive(section: NavSection): boolean {
+    const paths = section.matchPaths || [section.path];
+    return paths.some(p => location.pathname === p || location.pathname.startsWith(p + '/'));
+  }
 
   return (
     <div className="flex h-screen bg-zinc-950">
@@ -119,26 +128,15 @@ export function AppShell({
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_SECTIONS.map((section) => {
             const Icon = section.icon;
-            const isActive = resolvedActive === section.id
-              || (section.id === 'create' && ['clip', 'enhance-clip', 'episode', 'enhance-episode', 'episode-builder', 'question-bank'].includes(resolvedActive));
+            const active = isNavActive(section);
 
             return (
               <button
                 key={section.id}
-                onClick={() => {
-                  if (section.id === 'dashboard' && onNavigateToDashboard) {
-                    onNavigateToDashboard();
-                  } else if (section.id === 'create' && onNavigateToCreate) {
-                    onNavigateToCreate();
-                  } else if (section.id === 'library' && onNavigateToLibrary) {
-                    onNavigateToLibrary();
-                  } else if (section.id === 'templates' && onNavigateToTemplates) {
-                    onNavigateToTemplates();
-                  }
-                }}
+                onClick={() => navigate(section.path)}
                 className={clsx(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all relative",
-                  isActive
+                  active
                     ? "bg-amber-500/10 text-amber-400"
                     : "text-gray-400 hover:text-white hover:bg-zinc-800"
                 )}
@@ -179,10 +177,10 @@ export function AppShell({
           </div>
           <div className="flex items-center gap-4">
             <button
-              onClick={onNavigateToSettings}
+              onClick={() => navigate('/settings')}
               className={clsx(
                 "p-2 rounded-lg transition-colors",
-                activePage === 'settings'
+                location.pathname === '/settings'
                   ? "text-amber-400 bg-amber-500/10"
                   : "text-gray-400 hover:text-white hover:bg-zinc-800"
               )}
@@ -207,7 +205,7 @@ export function AppShell({
                   <button
                     onClick={() => {
                       setShowUserMenu(false);
-                      onNavigateToSettings?.();
+                      navigate('/settings');
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
                   >

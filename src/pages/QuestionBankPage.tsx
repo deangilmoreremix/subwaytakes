@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Plus,
@@ -24,13 +25,8 @@ import {
   type QuestionBankItem,
 } from '../lib/questionBank';
 
-interface QuestionBankPageProps {
-  onBack: () => void;
-  onSelectQuestion?: (question: QuestionBankItem) => void;
-  selectionMode?: boolean;
-}
-
-export function QuestionBankPage({ onBack, onSelectQuestion, selectionMode = false }: QuestionBankPageProps) {
+export function QuestionBankPage() {
+  const navigate = useNavigate();
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,12 +139,6 @@ export function QuestionBankPage({ onBack, onSelectQuestion, selectionMode = fal
     }
   }
 
-  function handleSelectQuestion(question: QuestionBankItem) {
-    if (selectionMode && onSelectQuestion) {
-      onSelectQuestion(question);
-    }
-  }
-
   function startEdit(question: QuestionBankItem) {
     setEditingId(question.id);
     setEditValue(question.question);
@@ -166,11 +156,11 @@ export function QuestionBankPage({ onBack, onSelectQuestion, selectionMode = fal
     <div className="mx-auto max-w-5xl px-4 py-10">
       <div className="mb-8">
         <button
-          onClick={onBack}
+          onClick={() => navigate('/create')}
           className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition mb-4"
         >
           <ChevronLeft className="h-4 w-4" />
-          {selectionMode ? 'Back to Episode Builder' : 'Back'}
+          Back
         </button>
 
         <div className="flex items-center justify-between">
@@ -183,12 +173,12 @@ export function QuestionBankPage({ onBack, onSelectQuestion, selectionMode = fal
                 Question Bank
               </h1>
               <p className="text-sm text-zinc-400">
-                {selectionMode ? 'Select a hook question for your episode' : 'Manage your interview questions'}
+                Manage your interview questions
               </p>
             </div>
           </div>
 
-          {!selectionMode && (
+          {(
             <button
               onClick={() => setShowAddForm(true)}
               className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400"
@@ -380,19 +370,14 @@ export function QuestionBankPage({ onBack, onSelectQuestion, selectionMode = fal
         </div>
       ) : questions.length === 0 ? (
         <div className="text-center py-12 text-zinc-500">
-          No questions found. {!selectionMode && 'Add your first question to get started.'}
+          No questions found. Add your first question to get started.
         </div>
       ) : (
         <div className="space-y-2">
           {questions.map((question) => (
             <div
               key={question.id}
-              className={`rounded-xl border bg-zinc-800/30 p-4 transition ${
-                selectionMode
-                  ? 'border-zinc-700 hover:border-amber-500/50 cursor-pointer'
-                  : 'border-zinc-700'
-              } ${question.is_trending ? 'ring-1 ring-amber-500/20' : ''}`}
-              onClick={() => selectionMode && handleSelectQuestion(question)}
+              className={`rounded-xl border bg-zinc-800/30 p-4 transition border-zinc-700 ${question.is_trending ? 'ring-1 ring-amber-500/20' : ''}`}
             >
               {editingId === question.id ? (
                 <div className="flex items-center gap-3">
@@ -455,7 +440,7 @@ export function QuestionBankPage({ onBack, onSelectQuestion, selectionMode = fal
                     )}
                   </div>
 
-                  {!selectionMode && (
+                  {(
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={(e) => {

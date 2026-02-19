@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Plus,
   Copy,
   Trash2,
-  Check,
   Palette,
   Type,
   Layout,
@@ -17,11 +17,8 @@ import { fetchTemplates, deleteTemplate, duplicateTemplate } from '../lib/templa
 import { TemplateEditor } from '../components/TemplateEditor';
 import { TemplatePreviewCard } from '../components/TemplatePreviewCard';
 
-interface TemplateManagerPageProps {
-  onBack: () => void;
-}
-
-export function TemplateManagerPage({ onBack }: TemplateManagerPageProps) {
+export function TemplateManagerPage() {
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<VideoTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingTemplate, setEditingTemplate] = useState<VideoTemplate | null>(null);
@@ -82,7 +79,7 @@ export function TemplateManagerPage({ onBack }: TemplateManagerPageProps) {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <button
-            onClick={onBack}
+            onClick={() => navigate('/create')}
             className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />

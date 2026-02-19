@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, RefreshCw, Layers, Grid, Film, Clapperboard } from 'lucide-react';
 import { FilterTabs } from '../components/FilterTabs';
 import { ClipGrid } from '../components/ClipGrid';
@@ -9,16 +10,12 @@ import { listEpisodes } from '../lib/episodes';
 import type { Clip, ClipType, Episode } from '../lib/types';
 import { clsx } from '../lib/format';
 
-interface LibraryPageProps {
-  onSelectClip: (clipId: string) => void;
-  onSelectEpisode?: (episodeId: string) => void;
-}
-
 type FilterValue = 'all' | ClipType;
 type ViewMode = 'all' | 'grouped';
 type ContentMode = 'clips' | 'episodes';
 
-export function LibraryPage({ onSelectClip, onSelectEpisode }: LibraryPageProps) {
+export function LibraryPage() {
+  const navigate = useNavigate();
   const [clips, setClips] = useState<Clip[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [batches, setBatches] = useState<Map<string, Clip[]>>(new Map());
@@ -238,7 +235,7 @@ export function LibraryPage({ onSelectClip, onSelectEpisode }: LibraryPageProps)
                 <EpisodeCard
                   key={episode.id}
                   episode={episode}
-                  onClick={() => onSelectEpisode?.(episode.id)}
+                  onClick={() => navigate('/episodes/' + episode.id)}
                 />
               ))}
             </div>
@@ -262,7 +259,7 @@ export function LibraryPage({ onSelectClip, onSelectEpisode }: LibraryPageProps)
                     key={batchId}
                     batchId={batchId}
                     clips={batchClips}
-                    onSelectClip={onSelectClip}
+                    onSelectClip={(clipId: string) => navigate('/clips/' + clipId)}
                   />
                 ))}
               </div>
@@ -273,16 +270,16 @@ export function LibraryPage({ onSelectClip, onSelectEpisode }: LibraryPageProps)
                 {batches.size > 0 && (
                   <h3 className="text-sm font-medium text-zinc-400 mb-4">Single Clips</h3>
                 )}
-                <ClipGrid clips={singles} onSelectClip={onSelectClip} />
+                <ClipGrid clips={singles} onSelectClip={(clipId: string) => navigate('/clips/' + clipId)} />
               </div>
             )}
 
             {batches.size === 0 && singles.length === 0 && (
-              <ClipGrid clips={[]} onSelectClip={onSelectClip} />
+              <ClipGrid clips={[]} onSelectClip={(clipId: string) => navigate('/clips/' + clipId)} />
             )}
           </div>
         ) : (
-          <ClipGrid clips={clips} onSelectClip={onSelectClip} />
+          <ClipGrid clips={clips} onSelectClip={(clipId: string) => navigate('/clips/' + clipId)} />
         )}
       </div>
     </div>

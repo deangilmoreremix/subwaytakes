@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Film,
   TrendingUp,
@@ -17,14 +18,6 @@ import { supabase } from '../lib/supabase';
 import { formatDistanceToNow } from '../lib/format';
 import { useAuth } from '../lib/auth';
 
-interface DashboardPageProps {
-  onCreateClip: () => void;
-  onViewLibrary: () => void;
-  onViewClip: (clipId: string) => void;
-  onViewEpisode: (episodeId: string) => void;
-  onEpisodeBuilder: () => void;
-}
-
 interface DashboardStats {
   totalClips: number;
   totalEpisodes: number;
@@ -32,13 +25,8 @@ interface DashboardStats {
   averageViralScore: number;
 }
 
-export function DashboardPage({
-  onCreateClip,
-  onViewLibrary,
-  onViewClip,
-  onViewEpisode,
-  onEpisodeBuilder,
-}: DashboardPageProps) {
+export function DashboardPage() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [clips, setClips] = useState<Clip[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
@@ -95,13 +83,20 @@ export function DashboardPage({
         .select('*', { count: 'exact', head: true })
         .gte('created_at', oneWeekAgo.toISOString());
 
-      setClips(clipsData || []);
+      const allClips = clipsData || [];
+      setClips(allClips);
       setEpisodes(episodesData || []);
+
+      const scoredClips = allClips.filter(c => c.viral_score && c.viral_score.overall > 0);
+      const avgViral = scoredClips.length > 0
+        ? Math.round(scoredClips.reduce((sum, c) => sum + (c.viral_score?.overall || 0), 0) / scoredClips.length)
+        : 0;
+
       setStats({
         totalClips: totalClips || 0,
         totalEpisodes: totalEpisodes || 0,
         clipsThisWeek: clipsThisWeek || 0,
-        averageViralScore: 0,
+        averageViralScore: avgViral,
       });
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -160,30 +155,29 @@ export function DashboardPage({
             icon={<Plus className="h-5 w-5" />}
             label="Create Clip"
             description="Generate a new video"
-            onClick={onCreateClip}
+            onClick={() => navigate('/create')}
             color="emerald"
           />
           <QuickActionButton
             icon={<Film className="h-5 w-5" />}
             label="Episode Builder"
             description="Create full episodes"
-            onClick={onEpisodeBuilder}
+            onClick={() => navigate('/episodes/new')}
             color="amber"
           />
           <QuickActionButton
             icon={<Library className="h-5 w-5" />}
             label="Library"
             description="View all content"
-            onClick={onViewLibrary}
+            onClick={() => navigate('/library')}
             color="blue"
           />
           <QuickActionButton
             icon={<BarChart3 className="h-5 w-5" />}
             label="Analytics"
-            description="Coming soon"
-            onClick={() => {}}
+            description="View analytics"
+            onClick={() => navigate('/analytics')}
             color="purple"
-            disabled
           />
         </div>
       </div>
@@ -196,7 +190,7 @@ export function DashboardPage({
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-zinc-100">Recent Activity</h2>
               <button
-                onClick={onViewLibrary}
+                onClick={() => navigate('/library')}
                 className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
               >
                 View all <ChevronRight className="h-4 w-4" />
@@ -219,7 +213,7 @@ export function DashboardPage({
                     subtitle={`${clip.video_type.replace('_', ' ')} • ${clip.duration_seconds}s`}
                     status={clip.status}
                     timestamp={clip.created_at}
-                    onClick={() => onViewClip(clip.id)}
+                    onClick={() => navigate('/clips/' + clip.id)}
                     viralScore={clip.viral_score}
                   />
                 ))}
@@ -231,7 +225,7 @@ export function DashboardPage({
                     subtitle={`${episode.total_duration_seconds}s • ${episode.city_style}`}
                     status={episode.status}
                     timestamp={episode.created_at}
-                    onClick={() => onViewEpisode(episode.id)}
+                    onClick={() => navigate('/episodes/' + episode.id)}
                   />
                 ))}
               </div>
@@ -261,7 +255,7 @@ export function DashboardPage({
                 {viralClips.map((clip) => (
                   <div
                     key={clip.id}
-                    onClick={() => onViewClip(clip.id)}
+                    onClick={() => navigate('/clips/' + clip.id)}
                     className="p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 cursor-pointer transition"
                   >
                     <div className="flex items-center justify-between">

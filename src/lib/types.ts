@@ -1442,6 +1442,14 @@ export interface Clip {
   speaker_archetype: SpeakerArchetype | null;
   // Age-appropriate content field
   target_age_group: AgeGroup | null;
+  // New feature fields
+  language: SupportedLanguage | null;
+  niche: NicheCategory | null;
+  interview_format: InterviewFormat | null;
+  duration_preset: DurationPreset | null;
+  caption_style: string | null;
+  export_platforms: ExportPlatform[] | null;
+  product_placement: ProductPlacementConfig | null;
   // Universal overlay/compose fields
   overlay_status: string | null;
   composed_video_url: string | null;

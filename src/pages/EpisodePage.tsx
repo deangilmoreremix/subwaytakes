@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Share2, Clock, MapPin, Film, CheckCircle, AlertCircle, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import { getEpisodeById, retryEpisodeShot } from '../lib/episodes';
 import { triggerComposeOverlay } from '../lib/templates';
 import { useRealtimeStatus } from '../hooks/useRealtimeStatus';
 import type { Episode, EpisodeShot } from '../lib/types';
 
-interface EpisodePageProps {
-  episodeId: string;
-  onBack: () => void;
-  onEnhance?: (episodeId: string) => void;
-}
-
-export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) {
+export function EpisodePage() {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const episodeId = id!;
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +46,7 @@ export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) 
           <AlertCircle className="h-8 w-8 text-red-400 mx-auto mb-3" />
           <p className="text-red-400">{error}</p>
           <button
-            onClick={onBack}
+            onClick={() => navigate('/library')}
             className="mt-4 text-sm text-zinc-400 hover:text-zinc-200"
           >
             Go Back
@@ -75,7 +73,7 @@ export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <button
-        onClick={onBack}
+        onClick={() => navigate('/library')}
         className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -97,15 +95,13 @@ export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) 
 
         {episode.status === 'done' && episode.final_video_url && (
           <div className="flex gap-2">
-            {onEnhance && (
-              <button
-                onClick={() => onEnhance(episodeId)}
-                className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-black hover:bg-amber-400 transition"
-              >
-                <Sparkles className="h-4 w-4" />
-                Enhance
-              </button>
-            )}
+            <button
+              onClick={() => navigate('/episodes/' + id + '/enhance')}
+              className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-black hover:bg-amber-400 transition"
+            >
+              <Sparkles className="h-4 w-4" />
+              Enhance
+            </button>
             <a
               href={episode.composed_video_url || episode.final_video_url}
               download

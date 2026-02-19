@@ -13,7 +13,23 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { fetchTemplates, type VideoTemplate } from '../lib/templates';
+import { supabase } from '../lib/supabase';
 import type { ColorGradePreset, EndcardStyle, EnhancementConfig } from '../lib/types';
+
+interface MusicTrack {
+  id: string;
+  name: string;
+  mood: string;
+  duration_seconds: number;
+  bpm: number;
+}
+
+interface SoundEffect {
+  id: string;
+  name: string;
+  category: string;
+  duration_seconds: number;
+}
 
 interface EnhancementPanelProps {
   config: EnhancementConfig;
@@ -114,12 +130,41 @@ function SectionToggle({
   );
 }
 
+const MOOD_COLORS: Record<string, string> = {
+  energetic: 'bg-red-500/20 text-red-300',
+  calm: 'bg-cyan-500/20 text-cyan-300',
+  dramatic: 'bg-orange-500/20 text-orange-300',
+  inspiring: 'bg-amber-500/20 text-amber-300',
+  cinematic: 'bg-blue-500/20 text-blue-300',
+  playful: 'bg-emerald-500/20 text-emerald-300',
+  tense: 'bg-rose-500/20 text-rose-300',
+  neutral: 'bg-zinc-500/20 text-zinc-300',
+};
+
+const SFX_CATEGORY_COLORS: Record<string, string> = {
+  subway: 'bg-blue-500/20 text-blue-300',
+  street: 'bg-emerald-500/20 text-emerald-300',
+  studio: 'bg-amber-500/20 text-amber-300',
+  motivational: 'bg-orange-500/20 text-orange-300',
+  wisdom: 'bg-cyan-500/20 text-cyan-300',
+  transition: 'bg-zinc-500/20 text-zinc-300',
+  stinger: 'bg-rose-500/20 text-rose-300',
+};
+
 export function EnhancementPanel({ config, onChange, contentType }: EnhancementPanelProps) {
   const [templates, setTemplates] = useState<VideoTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [musicTracks, setMusicTracks] = useState<MusicTrack[]>([]);
+  const [soundEffects, setSoundEffects] = useState<SoundEffect[]>([]);
 
   useEffect(() => {
     fetchTemplates().then(setTemplates);
+    supabase.from('music_tracks').select('id, name, mood, duration_seconds, bpm').order('name').then(({ data }) => {
+      if (data) setMusicTracks(data);
+    });
+    supabase.from('sound_effects').select('id, name, category, duration_seconds').order('name').then(({ data }) => {
+      if (data) setSoundEffects(data);
+    });
   }, []);
 
   function update(partial: Partial<EnhancementConfig>) {
@@ -245,20 +290,52 @@ export function EnhancementPanel({ config, onChange, contentType }: EnhancementP
         label="Background Music"
         icon={Music}
         enabled={!!config.musicTrackId}
-        onToggle={() => update({ musicTrackId: config.musicTrackId ? null : 'default' })}
+        onToggle={() => update({ musicTrackId: config.musicTrackId ? null : (musicTracks[0]?.id || 'default') })}
       >
-        <div>
-          <label className="text-xs text-zinc-500 mb-1.5 block">Volume</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={config.musicVolume * 100}
-              onChange={(e) => update({ musicVolume: Number(e.target.value) / 100 })}
-              className="flex-1 h-1.5 rounded-full appearance-none bg-zinc-700 accent-amber-500"
-            />
-            <span className="text-xs text-zinc-400 w-8 text-right">{Math.round(config.musicVolume * 100)}%</span>
+        <div className="space-y-3">
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {musicTracks.map((track) => (
+              <button
+                key={track.id}
+                onClick={() => update({ musicTrackId: track.id })}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition ${
+                  config.musicTrackId === track.id
+                    ? 'bg-amber-500/10 border border-amber-500/30'
+                    : 'bg-zinc-800/40 border border-zinc-700 hover:border-zinc-600'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Music className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
+                  <div>
+                    <span className="text-xs font-medium text-zinc-200 block">{track.name}</span>
+                    <span className="text-[10px] text-zinc-500">{track.duration_seconds}s / {track.bpm} BPM</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${MOOD_COLORS[track.mood] || 'bg-zinc-700 text-zinc-400'}`}>
+                    {track.mood}
+                  </span>
+                  {config.musicTrackId === track.id && <Check className="h-3 w-3 text-amber-400 flex-shrink-0" />}
+                </div>
+              </button>
+            ))}
+            {musicTracks.length === 0 && (
+              <p className="text-xs text-zinc-500 text-center py-3">No music tracks available</p>
+            )}
+          </div>
+          <div>
+            <label className="text-xs text-zinc-500 mb-1.5 block">Volume</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={config.musicVolume * 100}
+                onChange={(e) => update({ musicVolume: Number(e.target.value) / 100 })}
+                className="flex-1 h-1.5 rounded-full appearance-none bg-zinc-700 accent-amber-500"
+              />
+              <span className="text-xs text-zinc-400 w-8 text-right">{Math.round(config.musicVolume * 100)}%</span>
+            </div>
           </div>
         </div>
       </SectionToggle>
@@ -268,7 +345,30 @@ export function EnhancementPanel({ config, onChange, contentType }: EnhancementP
         icon={Volume2}
         enabled={config.sfxEnabled}
         onToggle={() => update({ sfxEnabled: !config.sfxEnabled })}
-      />
+      >
+        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+          {soundEffects.map((sfx) => (
+            <div
+              key={sfx.id}
+              className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-800/40 border border-zinc-700"
+            >
+              <div className="flex items-center gap-2.5">
+                <Volume2 className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
+                <div>
+                  <span className="text-xs font-medium text-zinc-200 block">{sfx.name}</span>
+                  <span className="text-[10px] text-zinc-500">{sfx.duration_seconds}s</span>
+                </div>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${SFX_CATEGORY_COLORS[sfx.category] || 'bg-zinc-700 text-zinc-400'}`}>
+                {sfx.category}
+              </span>
+            </div>
+          ))}
+          {soundEffects.length === 0 && (
+            <p className="text-xs text-zinc-500 text-center py-3">No sound effects available</p>
+          )}
+        </div>
+      </SectionToggle>
 
       <SectionToggle
         label="Color Grade"

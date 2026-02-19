@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Film, Sparkles, Users, Play, ChevronRight, ChevronLeft, Loader2, Flame, Music } from 'lucide-react';
 import { CityStyleSelector } from '../components/CityStyleSelector';
 import { TopicSelector } from '../components/TopicSelector';
@@ -13,15 +14,10 @@ import { generateRandomGuest, DEFAULT_HOST } from '../lib/characters';
 import { incrementUsageCount } from '../lib/questionBank';
 import type { CityStyle, EpisodeScript, CharacterBible, Beat, InterviewMode } from '../lib/types';
 
-interface EpisodeBuilderPageProps {
-  onEpisodeCreated: (episodeId: string) => void;
-  onBack: () => void;
-  onOpenQuestionBank?: () => void;
-}
-
 type WizardStep = 'topic' | 'script' | 'beats' | 'characters' | 'preview' | 'generating';
 
-export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBank }: EpisodeBuilderPageProps) {
+export function EpisodeBuilderPage() {
+  const navigate = useNavigate();
   const [step, setStep] = useState<WizardStep>('topic');
   const [selectedTopic, setSelectedTopic] = useState<string>('hottakes');
   const [cityStyle, setCityStyle] = useState<CityStyle>('nyc');
@@ -86,7 +82,7 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
         interviewMode,
         templateId: selectedTemplateId,
       });
-      onEpisodeCreated(episode.id);
+      navigate('/episodes/' + episode.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create episode');
       setStep('preview');
@@ -111,20 +107,18 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
         <div className="pt-4">
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium text-zinc-300">Hook Question (optional)</label>
-            {onOpenQuestionBank && (
-              <button
-                onClick={onOpenQuestionBank}
-                className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition"
-              >
-                <Flame className="h-3 w-3" />
-                Manage Question Bank
-              </button>
-            )}
+            <button
+              onClick={() => navigate('/questions')}
+              className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition"
+            >
+              <Flame className="h-3 w-3" />
+              Manage Question Bank
+            </button>
           </div>
           <QuestionPicker
             value={customHookQuestion}
             onChange={handleQuestionSelect}
-            onOpenBank={onOpenQuestionBank}
+            onOpenBank={() => navigate('/questions')}
           />
           <p className="text-xs text-zinc-500 mt-1.5">
             Pick a specific question or leave blank for AI-generated hooks
@@ -437,7 +431,7 @@ export function EpisodeBuilderPage({ onEpisodeCreated, onBack, onOpenQuestionBan
     <div className="mx-auto max-w-4xl px-4 py-10">
       <div className="mb-8">
         <button
-          onClick={onBack}
+          onClick={() => navigate('/create')}
           className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition mb-4"
         >
           <ChevronLeft className="h-4 w-4" />

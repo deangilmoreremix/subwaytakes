@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Layers, MessageCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { ClipActions } from '../components/ClipActions';
 import { VideoProcessingToolbar } from '../components/VideoProcessingToolbar';
+import { ViralScoreCard } from '../components/ViralScoreCard';
+import { RerollPanel } from '../components/RerollPanel';
 import { getClipById, regenerateClip, updateClipStatus, retryClip } from '../lib/clips';
+import { useAuth } from '../lib/auth';
+import type { RerollOptions } from '../lib/types';
 import { prettyType, formatDate, clsx } from '../lib/format';
 import { useRealtimeStatus } from '../hooks/useRealtimeStatus';
 import type { Clip } from '../lib/types';
@@ -18,13 +23,6 @@ import {
   STUDIO_SETUPS,
   STUDIO_LIGHTING,
 } from '../lib/constants';
-
-interface ClipPageProps {
-  clipId: string;
-  onBack: () => void;
-  onNavigateToClip: (clipId: string) => void;
-  onEnhance?: (clipId: string) => void;
-}
 
 function StatusBadge({ status }: { status: Clip['status'] }) {
   const config = {
@@ -49,12 +47,17 @@ function findLabel(list: { value: string; label: string }[], value: string | nul
   return list.find(item => item.value === value)?.label || prettyType(value);
 }
 
-export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPageProps) {
+export function ClipPage() {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const { profile } = useAuth();
+  const clipId = id!;
   const [clip, setClip] = useState<Clip | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [rerolling, setRerolling] = useState(false);
 
   const fetchClip = useCallback(async () => {
     try {
@@ -87,7 +90,7 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
     try {
       const newClip = await regenerateClip(clip.id, mode);
       await updateClipStatus(newClip.id, 'running');
-      onNavigateToClip(newClip.id);
+      navigate('/clips/' + newClip.id);
     } catch (error) {
       console.error('Failed to regenerate:', error);
     } finally {
@@ -114,6 +117,20 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleReroll(_options: RerollOptions) {
+    if (!clip) return;
+    setRerolling(true);
+    try {
+      const newClip = await regenerateClip(clip.id, 'variation');
+      await updateClipStatus(newClip.id, 'running');
+      navigate('/clips/' + newClip.id);
+    } catch (error) {
+      console.error('Reroll failed:', error);
+    } finally {
+      setRerolling(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10">
@@ -133,7 +150,7 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
           <h2 className="mt-4 text-lg font-semibold text-zinc-100">Clip not found</h2>
           <p className="mt-2 text-sm text-zinc-400">This clip may have been deleted or doesn't exist.</p>
           <button
-            onClick={onBack}
+            onClick={() => navigate('/create')}
             className="mt-4 rounded-xl bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
           >
             Go back
@@ -149,7 +166,7 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <button
-        onClick={onBack}
+        onClick={() => navigate('/create')}
         className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -265,15 +282,17 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
             </div>
           </div>
 
+          <ViralScoreCard score={clip.viral_score || null} isLoading={loading} />
+
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
             <p className="text-xs text-zinc-500">
               <TypeHelpText videoType={clip.video_type} />
             </p>
           </div>
 
-          {ready && onEnhance && (
+          {ready && (
             <button
-              onClick={() => onEnhance(clip.id)}
+              onClick={() => navigate('/clips/' + clip.id + '/enhance')}
               className="w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-semibold text-zinc-900 hover:bg-amber-400 transition"
             >
               <Sparkles className="h-4 w-4" />
@@ -281,8 +300,16 @@ export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPa
             </button>
           )}
 
+          {ready && (
+            <RerollPanel
+              onReroll={handleReroll}
+              isLoading={rerolling}
+              currentTokens={profile?.credits_balance ?? 0}
+            />
+          )}
+
           <button
-            onClick={onBack}
+            onClick={() => navigate('/create')}
             className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/30 px-4 py-3 text-sm font-semibold text-zinc-100 hover:bg-zinc-900/50 transition"
           >
             Create another clip

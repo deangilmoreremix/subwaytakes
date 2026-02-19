@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Zap, Layers, ChevronDown, ChevronUp, Users, Sparkles, MapPin, Flame, Heart, Wand2, Globe, Hash, Film, Tag, ShoppingBag, Languages } from 'lucide-react';
 import { ClipTypeSelector } from '../components/ClipTypeSelector';
 import { TopicSelect } from '../components/TopicSelect';
@@ -161,13 +162,10 @@ import type {
 // Alias for component to avoid naming conflict with type
 const PlatformPoll = PlatformPollComponent;
 
-interface CreatePageProps {
-  onClipCreated: (clipId: string) => void;
-}
-
 type GenerationStatus = 'idle' | 'planning' | 'generating' | 'done' | 'error';
 
-export function CreatePage({ onClipCreated }: CreatePageProps) {
+export function CreatePage() {
+  const navigate = useNavigate();
   const [clipType, setClipType] = useState<ClipType>('wisdom_interview');
   const [topic, setTopic] = useState<string>(TOPICS.wisdom_interview[0]);
   const [duration, setDuration] = useState<number>(6);
@@ -498,19 +496,27 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
         studioLighting: isStudio ? studioLighting : undefined,
         // Remotion effects
         effects,
+        // New feature fields
+        language,
+        niche,
+        interview_format: interviewFormat,
+        duration_preset: durationPreset,
+        caption_style: captionStyle,
+        export_platforms: exportPlatforms,
+        product_placement: productPlacement.enabled ? productPlacement : undefined,
       };
 
       if (batchMode && isSubway) {
         const clips = await createClipBatch(options, batchSize);
         setStatus('generating');
         setTimeout(() => {
-          onClipCreated(clips[0].id);
+          navigate('/clips/' + clips[0].id);
         }, 500);
       } else {
         const clip = await createClip(options);
         setStatus('generating');
         setTimeout(() => {
-          onClipCreated(clip.id);
+          navigate('/clips/' + clip.id);
         }, 500);
       }
     } catch (error) {
