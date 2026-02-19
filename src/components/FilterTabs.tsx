@@ -1,3 +1,4 @@
+import { VALID_CLIP_TYPES } from '../lib/types';
 import type { ClipType } from '../lib/types';
 import { clsx, prettyType } from '../lib/format';
 
@@ -10,7 +11,7 @@ interface FilterTabsProps {
 }
 
 export function FilterTabs({ value, onChange, disabled }: FilterTabsProps) {
-  const tabs: FilterValue[] = ['all', 'motivational', 'street_interview', 'subway_interview'];
+  const tabs: FilterValue[] = ['all', ...VALID_CLIP_TYPES];
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -27,7 +28,7 @@ export function FilterTabs({ value, onChange, disabled }: FilterTabsProps) {
             className={clsx(
               'rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200',
               isActive
-                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
                 : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200',
               disabled && 'opacity-60 cursor-not-allowed'
             )}

@@ -25,7 +25,7 @@ export function ClipTypeSelector({ value, onChange, disabled }: ClipTypeSelector
       <label className="block text-sm font-medium text-zinc-300 mb-3">
         Clip Type
       </label>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {types.map((type) => {
           const info = CLIP_TYPE_INFO[type];
           const isActive = value === type;
@@ -39,21 +39,21 @@ export function ClipTypeSelector({ value, onChange, disabled }: ClipTypeSelector
               className={clsx(
                 'relative rounded-2xl border p-4 text-left transition-all duration-200',
                 isActive
-                  ? 'border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/20'
+                  ? 'border-amber-500/50 bg-amber-500/10 ring-1 ring-amber-500/20'
                   : 'border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900 hover:border-zinc-700',
                 disabled && 'opacity-60 cursor-not-allowed'
               )}
             >
               <div className={clsx(
                 'mb-2',
-                isActive ? 'text-emerald-400' : 'text-zinc-400'
+                isActive ? 'text-amber-400' : 'text-zinc-400'
               )}>
                 {ICONS[type]}
               </div>
               <div className="text-sm font-semibold text-zinc-100">{info.title}</div>
               <div className="mt-1 text-xs text-zinc-500">{info.subtitle}</div>
               {isActive && (
-                <div className="absolute top-3 right-3 h-2 w-2 rounded-full bg-emerald-400" />
+                <div className="absolute top-3 right-3 h-2 w-2 rounded-full bg-amber-400" />
               )}
             </button>
           );

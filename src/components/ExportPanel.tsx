@@ -57,11 +57,6 @@ export function ExportPanel({ parentId, parentType, videoUrl, onExport, exportin
   const horizontalPlatforms = Object.entries(PLATFORM_SPECS).filter(([, spec]) => spec.height <= spec.width);
   const squarePlatforms = Object.entries(PLATFORM_SPECS).filter(([, spec]) => spec.height === spec.width);
 
-  const allNonSquare = [
-    ...verticalPlatforms.filter(([key]) => !squarePlatforms.find(([k]) => k === key)),
-    ...horizontalPlatforms.filter(([key]) => !squarePlatforms.find(([k]) => k === key)),
-  ];
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">

@@ -72,6 +72,10 @@ function App() {
     setCurrentPage('library');
   }
 
+  function handleGoToCreate() {
+    setCurrentPage('shell');
+  }
+
   function handleEnhanceClip(clipId: string) {
     setSelectedClipId(clipId);
     setCurrentPage('enhance-clip');
@@ -82,100 +86,100 @@ function App() {
     setCurrentPage('enhance-episode');
   }
 
-  if (currentPage === 'shell') {
-    return (
-      <div className="min-h-screen bg-zinc-950">
-        <AppShell
-          onNavigateToDashboard={handleGoToDashboard}
-          onNavigateToLibrary={handleGoToLibrary}
-          onNavigateToTemplates={() => setCurrentPage('templates')}
-        >
-          <CreatePage onClipCreated={handleClipCreated} />
-        </AppShell>
-      </div>
-    );
+  function renderPage() {
+    switch (currentPage) {
+      case 'shell':
+      case 'create':
+        return <CreatePage onClipCreated={handleClipCreated} />;
+
+      case 'dashboard':
+        return (
+          <DashboardPage
+            onCreateClip={handleGoToCreate}
+            onViewLibrary={handleGoToLibrary}
+            onViewClip={handleSelectClip}
+            onViewEpisode={handleSelectEpisode}
+            onEpisodeBuilder={handleGoToEpisodeBuilder}
+          />
+        );
+
+      case 'clip':
+        return selectedClipId ? (
+          <ClipPage
+            clipId={selectedClipId}
+            onBack={handleBackFromClip}
+            onNavigateToClip={handleSelectClip}
+            onEnhance={handleEnhanceClip}
+          />
+        ) : null;
+
+      case 'library':
+        return (
+          <LibraryPage
+            onSelectClip={handleSelectClip}
+            onSelectEpisode={handleSelectEpisode}
+          />
+        );
+
+      case 'episode-builder':
+        return (
+          <EpisodeBuilderPage
+            onEpisodeCreated={handleEpisodeCreated}
+            onBack={handleBackFromEpisodeBuilder}
+            onOpenQuestionBank={handleGoToQuestionBank}
+          />
+        );
+
+      case 'question-bank':
+        return <QuestionBankPage onBack={handleBackFromQuestionBank} />;
+
+      case 'templates':
+        return <TemplateManagerPage onBack={handleGoToCreate} />;
+
+      case 'episode':
+        return selectedEpisodeId ? (
+          <EpisodePage
+            episodeId={selectedEpisodeId}
+            onBack={handleBackFromEpisode}
+            onEnhance={handleEnhanceEpisode}
+          />
+        ) : null;
+
+      case 'enhance-clip':
+        return selectedClipId ? (
+          <EnhancePage
+            contentType="clip"
+            contentId={selectedClipId}
+            onBack={() => setCurrentPage('clip')}
+          />
+        ) : null;
+
+      case 'enhance-episode':
+        return selectedEpisodeId ? (
+          <EnhancePage
+            contentType="episode"
+            contentId={selectedEpisodeId}
+            onBack={() => setCurrentPage('episode')}
+          />
+        ) : null;
+
+      default:
+        return null;
+    }
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main>
-        <ErrorBoundary>
-          {currentPage === 'dashboard' && (
-            <DashboardPage
-              onCreateClip={() => setCurrentPage('create')}
-              onViewLibrary={() => setCurrentPage('library')}
-              onViewClip={handleSelectClip}
-              onViewEpisode={handleSelectEpisode}
-              onEpisodeBuilder={handleGoToEpisodeBuilder}
-            />
-          )}
-
-          {currentPage === 'create' && (
-            <CreatePage onClipCreated={handleClipCreated} />
-          )}
-
-          {currentPage === 'clip' && selectedClipId && (
-            <ClipPage
-              clipId={selectedClipId}
-              onBack={handleBackFromClip}
-              onNavigateToClip={handleSelectClip}
-              onEnhance={handleEnhanceClip}
-            />
-          )}
-
-          {currentPage === 'library' && (
-            <LibraryPage
-              onSelectClip={handleSelectClip}
-              onSelectEpisode={handleSelectEpisode}
-            />
-          )}
-
-          {currentPage === 'episode-builder' && (
-            <EpisodeBuilderPage
-              onEpisodeCreated={handleEpisodeCreated}
-              onBack={handleBackFromEpisodeBuilder}
-              onOpenQuestionBank={handleGoToQuestionBank}
-            />
-          )}
-
-          {currentPage === 'question-bank' && (
-            <QuestionBankPage onBack={handleBackFromQuestionBank} />
-          )}
-
-          {currentPage === 'templates' && (
-            <TemplateManagerPage onBack={() => setCurrentPage('shell')} />
-          )}
-
-          {currentPage === 'episode' && selectedEpisodeId && (
-            <EpisodePage
-              episodeId={selectedEpisodeId}
-              onBack={handleBackFromEpisode}
-              onEnhance={handleEnhanceEpisode}
-            />
-          )}
-
-          {currentPage === 'enhance-clip' && selectedClipId && (
-            <EnhancePage
-              contentType="clip"
-              contentId={selectedClipId}
-              onBack={() => {
-                setCurrentPage('clip');
-              }}
-            />
-          )}
-
-          {currentPage === 'enhance-episode' && selectedEpisodeId && (
-            <EnhancePage
-              contentType="episode"
-              contentId={selectedEpisodeId}
-              onBack={() => {
-                setCurrentPage('episode');
-              }}
-            />
-          )}
-        </ErrorBoundary>
-      </main>
-    </div>
+    <AppShell
+      activePage={currentPage}
+      onNavigateToDashboard={handleGoToDashboard}
+      onNavigateToLibrary={handleGoToLibrary}
+      onNavigateToCreate={handleGoToCreate}
+      onNavigateToTemplates={() => setCurrentPage('templates')}
+    >
+      <ErrorBoundary>
+        {renderPage()}
+      </ErrorBoundary>
+    </AppShell>
   );
 }
 

@@ -19,7 +19,7 @@ import {
   createVideoExport,
 } from '../lib/templates';
 import { generateUserId, prettyType, clsx } from '../lib/format';
-import type { Clip, Episode, EnhancementConfig } from '../lib/types';
+import type { Clip, Episode, EnhancementConfig, ClipType } from '../lib/types';
 
 interface EnhancePageProps {
   contentType: 'clip' | 'episode';
@@ -42,6 +42,51 @@ const DEFAULT_CONFIG: EnhancementConfig = {
   endcard: false,
   endcardStyle: 'minimal',
   progressBar: true,
+};
+
+const TYPE_PRESETS: Record<ClipType, Partial<EnhancementConfig>> = {
+  wisdom_interview: {
+    captions: true,
+    captionAnimation: 'word_by_word',
+    colorGrade: 'warm',
+    lowerThird: true,
+    lowerThirdStyle: 'modern',
+    endcard: true,
+    endcardStyle: 'minimal',
+  },
+  studio_interview: {
+    captions: true,
+    captionAnimation: 'static',
+    colorGrade: 'cinematic',
+    lowerThird: true,
+    lowerThirdStyle: 'classic',
+    endcard: true,
+    endcardStyle: 'branded',
+  },
+  subway_interview: {
+    captions: true,
+    captionAnimation: 'pop_up',
+    colorGrade: 'none',
+    lowerThird: true,
+    lowerThirdStyle: 'minimal',
+    progressBar: true,
+  },
+  street_interview: {
+    captions: true,
+    captionAnimation: 'word_by_word',
+    colorGrade: 'none',
+    lowerThird: true,
+    lowerThirdStyle: 'classic',
+  },
+  motivational: {
+    captions: true,
+    captionAnimation: 'karaoke',
+    colorGrade: 'dramatic',
+    lowerThird: false,
+    endcard: true,
+    endcardStyle: 'cta',
+    progressBar: true,
+  },
 };
 
 function getVideoUrl(content: Clip | Episode, type: 'clip' | 'episode'): string | null {
@@ -68,6 +113,8 @@ export function EnhancePage({ contentType, contentId, onBack }: EnhancePageProps
   const [composeStatus, setComposeStatus] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  const [presetApplied, setPresetApplied] = useState(false);
+
   const loadContent = useCallback(async () => {
     try {
       if (contentType === 'clip') {
@@ -87,6 +134,18 @@ export function EnhancePage({ contentType, contentId, onBack }: EnhancePageProps
   useEffect(() => {
     loadContent();
   }, [loadContent]);
+
+  useEffect(() => {
+    if (!content || presetApplied) return;
+    if (contentType === 'clip') {
+      const videoType = (content as Clip).video_type;
+      const preset = TYPE_PRESETS[videoType];
+      if (preset) {
+        setEnhancementConfig({ ...DEFAULT_CONFIG, ...preset });
+      }
+    }
+    setPresetApplied(true);
+  }, [content, contentType, presetApplied]);
 
   useEffect(() => {
     if (!content) return;
@@ -295,6 +354,17 @@ export function EnhancePage({ contentType, contentId, onBack }: EnhancePageProps
         </div>
 
         <div className="lg:col-span-4 space-y-6">
+          {contentType === 'clip' && content && (
+            <PresetBar
+              currentType={(content as Clip).video_type}
+              onApplyPreset={(type) => {
+                const preset = TYPE_PRESETS[type];
+                if (preset) {
+                  setEnhancementConfig({ ...DEFAULT_CONFIG, ...preset });
+                }
+              }}
+            />
+          )}
           <EnhancementPanel
             config={enhancementConfig}
             onChange={setEnhancementConfig}
@@ -313,6 +383,38 @@ export function EnhancePage({ contentType, contentId, onBack }: EnhancePageProps
             />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PresetBar({ currentType, onApplyPreset }: { currentType: ClipType; onApplyPreset: (type: ClipType) => void }) {
+  const presets: { type: ClipType; label: string }[] = [
+    { type: 'wisdom_interview', label: 'Wisdom' },
+    { type: 'studio_interview', label: 'Studio' },
+    { type: 'subway_interview', label: 'Subway' },
+    { type: 'street_interview', label: 'Street' },
+    { type: 'motivational', label: 'Motivational' },
+  ];
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+      <p className="text-xs text-zinc-500 mb-2">Quick Presets</p>
+      <div className="flex flex-wrap gap-1.5">
+        {presets.map(({ type, label }) => (
+          <button
+            key={type}
+            onClick={() => onApplyPreset(type)}
+            className={clsx(
+              'px-2.5 py-1 rounded-lg text-xs font-medium transition',
+              type === currentType
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-600'
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

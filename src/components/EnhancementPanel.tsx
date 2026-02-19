@@ -10,7 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
-  Loader2,
+  BarChart3,
 } from 'lucide-react';
 import { fetchTemplates, type VideoTemplate } from '../lib/templates';
 import type { ColorGradePreset, EndcardStyle, EnhancementConfig } from '../lib/types';
@@ -70,12 +70,15 @@ function SectionToggle({
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => {
           if (!enabled) onToggle();
           setExpanded(!expanded);
         }}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/40 transition"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!enabled) onToggle(); setExpanded(!expanded); } }}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/40 transition cursor-pointer"
       >
         <div className="flex items-center gap-3">
           <Icon className="h-4 w-4 text-zinc-400" />
@@ -101,7 +104,7 @@ function SectionToggle({
             expanded ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />
           )}
         </div>
-      </button>
+      </div>
       {expanded && enabled && children && (
         <div className="px-4 pb-4 pt-1 border-t border-zinc-800/50">
           {children}
@@ -322,7 +325,7 @@ export function EnhancementPanel({ config, onChange, contentType }: EnhancementP
 
       <SectionToggle
         label="Progress Bar"
-        icon={Loader2}
+        icon={BarChart3}
         enabled={config.progressBar}
         onToggle={() => update({ progressBar: !config.progressBar })}
       />

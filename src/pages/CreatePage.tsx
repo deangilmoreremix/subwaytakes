@@ -424,7 +424,7 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
   const isMotivational = clipType === 'motivational';
   const isWisdom = clipType === 'wisdom_interview';
   const isStudio = clipType === 'studio_interview';
-  const isInterview = isSubway || isStreet || isStudio;
+  const isInterview = isSubway || isStreet || isStudio || isWisdom;
 
   function handlePresetChange(preset: CharacterPreset) {
     setCharacterPreset(preset);
@@ -1195,7 +1195,7 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
               disabled={busy}
             />
 
-            {(isStreet || isSubway) && (
+            {isInterview && (
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-zinc-300">
                   Speech Script (optional)
@@ -1334,6 +1334,8 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
           ? 'Street interview clips. Pick your scene, style, and time of day for authentic vox pop content.'
           : isWisdom
           ? 'Wisdom interview clips for 55+ audience. Life lessons, retirement advice, and heartfelt conversations.'
+          : isStudio
+          ? 'Professional studio interview clips. Configure your set, lighting, and guest setup for polished content.'
           : 'SubwayTakes-style viral clips. Pick a trending question and scene for maximum engagement.'}
       </p>
       {/* Effects Customization Modal */}
