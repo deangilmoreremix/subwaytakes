@@ -21,7 +21,8 @@ interface OverlayTextEntry {
 }
 
 interface ComposeRequest {
-  episode_id: string;
+  episode_id?: string;
+  clip_id?: string;
 }
 
 interface VideoTemplate {
@@ -41,6 +42,12 @@ interface VideoTemplate {
   reaction_text_font_size: number;
   progress_bar_enabled: boolean;
   progress_bar_color: string;
+  lower_third_enabled?: boolean;
+  lower_third_style?: string;
+  endcard_enabled?: boolean;
+  endcard_style?: string;
+  color_grade_preset?: string;
+  caption_animation_style?: string;
 }
 
 function getServiceConfig() {
@@ -70,7 +77,7 @@ function positionToXY(
   return map[position] || map["top-left"];
 }
 
-function buildOverlayEntries(
+function buildEpisodeOverlayEntries(
   template: VideoTemplate,
   episodeNumber: number | null,
   hookQuestion: string,
@@ -171,6 +178,107 @@ function buildOverlayEntries(
   return entries;
 }
 
+function buildClipOverlayEntries(
+  template: VideoTemplate,
+  clip: {
+    topic: string;
+    interview_question: string | null;
+    speech_script: string | null;
+    duration_seconds: number;
+    video_type: string;
+    interviewer_type: string | null;
+    subject_demographic: string | null;
+  }
+): OverlayTextEntry[] {
+  const entries: OverlayTextEntry[] = [];
+  const totalDuration = clip.duration_seconds;
+
+  const watermarkPos = positionToXY(template.watermark_position, 1080, 1920);
+  entries.push({
+    text: template.watermark_text,
+    x: watermarkPos.x,
+    y: watermarkPos.y,
+    fontSize: template.watermark_font_size,
+    color: template.watermark_color,
+    startTime: 0,
+    endTime: totalDuration,
+    boxEnabled: false,
+  });
+
+  const titleText = clip.interview_question
+    ? `${template.watermark_text} ${clip.interview_question}`
+    : `${template.watermark_text} ${clip.topic}`;
+
+  const captionPos = positionToXY(template.caption_position, 1080, 1920);
+  const titleEnd = Math.min(10, totalDuration);
+  entries.push({
+    text: titleText,
+    x: captionPos.x,
+    y: captionPos.y,
+    fontSize: template.caption_font_size,
+    color: template.caption_color,
+    startTime: 0,
+    endTime: titleEnd,
+    boxEnabled: true,
+    boxColor: `black@${template.caption_bg_opacity}`,
+  });
+
+  if (template.lower_third_enabled && clip.subject_demographic) {
+    const label = clip.subject_demographic.replace(/_/g, ' ');
+    entries.push({
+      text: label,
+      x: "32",
+      y: "(h-th-200)",
+      fontSize: 22,
+      color: template.caption_color,
+      startTime: 1,
+      endTime: Math.min(8, totalDuration - 1),
+      boxEnabled: true,
+      boxColor: `black@0.5`,
+    });
+  }
+
+  if (clip.speech_script && template.reaction_text_enabled) {
+    const captionStart = titleEnd > 2 ? titleEnd - 1 : 1;
+    entries.push({
+      text: clip.speech_script.length > 80
+        ? clip.speech_script.substring(0, 77) + "..."
+        : clip.speech_script,
+      x: "32",
+      y: "(h-th-100)",
+      fontSize: template.reaction_text_font_size,
+      color: template.caption_color,
+      startTime: captionStart,
+      endTime: totalDuration - 1,
+      boxEnabled: true,
+      boxColor: `black@${template.caption_bg_opacity}`,
+    });
+  }
+
+  if (template.endcard_enabled) {
+    const endcardStart = Math.max(0, totalDuration - 3);
+    const ctaText = template.endcard_style === 'subscribe'
+      ? `Follow ${template.watermark_text}`
+      : template.endcard_style === 'cta'
+        ? `More at ${template.watermark_text}`
+        : template.watermark_text;
+
+    entries.push({
+      text: ctaText,
+      x: "(w-tw)/2",
+      y: "(h-th)/2",
+      fontSize: template.caption_font_size + 8,
+      color: template.watermark_color,
+      startTime: endcardStart,
+      endTime: totalDuration,
+      boxEnabled: true,
+      boxColor: `black@0.7`,
+    });
+  }
+
+  return entries;
+}
+
 async function composeWithFFmpegService(
   videoUrl: string,
   overlays: OverlayTextEntry[],
@@ -207,6 +315,275 @@ async function composeWithFFmpegService(
   }
 }
 
+async function uploadComposedVideo(
+  supabase: ReturnType<typeof createClient>,
+  composedUrl: string,
+  entityId: string,
+  bucket: string
+): Promise<string> {
+  let finalUrl = composedUrl;
+
+  if (composedUrl.startsWith("data:")) {
+    const base64Data = composedUrl.split(",")[1];
+    if (base64Data) {
+      const binaryStr = atob(base64Data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      const fileName = `composed_${entityId}_${Date.now()}.mp4`;
+      const { data: uploadData } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, bytes, {
+          contentType: "video/mp4",
+          upsert: true,
+        });
+
+      if (uploadData) {
+        const {
+          data: { publicUrl },
+        } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(fileName);
+        finalUrl = publicUrl;
+      }
+    }
+  }
+
+  return finalUrl;
+}
+
+async function getTemplate(
+  supabase: ReturnType<typeof createClient>,
+  templateData: VideoTemplate | null,
+  templateId: string | null
+): Promise<VideoTemplate> {
+  if (templateData) return templateData;
+
+  if (templateId) {
+    const { data } = await supabase
+      .from("video_templates")
+      .select("*")
+      .eq("id", templateId)
+      .maybeSingle();
+    if (data) return data;
+  }
+
+  const { data: defaultTemplate } = await supabase
+    .from("video_templates")
+    .select("*")
+    .eq("is_default", true)
+    .eq("is_system", true)
+    .maybeSingle();
+
+  if (defaultTemplate) return defaultTemplate;
+
+  return {
+    watermark_text: "@subwaytakes",
+    watermark_position: "top-left",
+    watermark_font_size: 18,
+    watermark_color: "#FFFFFF",
+    watermark_opacity: 0.85,
+    episode_prefix_format: "Episode {number}:",
+    caption_font: "Inter",
+    caption_font_size: 40,
+    caption_color: "#FFFFFF",
+    caption_bg_opacity: 0.6,
+    caption_position: "bottom",
+    reaction_text_enabled: true,
+    reaction_text_position: "bottom-right",
+    reaction_text_font_size: 28,
+    progress_bar_enabled: true,
+    progress_bar_color: "#F59E0B",
+  };
+}
+
+async function handleEpisodeCompose(
+  supabase: ReturnType<typeof createClient>,
+  episodeId: string
+) {
+  const { data: episode, error: episodeError } = await supabase
+    .from("episodes")
+    .select("*, episode_scripts(*), video_templates(*)")
+    .eq("id", episodeId)
+    .maybeSingle();
+
+  if (episodeError || !episode) {
+    throw new Error(episodeError?.message || "Episode not found");
+  }
+
+  if (!episode.final_video_url) {
+    throw new Error("Episode has no stitched video yet");
+  }
+
+  await supabase
+    .from("episodes")
+    .update({ overlay_status: "composing" })
+    .eq("id", episodeId);
+
+  const template = await getTemplate(supabase, episode.video_templates, episode.template_id);
+
+  const { data: shots } = await supabase
+    .from("episode_shots")
+    .select("dialogue, speaker, duration_seconds, sequence, shot_type")
+    .eq("episode_id", episodeId)
+    .order("sequence");
+
+  const hookQuestion = episode.episode_scripts?.hook_question || "Subway interview";
+  const reactionLine = episode.episode_scripts?.reaction_line || null;
+
+  const overlays = buildEpisodeOverlayEntries(
+    template,
+    episode.episode_number,
+    hookQuestion,
+    reactionLine,
+    shots || []
+  );
+
+  const { serviceUrl, serviceKey } = getServiceConfig();
+
+  if (!serviceUrl) {
+    await supabase
+      .from("episodes")
+      .update({
+        overlay_status: "done",
+        composed_video_url: episode.final_video_url,
+      })
+      .eq("id", episodeId);
+
+    return {
+      success: true,
+      composed_video_url: episode.final_video_url,
+      note: "No FFmpeg service configured, using raw video",
+    };
+  }
+
+  const composedUrl = await composeWithFFmpegService(
+    episode.final_video_url,
+    overlays,
+    serviceUrl,
+    serviceKey
+  );
+
+  if (composedUrl) {
+    const finalUrl = await uploadComposedVideo(supabase, composedUrl, episodeId, "episode-videos");
+
+    await supabase
+      .from("episodes")
+      .update({
+        overlay_status: "done",
+        composed_video_url: finalUrl,
+      })
+      .eq("id", episodeId);
+
+    return { success: true, composed_video_url: finalUrl };
+  }
+
+  await supabase
+    .from("episodes")
+    .update({
+      overlay_status: "done",
+      composed_video_url: episode.final_video_url,
+    })
+    .eq("id", episodeId);
+
+  return {
+    success: true,
+    composed_video_url: episode.final_video_url,
+    note: "Compose failed, using raw video as fallback",
+  };
+}
+
+async function handleClipCompose(
+  supabase: ReturnType<typeof createClient>,
+  clipId: string
+) {
+  const { data: clip, error: clipError } = await supabase
+    .from("clips")
+    .select("*, video_templates(*)")
+    .eq("id", clipId)
+    .maybeSingle();
+
+  if (clipError || !clip) {
+    throw new Error(clipError?.message || "Clip not found");
+  }
+
+  if (!clip.result_url) {
+    throw new Error("Clip has no generated video yet");
+  }
+
+  await supabase
+    .from("clips")
+    .update({ overlay_status: "composing" })
+    .eq("id", clipId);
+
+  const template = await getTemplate(supabase, clip.video_templates, clip.template_id);
+
+  const overlays = buildClipOverlayEntries(template, {
+    topic: clip.topic,
+    interview_question: clip.interview_question,
+    speech_script: clip.speech_script,
+    duration_seconds: clip.duration_seconds,
+    video_type: clip.video_type,
+    interviewer_type: clip.interviewer_type,
+    subject_demographic: clip.subject_demographic,
+  });
+
+  const { serviceUrl, serviceKey } = getServiceConfig();
+
+  if (!serviceUrl) {
+    await supabase
+      .from("clips")
+      .update({
+        overlay_status: "done",
+        composed_video_url: clip.result_url,
+      })
+      .eq("id", clipId);
+
+    return {
+      success: true,
+      composed_video_url: clip.result_url,
+      note: "No FFmpeg service configured, using raw video",
+    };
+  }
+
+  const composedUrl = await composeWithFFmpegService(
+    clip.result_url,
+    overlays,
+    serviceUrl,
+    serviceKey
+  );
+
+  if (composedUrl) {
+    const finalUrl = await uploadComposedVideo(supabase, composedUrl, clipId, "episode-videos");
+
+    await supabase
+      .from("clips")
+      .update({
+        overlay_status: "done",
+        composed_video_url: finalUrl,
+      })
+      .eq("id", clipId);
+
+    return { success: true, composed_video_url: finalUrl };
+  }
+
+  await supabase
+    .from("clips")
+    .update({
+      overlay_status: "done",
+      composed_video_url: clip.result_url,
+    })
+    .eq("id", clipId);
+
+  return {
+    success: true,
+    composed_video_url: clip.result_url,
+    note: "Compose failed, using raw video as fallback",
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -217,11 +594,11 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { episode_id }: ComposeRequest = await req.json();
+    const body: ComposeRequest = await req.json();
 
-    if (!episode_id) {
+    if (!body.episode_id && !body.clip_id) {
       return new Response(
-        JSON.stringify({ error: "episode_id is required" }),
+        JSON.stringify({ error: "episode_id or clip_id is required" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -229,192 +606,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: episode, error: episodeError } = await supabase
-      .from("episodes")
-      .select(
-        "*, episode_scripts(*), video_templates(*)"
-      )
-      .eq("id", episode_id)
-      .maybeSingle();
+    let result;
 
-    if (episodeError || !episode) {
-      return new Response(
-        JSON.stringify({
-          error: episodeError?.message || "Episode not found",
-        }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (!episode.final_video_url) {
-      return new Response(
-        JSON.stringify({
-          error: "Episode has no stitched video yet",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    await supabase
-      .from("episodes")
-      .update({ overlay_status: "composing" })
-      .eq("id", episode_id);
-
-    let template: VideoTemplate;
-    if (episode.video_templates) {
-      template = episode.video_templates;
+    if (body.episode_id) {
+      result = await handleEpisodeCompose(supabase, body.episode_id);
     } else {
-      const { data: defaultTemplate } = await supabase
-        .from("video_templates")
-        .select("*")
-        .eq("is_default", true)
-        .eq("is_system", true)
-        .maybeSingle();
-
-      if (!defaultTemplate) {
-        template = {
-          watermark_text: "@subwaytakes",
-          watermark_position: "top-left",
-          watermark_font_size: 18,
-          watermark_color: "#FFFFFF",
-          watermark_opacity: 0.85,
-          episode_prefix_format: "Episode {number}:",
-          caption_font: "Inter",
-          caption_font_size: 40,
-          caption_color: "#FFFFFF",
-          caption_bg_opacity: 0.6,
-          caption_position: "bottom",
-          reaction_text_enabled: true,
-          reaction_text_position: "bottom-right",
-          reaction_text_font_size: 28,
-          progress_bar_enabled: true,
-          progress_bar_color: "#F59E0B",
-        };
-      } else {
-        template = defaultTemplate;
-      }
+      result = await handleClipCompose(supabase, body.clip_id!);
     }
 
-    const { data: shots } = await supabase
-      .from("episode_shots")
-      .select("dialogue, speaker, duration_seconds, sequence, shot_type")
-      .eq("episode_id", episode_id)
-      .order("sequence");
-
-    const hookQuestion =
-      episode.episode_scripts?.hook_question || "Subway interview";
-    const reactionLine =
-      episode.episode_scripts?.reaction_line || null;
-
-    const overlays = buildOverlayEntries(
-      template,
-      episode.episode_number,
-      hookQuestion,
-      reactionLine,
-      shots || []
-    );
-
-    const { serviceUrl, serviceKey } = getServiceConfig();
-
-    if (!serviceUrl) {
-      await supabase
-        .from("episodes")
-        .update({
-          overlay_status: "done",
-          composed_video_url: episode.final_video_url,
-        })
-        .eq("id", episode_id);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          composed_video_url: episode.final_video_url,
-          note: "No FFmpeg service configured, using raw video",
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const composedUrl = await composeWithFFmpegService(
-      episode.final_video_url,
-      overlays,
-      serviceUrl,
-      serviceKey
-    );
-
-    if (composedUrl) {
-      let finalUrl = composedUrl;
-
-      if (composedUrl.startsWith("data:")) {
-        const base64Data = composedUrl.split(",")[1];
-        if (base64Data) {
-          const binaryStr = atob(base64Data);
-          const bytes = new Uint8Array(binaryStr.length);
-          for (let i = 0; i < binaryStr.length; i++) {
-            bytes[i] = binaryStr.charCodeAt(i);
-          }
-
-          const fileName = `composed_${episode_id}_${Date.now()}.mp4`;
-          const { data: uploadData } = await supabase.storage
-            .from("episode-videos")
-            .upload(fileName, bytes, {
-              contentType: "video/mp4",
-              upsert: true,
-            });
-
-          if (uploadData) {
-            const {
-              data: { publicUrl },
-            } = supabase.storage
-              .from("episode-videos")
-              .getPublicUrl(fileName);
-            finalUrl = publicUrl;
-          }
-        }
-      }
-
-      await supabase
-        .from("episodes")
-        .update({
-          overlay_status: "done",
-          composed_video_url: finalUrl,
-        })
-        .eq("id", episode_id);
-
-      return new Response(
-        JSON.stringify({ success: true, composed_video_url: finalUrl }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    await supabase
-      .from("episodes")
-      .update({
-        overlay_status: "done",
-        composed_video_url: episode.final_video_url,
-      })
-      .eq("id", episode_id);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        composed_video_url: episode.final_video_url,
-        note: "Compose failed, using raw video as fallback",
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error("Compose overlay error:", err);
     return new Response(

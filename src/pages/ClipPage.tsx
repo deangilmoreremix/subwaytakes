@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Layers, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Layers, MessageCircle, Sparkles } from 'lucide-react';
 import { ClipActions } from '../components/ClipActions';
 import { VideoProcessingToolbar } from '../components/VideoProcessingToolbar';
 import { getClipById, regenerateClip, updateClipStatus } from '../lib/clips';
@@ -11,6 +11,7 @@ interface ClipPageProps {
   clipId: string;
   onBack: () => void;
   onNavigateToClip: (clipId: string) => void;
+  onEnhance?: (clipId: string) => void;
 }
 
 function StatusBadge({ status }: { status: Clip['status'] }) {
@@ -46,7 +47,7 @@ function getEnergyLabel(value: string | null): string {
   return ENERGY_LEVELS.find(e => e.value === value)?.label || value;
 }
 
-export function ClipPage({ clipId, onBack, onNavigateToClip }: ClipPageProps) {
+export function ClipPage({ clipId, onBack, onNavigateToClip, onEnhance }: ClipPageProps) {
   const [clip, setClip] = useState<Clip | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
@@ -248,6 +249,16 @@ export function ClipPage({ clipId, onBack, onNavigateToClip }: ClipPageProps) {
                 : 'If a clip doesn\'t look right, try regenerating or creating a variation. Single-clip generation is designed for fast retries.'}
             </p>
           </div>
+
+          {ready && onEnhance && (
+            <button
+              onClick={() => onEnhance(clip.id)}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-semibold text-zinc-900 hover:bg-amber-400 transition"
+            >
+              <Sparkles className="h-4 w-4" />
+              Enhance Video
+            </button>
+          )}
 
           <button
             onClick={onBack}

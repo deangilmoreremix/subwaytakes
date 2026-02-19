@@ -23,6 +23,16 @@ const DEMO_VIDEOS: Record<string, string[]> = {
     "https://images.pexels.com/videos/3015482/free-video-3015482.mp4?auto=compress",
     "https://images.pexels.com/videos/5377612/pexels-video-5377612.mp4?auto=compress",
   ],
+  studio_interview: [
+    "https://images.pexels.com/videos/7579554/pexels-video-7579554.mp4?auto=compress",
+    "https://images.pexels.com/videos/6774947/pexels-video-6774947.mp4?auto=compress",
+    "https://images.pexels.com/videos/5377684/pexels-video-5377684.mp4?auto=compress",
+  ],
+  wisdom_interview: [
+    "https://images.pexels.com/videos/3015510/free-video-3015510.mp4?auto=compress",
+    "https://images.pexels.com/videos/3209828/free-video-3209828.mp4?auto=compress",
+    "https://images.pexels.com/videos/4057411/free-video-4057411.mp4?auto=compress",
+  ],
 };
 
 type VideoModel = 'hailuo-2.3-fast' | 'hailuo-2.3' | 'veo-3.1-fast' | 'veo-3.1';

@@ -180,3 +180,93 @@ export async function triggerComposeOverlay(episodeId: string): Promise<void> {
     body: JSON.stringify({ episode_id: episodeId }),
   });
 }
+
+export async function triggerClipCompose(clipId: string): Promise<void> {
+  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/compose-overlay`;
+  await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ clip_id: clipId }),
+  });
+}
+
+export async function assignTemplateToClip(clipId: string, templateId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('clips')
+    .update({ template_id: templateId })
+    .eq('id', clipId);
+
+  if (error) {
+    console.error('Error assigning template to clip:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function createVideoExport(
+  parentId: string,
+  parentType: 'clip' | 'episode',
+  platform: string,
+  userId: string
+): Promise<string | null> {
+  const specs: Record<string, { width: number; height: number }> = {
+    tiktok: { width: 1080, height: 1920 },
+    instagram_reel: { width: 1080, height: 1920 },
+    youtube_shorts: { width: 1080, height: 1920 },
+    instagram_post: { width: 1080, height: 1080 },
+    facebook: { width: 1280, height: 720 },
+    youtube: { width: 1920, height: 1080 },
+    twitter: { width: 1280, height: 720 },
+  };
+
+  const spec = specs[platform] || specs.tiktok;
+
+  const { data, error } = await supabase
+    .from('video_exports')
+    .insert({
+      user_id: userId,
+      parent_id: parentId,
+      parent_type: parentType,
+      platform,
+      width: spec.width,
+      height: spec.height,
+      status: 'queued',
+    })
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error creating export:', error);
+    return null;
+  }
+  return data?.id || null;
+}
+
+export async function getExportsForContent(
+  parentId: string,
+  parentType: 'clip' | 'episode'
+): Promise<Array<{
+  id: string;
+  platform: string;
+  status: string;
+  url: string | null;
+  width: number;
+  height: number;
+  created_at: string;
+}>> {
+  const { data, error } = await supabase
+    .from('video_exports')
+    .select('id, platform, status, url, width, height, created_at')
+    .eq('parent_id', parentId)
+    .eq('parent_type', parentType)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching exports:', error);
+    return [];
+  }
+  return data || [];
+}

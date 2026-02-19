@@ -28,6 +28,7 @@ import { generateEnhancedSubwayPrompt } from './subwayJourneyEngine';
 import { generateStreetEnhancementPrompt } from './streetJourneyEngine';
 import { generateMotivationalEnhancementPrompt } from './motivationalEngine';
 import { buildWisdomPrompt } from './wisdomPromptEngine';
+import { buildStudioInterviewPrompt } from './studioPromptEngine';
 import { LINE_PERSONALITIES, NEIGHBORHOOD_PERSONALITIES, CARD_VISUAL_ANCHORS } from './constants';
 import { hardenPrompt, mergeNegativePrompt, shouldApplyWisdomRules } from './promptHardening';
 import { buildInterviewStyleHardening } from './interviewStyleHardening';
@@ -607,10 +608,11 @@ function buildProviderPrompt(request: GenerateRequest): string {
         subwayEnhancements: request.subwayEnhancements,
       });
     case 'studio_interview':
-      // Studio interview uses subway prompt with studio modifications for now
-      return buildEnhancedSubwayPrompt(topic, durationSeconds, {
+      return buildStudioInterviewPrompt(topic, durationSeconds, {
         question: interviewQuestion,
         angle: anglePrompt,
+        setup: request.studioSetup,
+        lighting: request.studioLighting,
         interviewerType,
         interviewerPosition,
         subjectDemographic,
@@ -620,6 +622,9 @@ function buildProviderPrompt(request: GenerateRequest): string {
     case 'wisdom_interview':
       return buildWisdomPrompt(topic, durationSeconds, {
         tone: request.wisdomTone,
+        format: request.wisdomFormat,
+        demographic: request.wisdomDemographic,
+        setting: request.wisdomSetting,
         angle: anglePrompt,
       });
     default:

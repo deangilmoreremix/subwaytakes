@@ -8,9 +8,10 @@ import { EpisodePage } from './pages/EpisodePage';
 import { QuestionBankPage } from './pages/QuestionBankPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { TemplateManagerPage } from './pages/TemplateManagerPage';
+import { EnhancePage } from './pages/EnhancePage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-type Page = 'shell' | 'dashboard' | 'create' | 'library' | 'clip' | 'episode-builder' | 'episode' | 'question-bank' | 'templates';
+type Page = 'shell' | 'dashboard' | 'create' | 'library' | 'clip' | 'episode-builder' | 'episode' | 'question-bank' | 'templates' | 'enhance-clip' | 'enhance-episode';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('shell');
@@ -71,7 +72,16 @@ function App() {
     setCurrentPage('library');
   }
 
-  // Render AppShell with CreatePage as the main content
+  function handleEnhanceClip(clipId: string) {
+    setSelectedClipId(clipId);
+    setCurrentPage('enhance-clip');
+  }
+
+  function handleEnhanceEpisode(episodeId: string) {
+    setSelectedEpisodeId(episodeId);
+    setCurrentPage('enhance-episode');
+  }
+
   if (currentPage === 'shell') {
     return (
       <div className="min-h-screen bg-zinc-950">
@@ -109,6 +119,7 @@ function App() {
               clipId={selectedClipId}
               onBack={handleBackFromClip}
               onNavigateToClip={handleSelectClip}
+              onEnhance={handleEnhanceClip}
             />
           )}
 
@@ -139,6 +150,27 @@ function App() {
             <EpisodePage
               episodeId={selectedEpisodeId}
               onBack={handleBackFromEpisode}
+              onEnhance={handleEnhanceEpisode}
+            />
+          )}
+
+          {currentPage === 'enhance-clip' && selectedClipId && (
+            <EnhancePage
+              contentType="clip"
+              contentId={selectedClipId}
+              onBack={() => {
+                setCurrentPage('clip');
+              }}
+            />
+          )}
+
+          {currentPage === 'enhance-episode' && selectedEpisodeId && (
+            <EnhancePage
+              contentType="episode"
+              contentId={selectedEpisodeId}
+              onBack={() => {
+                setCurrentPage('episode');
+              }}
             />
           )}
         </ErrorBoundary>

@@ -1442,6 +1442,12 @@ export interface Clip {
   speaker_archetype: SpeakerArchetype | null;
   // Age-appropriate content field
   target_age_group: AgeGroup | null;
+  // Universal overlay/compose fields
+  overlay_status: string | null;
+  composed_video_url: string | null;
+  caption_file_url: string | null;
+  thumbnail_url: string | null;
+  template_id: string | null;
 }
 
 export interface Question {
@@ -1510,6 +1516,9 @@ export interface GenerateRequest {
   targetAgeGroup?: AgeGroup;
   // Wisdom mode
   wisdomTone?: WisdomTone;
+  wisdomFormat?: WisdomFormat;
+  wisdomDemographic?: WisdomDemographic;
+  wisdomSetting?: WisdomSetting;
   // Remotion effects
   effects?: RemotionEffectsConfig;
 }
@@ -1619,7 +1628,87 @@ export interface CreateEpisodeRequest {
   hostCharacterId?: string;
   guestCharacterId?: string;
   customScript?: Partial<EpisodeScript>;
-  // New fields for beats
   beats?: Beat[];
   interviewMode?: InterviewMode;
 }
+
+// === UNIVERSAL ENHANCEMENT SYSTEM TYPES ===
+
+export type OverlayStatus = 'pending' | 'composing' | 'done' | 'error' | 'skipped';
+
+export type ColorGradePreset = 'none' | 'warm' | 'cool' | 'cinematic' | 'vintage' | 'dramatic';
+
+export type EndcardStyle = 'minimal' | 'branded' | 'cta' | 'subscribe';
+
+export type ExportStatus = 'queued' | 'processing' | 'done' | 'error';
+
+export interface MusicTrack {
+  id: string;
+  name: string;
+  url: string;
+  mood: string;
+  duration_seconds: number;
+  bpm: number | null;
+  is_system: boolean;
+  created_at: string;
+}
+
+export interface SoundEffect {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  duration_seconds: number;
+  is_system: boolean;
+  created_at: string;
+}
+
+export interface VideoExport {
+  id: string;
+  user_id: string;
+  parent_id: string;
+  parent_type: 'clip' | 'episode';
+  platform: ExportPlatform | 'twitter';
+  url: string | null;
+  width: number;
+  height: number;
+  duration_seconds: number;
+  status: ExportStatus;
+  error: string | null;
+  created_at: string;
+}
+
+export interface EnhancementConfig {
+  watermark: boolean;
+  lowerThird: boolean;
+  lowerThirdStyle: LowerThirdStyle;
+  lowerThirdName: string;
+  lowerThirdTitle: string;
+  captions: boolean;
+  captionAnimation: CaptionAnimation;
+  musicTrackId: string | null;
+  musicVolume: number;
+  sfxEnabled: boolean;
+  colorGrade: ColorGradePreset;
+  endcard: boolean;
+  endcardStyle: EndcardStyle;
+  progressBar: boolean;
+}
+
+export const PLATFORM_SPECS: Record<string, { width: number; height: number; maxDuration: number; label: string }> = {
+  tiktok: { width: 1080, height: 1920, maxDuration: 180, label: 'TikTok' },
+  instagram_reel: { width: 1080, height: 1920, maxDuration: 90, label: 'Instagram Reel' },
+  youtube_shorts: { width: 1080, height: 1920, maxDuration: 60, label: 'YouTube Shorts' },
+  instagram_post: { width: 1080, height: 1080, maxDuration: 60, label: 'Instagram Post' },
+  facebook: { width: 1280, height: 720, maxDuration: 240, label: 'Facebook' },
+  youtube: { width: 1920, height: 1080, maxDuration: 600, label: 'YouTube' },
+  twitter: { width: 1280, height: 720, maxDuration: 140, label: 'Twitter/X' },
+};
+
+export type EnhanceableContent = {
+  type: 'clip';
+  data: Clip;
+} | {
+  type: 'episode';
+  data: Episode;
+};

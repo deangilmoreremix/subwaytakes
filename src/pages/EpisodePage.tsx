@@ -7,9 +7,10 @@ import type { Episode, EpisodeShot } from '../lib/types';
 interface EpisodePageProps {
   episodeId: string;
   onBack: () => void;
+  onEnhance?: (episodeId: string) => void;
 }
 
-export function EpisodePage({ episodeId, onBack }: EpisodePageProps) {
+export function EpisodePage({ episodeId, onBack, onEnhance }: EpisodePageProps) {
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +91,15 @@ export function EpisodePage({ episodeId, onBack }: EpisodePageProps) {
 
         {episode.status === 'done' && episode.final_video_url && (
           <div className="flex gap-2">
+            {onEnhance && (
+              <button
+                onClick={() => onEnhance(episodeId)}
+                className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-black hover:bg-amber-400 transition"
+              >
+                <Sparkles className="h-4 w-4" />
+                Enhance
+              </button>
+            )}
             <a
               href={episode.composed_video_url || episode.final_video_url}
               download
@@ -98,7 +108,7 @@ export function EpisodePage({ episodeId, onBack }: EpisodePageProps) {
               <Download className="h-4 w-4" />
               Download
             </a>
-            <button className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-black hover:bg-amber-400 transition">
+            <button className="flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-600 transition">
               <Share2 className="h-4 w-4" />
               Share
             </button>
