@@ -18,6 +18,12 @@ import type {
   SubjectDemographic,
   SubjectGender,
   SubjectStyle,
+  StudioSetup,
+  StudioLighting,
+  WisdomTone,
+  WisdomFormat,
+  WisdomDemographic,
+  WisdomSetting,
 } from './types';
 import { generateUserId } from './format';
 import { createClipPlan, createVariationPrompt, createBatchVariationPrompt } from './promptEngine';
@@ -87,6 +93,12 @@ export interface CreateClipOptions {
   subjectDemographic?: SubjectDemographic;
   subjectGender?: SubjectGender;
   subjectStyle?: SubjectStyle;
+  studioSetup?: StudioSetup;
+  studioLighting?: StudioLighting;
+  wisdomTone?: WisdomTone;
+  wisdomFormat?: WisdomFormat;
+  wisdomDemographic?: WisdomDemographic;
+  wisdomSetting?: WisdomSetting;
 }
 
 export async function createClip(options: CreateClipOptions): Promise<Clip> {
@@ -113,6 +125,12 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     subjectDemographic,
     subjectGender,
     subjectStyle,
+    studioSetup,
+    studioLighting,
+    wisdomTone,
+    wisdomFormat,
+    wisdomDemographic,
+    wisdomSetting,
   } = options;
 
   // Validate inputs
@@ -166,6 +184,12 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     subjectDemographic,
     subjectGender,
     subjectStyle,
+    studioSetup,
+    studioLighting,
+    wisdomTone,
+    wisdomFormat,
+    wisdomDemographic,
+    wisdomSetting,
   });
 
   const { data, error } = await supabase
@@ -192,6 +216,12 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
       subject_demographic: subjectDemographic || null,
       subject_gender: subjectGender || null,
       subject_style: subjectStyle || null,
+      studio_setup: studioSetup || null,
+      studio_lighting: studioLighting || null,
+      wisdom_tone: wisdomTone || null,
+      wisdom_format: wisdomFormat || null,
+      wisdom_demographic: wisdomDemographic || null,
+      wisdom_setting: wisdomSetting || null,
       provider: modelTier === 'premium' ? 'google' : 'minimax',
       status: 'queued',
       provider_prompt: plan.provider_prompt,

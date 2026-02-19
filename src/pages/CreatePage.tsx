@@ -22,6 +22,11 @@ import { SubjectSelector } from '../components/SubjectSelector';
 import { CharacterPresetSelector } from '../components/CharacterPresetSelector';
 import { AgeGroupSelector } from '../components/AgeGroupSelector';
 import { WisdomToneSelector } from '../components/WisdomToneSelector';
+import { WisdomFormatSelector } from '../components/WisdomFormatSelector';
+import { WisdomDemographicSelector } from '../components/WisdomDemographicSelector';
+import { WisdomSettingSelector } from '../components/WisdomSettingSelector';
+import { StudioSetupSelector } from '../components/StudioSetupSelector';
+import { StudioLightingSelector } from '../components/StudioLightingSelector';
 import { KeywordInput } from '../components/KeywordInput';
 // NEW FEATURES
 import { InterviewFormatSelector } from '../components/InterviewFormatSelector';
@@ -145,6 +150,11 @@ import type {
   MotivationalEnhancementConfig,
   AgeGroup,
   WisdomTone,
+  WisdomFormat,
+  WisdomDemographic,
+  WisdomSetting,
+  StudioSetup,
+  StudioLighting,
   RemotionEffectsConfig,
 } from '../lib/types';
 
@@ -259,6 +269,13 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
 
   // Wisdom Mode State
   const [wisdomTone, setWisdomTone] = useState<WisdomTone>('gentle');
+  const [wisdomFormat, setWisdomFormat] = useState<WisdomFormat>('street_conversation');
+  const [wisdomDemographic, setWisdomDemographic] = useState<WisdomDemographic>('retirees');
+  const [wisdomSetting, setWisdomSetting] = useState<WisdomSetting>('park_bench');
+
+  // Studio Interview State
+  const [studioSetup, setStudioSetup] = useState<StudioSetup>('podcast_desk');
+  const [studioLighting, setStudioLighting] = useState<StudioLighting>('three_point');
 
   // Keyword Mode State
   const [keywordMode, setKeywordMode] = useState(false);
@@ -406,7 +423,8 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
   const isStreet = clipType === 'street_interview';
   const isMotivational = clipType === 'motivational';
   const isWisdom = clipType === 'wisdom_interview';
-  const isInterview = isSubway || isStreet;
+  const isStudio = clipType === 'studio_interview';
+  const isInterview = isSubway || isStreet || isStudio;
 
   function handlePresetChange(preset: CharacterPreset) {
     setCharacterPreset(preset);
@@ -472,6 +490,12 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
         targetAgeGroup,
         // Wisdom mode
         wisdomTone: isWisdom ? wisdomTone : undefined,
+        wisdomFormat: isWisdom ? wisdomFormat : undefined,
+        wisdomDemographic: isWisdom ? wisdomDemographic : undefined,
+        wisdomSetting: isWisdom ? wisdomSetting : undefined,
+        // Studio interview
+        studioSetup: isStudio ? studioSetup : undefined,
+        studioLighting: isStudio ? studioLighting : undefined,
         // Remotion effects
         effects,
       };
@@ -572,9 +596,46 @@ export function CreatePage({ onClipCreated }: CreatePageProps) {
             </div>
 
             <div className="space-y-4">
+              <WisdomFormatSelector
+                value={wisdomFormat}
+                onChange={setWisdomFormat}
+                disabled={busy}
+              />
               <WisdomToneSelector
                 value={wisdomTone}
                 onChange={setWisdomTone}
+                disabled={busy}
+              />
+              <WisdomDemographicSelector
+                value={wisdomDemographic}
+                onChange={setWisdomDemographic}
+                disabled={busy}
+              />
+              <WisdomSettingSelector
+                value={wisdomSetting}
+                onChange={setWisdomSetting}
+                disabled={busy}
+              />
+            </div>
+          </div>
+        )}
+
+        {isStudio && (
+          <div className="border-t border-zinc-800 pt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Film className="h-4 w-4 text-amber-500" />
+              <span className="text-sm font-medium text-amber-400">Studio Setup</span>
+            </div>
+
+            <div className="space-y-4">
+              <StudioSetupSelector
+                value={studioSetup}
+                onChange={setStudioSetup}
+                disabled={busy}
+              />
+              <StudioLightingSelector
+                value={studioLighting}
+                onChange={setStudioLighting}
                 disabled={busy}
               />
             </div>
