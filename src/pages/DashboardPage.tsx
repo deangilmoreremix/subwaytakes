@@ -10,6 +10,9 @@ import {
   Video,
   Heart,
   ArrowRight,
+  Clapperboard,
+  TrendingUp,
+  Clock,
 } from 'lucide-react';
 import { TokenDisplay } from '../components/TokenDisplay';
 import type { Clip, Episode, TokenBalance, ViralScore, ClipType } from '../lib/types';
@@ -140,17 +143,51 @@ export function DashboardPage() {
   }
 
   const viralClips = clips.filter(c => c.viral_score && c.viral_score.overall >= 70).slice(0, 3);
+  const avgViralScore = viralClips.length > 0
+    ? Math.round(viralClips.reduce((sum, c) => sum + (c.viral_score?.overall || 0), 0) / viralClips.length)
+    : 0;
+  const recentClip = clips[0];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-zinc-100">Dashboard</h1>
-          <p className="text-zinc-400 mt-1">Choose a creation tool to start building content.</p>
+          <p className="text-zinc-400 mt-1">Overview of your content and quick access to creation tools.</p>
         </div>
         <TokenDisplay balance={tokenBalance} isLoading={isLoading} compact />
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard
+          icon={<Film className="h-5 w-5" />}
+          label="Total Clips"
+          value={isLoading ? '--' : String(clips.length)}
+          iconBg="bg-blue-500/10 text-blue-400"
+        />
+        <StatCard
+          icon={<Clapperboard className="h-5 w-5" />}
+          label="Episodes"
+          value={isLoading ? '--' : String(episodes.length)}
+          iconBg="bg-amber-500/10 text-amber-400"
+        />
+        <StatCard
+          icon={<TrendingUp className="h-5 w-5" />}
+          label="Avg Viral Score"
+          value={isLoading ? '--' : avgViralScore > 0 ? String(avgViralScore) : 'N/A'}
+          iconBg="bg-emerald-500/10 text-emerald-400"
+        />
+        <StatCard
+          icon={<Clock className="h-5 w-5" />}
+          label="Last Created"
+          value={isLoading ? '--' : recentClip ? formatDistanceToNow(recentClip.created_at) : 'Never'}
+          iconBg="bg-rose-500/10 text-rose-400"
+        />
+      </div>
+
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-zinc-100 mb-4">Create New Content</h2>
+      </div>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-10">
         {CREATION_MODES.map((mode) => (
           <button
@@ -296,6 +333,29 @@ export function DashboardPage() {
               </li>
             </ul>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface StatCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  iconBg: string;
+}
+
+function StatCard({ icon, label, value, iconBg }: StatCardProps) {
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
+          {icon}
+        </div>
+        <div>
+          <p className="text-xs text-zinc-500">{label}</p>
+          <p className="text-lg font-semibold text-zinc-100">{value}</p>
         </div>
       </div>
     </div>
