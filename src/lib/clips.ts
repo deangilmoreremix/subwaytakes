@@ -128,6 +128,13 @@ export interface CreateClipOptions {
   wisdomFormat?: WisdomFormat;
   wisdomDemographic?: WisdomDemographic;
   wisdomSetting?: WisdomSetting;
+  subwayLine?: string;
+  subwayEnhancements?: unknown;
+  neighborhood?: string;
+  streetEnhancements?: unknown;
+  motivationalEnhancements?: unknown;
+  targetAgeGroup?: string;
+  effects?: unknown;
   // New feature fields
   language?: SupportedLanguage;
   niche?: NicheCategory;

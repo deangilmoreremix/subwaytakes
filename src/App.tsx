@@ -2,7 +2,12 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/auth';
 import { AppShell } from './components/AppLayout/AppShell';
 import { AuthPage } from './pages/AuthPage';
-import { CreatePage } from './pages/CreatePage';
+import { CreateHubPage } from './pages/CreateHubPage';
+import { CreateSubwayPage } from './pages/create/CreateSubwayPage';
+import { CreateStreetPage } from './pages/create/CreateStreetPage';
+import { CreateMotivationalPage } from './pages/create/CreateMotivationalPage';
+import { CreateWisdomPage } from './pages/create/CreateWisdomPage';
+import { CreateStudioPage } from './pages/create/CreateStudioPage';
 import { ClipPage } from './pages/ClipPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { EpisodeBuilderPage } from './pages/EpisodeBuilderPage';
@@ -33,7 +38,12 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Navigate to="/create" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/create" element={<CreatePage />} />
+          <Route path="/create" element={<CreateHubPage />} />
+          <Route path="/create/subway" element={<CreateSubwayPage />} />
+          <Route path="/create/street" element={<CreateStreetPage />} />
+          <Route path="/create/motivational" element={<CreateMotivationalPage />} />
+          <Route path="/create/wisdom" element={<CreateWisdomPage />} />
+          <Route path="/create/studio" element={<CreateStudioPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/clips/:id" element={<ClipPage />} />
           <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />

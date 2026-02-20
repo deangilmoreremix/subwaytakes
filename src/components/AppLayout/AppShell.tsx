@@ -47,7 +47,12 @@ const NAV_SECTIONS: NavSection[] = [
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
-  '/create': 'Create Interview',
+  '/create': 'Create',
+  '/create/subway': 'Subway Interview',
+  '/create/street': 'Street Interview',
+  '/create/motivational': 'Motivational',
+  '/create/wisdom': 'Wisdom Interview',
+  '/create/studio': 'Studio Interview',
   '/library': 'Library',
   '/templates': 'Templates',
   '/questions': 'Question Bank',
