@@ -1,20 +1,14 @@
-import { Heart } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useClipCreation } from '../../hooks/useClipCreation';
-import {
-  PageHeader,
-  KeywordSection,
-  TopicDurationRow,
-  CharacterSection,
-  ModelSection,
-  AdvancedOptionsSection,
-  GenerateSection,
-  EffectsModal,
-} from '../../components/create/CommonCreateSections';
-import { WisdomFormatSelector } from '../../components/WisdomFormatSelector';
-import { WisdomToneSelector } from '../../components/WisdomToneSelector';
-import { WisdomDemographicSelector } from '../../components/WisdomDemographicSelector';
-import { WisdomSettingSelector } from '../../components/WisdomSettingSelector';
+import type { WizardStepDef } from '../../hooks/useClipCreation';
+import { PageHeader, EffectsModal } from '../../components/create/CommonCreateSections';
+import { CreationWizard } from '../../components/create/CreationWizard';
+import { AdvancedSettingsDrawer } from '../../components/create/AdvancedSettingsDrawer';
+import { QuickGenerateModal } from '../../components/create/QuickGenerateModal';
+import { ContentStep } from '../../components/create/steps/ContentStep';
+import { WisdomStyleStep } from '../../components/create/steps/WisdomStyleStep';
+import { GenerateStep } from '../../components/create/steps/GenerateStep';
+import { SelectionSummary } from '../../components/create/SelectionSummary';
 import type {
   WisdomTone,
   WisdomFormat,
@@ -22,8 +16,15 @@ import type {
   WisdomSetting,
 } from '../../lib/types';
 
+const STEPS: WizardStepDef[] = [
+  { label: 'Content' },
+  { label: 'Style' },
+  { label: 'Generate' },
+];
+
 export function CreateWisdomPage() {
-  const clip = useClipCreation('wisdom_interview');
+  const clip = useClipCreation('wisdom_interview', STEPS);
+  const [showQuickGen, setShowQuickGen] = useState(false);
 
   const [wisdomTone, setWisdomTone] = useState<WisdomTone>('gentle');
   const [wisdomFormat, setWisdomFormat] = useState<WisdomFormat>('street_conversation');
@@ -40,46 +41,76 @@ export function CreateWisdomPage() {
     });
   }
 
+  const summaryGroups = useMemo(() => [
+    {
+      label: 'Content',
+      stepIndex: 0,
+      items: [
+        { label: 'Topic', value: clip.topic },
+        { label: 'Duration', value: `${clip.duration}s` },
+      ],
+    },
+    {
+      label: 'Style',
+      stepIndex: 1,
+      items: [
+        { label: 'Format', value: wisdomFormat.replace(/_/g, ' ') },
+        { label: 'Tone', value: wisdomTone },
+        { label: 'Demographic', value: wisdomDemographic },
+        { label: 'Setting', value: wisdomSetting.replace(/_/g, ' ') },
+      ],
+    },
+  ], [clip.topic, clip.duration, wisdomFormat, wisdomTone, wisdomDemographic, wisdomSetting]);
+
+  const quickGenDefaults = [
+    { label: 'Topic', value: clip.topic },
+    { label: 'Duration', value: `${clip.duration}s` },
+    { label: 'Format', value: 'Street Conversation' },
+    { label: 'Tone', value: 'Gentle' },
+    { label: 'Demographic', value: 'Retirees' },
+  ];
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <PageHeader
         title="Wisdom Interview"
-        description="One prompt generates a single 2-8 second clip. Heartfelt conversations with experienced voices sharing life lessons."
+        description="Heartfelt conversations with experienced voices sharing life lessons."
         clip={clip}
       />
 
-      <KeywordSection clip={clip} />
+      <CreationWizard clip={clip} steps={STEPS} accentColor="amber" onGenerate={handleGenerate}>
+        <ContentStep clip={clip} onQuickGenerate={() => setShowQuickGen(true)} />
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6 space-y-6">
-        <TopicDurationRow clip={clip} />
+        <WisdomStyleStep
+          clip={clip}
+          wisdomFormat={wisdomFormat}
+          setWisdomFormat={setWisdomFormat}
+          wisdomTone={wisdomTone}
+          setWisdomTone={setWisdomTone}
+          wisdomDemographic={wisdomDemographic}
+          setWisdomDemographic={setWisdomDemographic}
+          wisdomSetting={wisdomSetting}
+          setWisdomSetting={setWisdomSetting}
+        />
 
-        <div className="border-t border-zinc-800 pt-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Heart className="h-4 w-4 text-amber-500" />
-            <span className="text-sm font-medium text-amber-400">Wisdom Mode Options</span>
-          </div>
-          <div className="space-y-4">
-            <WisdomFormatSelector value={wisdomFormat} onChange={setWisdomFormat} disabled={clip.busy} />
-            <WisdomToneSelector value={wisdomTone} onChange={setWisdomTone} disabled={clip.busy} />
-            <WisdomDemographicSelector value={wisdomDemographic} onChange={setWisdomDemographic} disabled={clip.busy} />
-            <WisdomSettingSelector value={wisdomSetting} onChange={setWisdomSetting} disabled={clip.busy} />
-          </div>
-        </div>
-
-        <CharacterSection clip={clip} />
-        <ModelSection clip={clip} showSpeechScript={true} />
-        <AdvancedOptionsSection clip={clip} />
-        <GenerateSection
+        <GenerateStep
           clip={clip}
           onGenerate={handleGenerate}
+          showSpeechScript={true}
+          summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} />}
         />
-      </div>
+      </CreationWizard>
 
-      <p className="mt-6 text-xs text-zinc-600">
-        Wisdom interview clips for 55+ audience. Life lessons, retirement advice, and heartfelt conversations.
-      </p>
-
+      <AdvancedSettingsDrawer clip={clip} />
       <EffectsModal clip={clip} />
+
+      <QuickGenerateModal
+        open={showQuickGen}
+        onClose={() => setShowQuickGen(false)}
+        onConfirm={() => { setShowQuickGen(false); handleGenerate(); }}
+        onCustomize={() => { setShowQuickGen(false); clip.nextStep(); }}
+        defaults={quickGenDefaults}
+      />
     </div>
   );
 }

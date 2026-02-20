@@ -34,8 +34,26 @@ import type { KeywordAnalysis } from '../lib/keywordEngine';
 
 export type GenerationStatus = 'idle' | 'planning' | 'generating' | 'done' | 'error';
 
-export function useClipCreation(clipType: ClipType) {
+export interface WizardStepDef {
+  label: string;
+  optional?: boolean;
+}
+
+export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) {
   const navigate = useNavigate();
+
+  const totalSteps = stepDefs?.length ?? 1;
+  const [currentStep, setCurrentStep] = useState(0);
+
+  function goToStep(n: number) {
+    if (n >= 0 && n < totalSteps) setCurrentStep(n);
+  }
+  function nextStep() {
+    if (currentStep < totalSteps - 1) setCurrentStep(currentStep + 1);
+  }
+  function prevStep() {
+    if (currentStep > 0) setCurrentStep(currentStep - 1);
+  }
 
   const [topic, setTopic] = useState<string>(TOPICS[clipType][0]);
   const [duration, setDuration] = useState<number>(getDefaultDuration(clipType));
@@ -173,7 +191,11 @@ export function useClipCreation(clipType: ClipType) {
     }
   }
 
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   return {
+    currentStep, totalSteps, goToStep, nextStep, prevStep,
+    showAdvanced, setShowAdvanced,
     topic, setTopic,
     duration, setDuration,
     angle, setAngle,

@@ -1,29 +1,15 @@
-import { useState } from 'react';
-import { MapPin, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { useClipCreation } from '../../hooks/useClipCreation';
-import {
-  PageHeader,
-  KeywordSection,
-  TopicDurationRow,
-  CharacterSection,
-  ModelSection,
-  AdvancedOptionsSection,
-  GenerateSection,
-  EffectsModal,
-} from '../../components/create/CommonCreateSections';
-import { StreetSceneSelector } from '../../components/StreetSceneSelector';
-import { InterviewStyleSelector } from '../../components/InterviewStyleSelector';
-import { TimeOfDaySelector } from '../../components/TimeOfDaySelector';
-import { EnergyLevelSelector } from '../../components/EnergyLevelSelector';
-import { StreetJourneyBuilder } from '../../components/StreetJourneyBuilder';
-import { StreetCrowdPanel } from '../../components/StreetCrowdPanel';
-import { UrbanSoundscapeSelector } from '../../components/UrbanSoundscapeSelector';
-import { StreetPlotTwistSelector } from '../../components/StreetPlotTwistSelector';
-import { StreetPoll } from '../../components/StreetPoll';
-import { NeighborhoodSelector } from '../../components/NeighborhoodSelector';
-import { StreetDramaticMoment } from '../../components/StreetDramaticMoment';
-import { StreetSeasonalSelector } from '../../components/StreetSeasonalSelector';
-import { CrossStreetPivot } from '../../components/CrossStreetPivot';
+import type { WizardStepDef } from '../../hooks/useClipCreation';
+import { PageHeader, EffectsModal } from '../../components/create/CommonCreateSections';
+import { CreationWizard } from '../../components/create/CreationWizard';
+import { AdvancedSettingsDrawer } from '../../components/create/AdvancedSettingsDrawer';
+import { QuickGenerateModal } from '../../components/create/QuickGenerateModal';
+import { ContentStep } from '../../components/create/steps/ContentStep';
+import { StreetSceneStep } from '../../components/create/steps/StreetSceneStep';
+import { StreetEnhancementsStep } from '../../components/create/steps/StreetEnhancementsStep';
+import { GenerateStep } from '../../components/create/steps/GenerateStep';
+import { SelectionSummary } from '../../components/create/SelectionSummary';
 import type {
   StreetScene,
   InterviewStyle,
@@ -41,8 +27,16 @@ import type {
   StreetEnhancementConfig,
 } from '../../lib/types';
 
+const STEPS: WizardStepDef[] = [
+  { label: 'Content' },
+  { label: 'Scene' },
+  { label: 'Enhance', optional: true },
+  { label: 'Generate' },
+];
+
 export function CreateStreetPage() {
-  const clip = useClipCreation('street_interview');
+  const clip = useClipCreation('street_interview', STEPS);
+  const [showQuickGen, setShowQuickGen] = useState(false);
 
   const [streetScene, setStreetScene] = useState<StreetScene>('busy_sidewalk');
   const [interviewStyle, setInterviewStyle] = useState<InterviewStyle>('man_on_street');
@@ -58,7 +52,6 @@ export function CreateStreetPage() {
   const [streetDramaticMoment, setStreetDramaticMoment] = useState<StreetDramaticMomentType | undefined>();
   const [streetSeasonalContext, setStreetSeasonalContext] = useState<StreetSeasonalContext | undefined>();
   const [crossStreetPivot, setCrossStreetPivot] = useState<CrossStreetPivotType | undefined>();
-  const [showStreetEnhancements, setShowStreetEnhancements] = useState(false);
 
   function buildStreetEnhancements(): StreetEnhancementConfig | undefined {
     const hasEnhancements = streetMultiLocationJourney?.enabled ||
@@ -94,90 +87,114 @@ export function CreateStreetPage() {
     });
   }
 
+  const summaryGroups = useMemo(() => [
+    {
+      label: 'Content',
+      stepIndex: 0,
+      items: [
+        { label: 'Topic', value: clip.topic },
+        { label: 'Duration', value: `${clip.duration}s` },
+      ],
+    },
+    {
+      label: 'Scene',
+      stepIndex: 1,
+      items: [
+        { label: 'Scene', value: streetScene.replace(/_/g, ' ') },
+        { label: 'Style', value: interviewStyle.replace(/_/g, ' ') },
+        { label: 'Time', value: timeOfDay.replace(/_/g, ' ') },
+        { label: 'Energy', value: energyLevel },
+      ],
+    },
+    {
+      label: 'Enhancements',
+      stepIndex: 2,
+      items: [
+        ...(neighborhood ? [{ label: 'Hood', value: neighborhood }] : []),
+        ...(streetMultiLocationJourney?.enabled ? [{ label: '', value: 'Journey' }] : []),
+        ...(streetCrowdConfig?.enabled ? [{ label: '', value: 'Crowd' }] : []),
+        ...(urbanSoundscape?.enabled ? [{ label: '', value: 'Soundscape' }] : []),
+        ...(streetPlotTwist ? [{ label: '', value: 'Plot Twist' }] : []),
+        ...(streetPoll?.enabled ? [{ label: '', value: 'Poll' }] : []),
+        ...(streetDramaticMoment?.enabled ? [{ label: '', value: 'Dramatic' }] : []),
+        ...(streetSeasonalContext?.enabled ? [{ label: '', value: 'Seasonal' }] : []),
+        ...(crossStreetPivot?.enabled ? [{ label: '', value: 'Pivot' }] : []),
+        ...(!buildStreetEnhancements() && !neighborhood ? [{ label: '', value: 'None' }] : []),
+      ],
+    },
+  ], [clip.topic, clip.duration, streetScene, interviewStyle, timeOfDay, energyLevel, neighborhood, streetMultiLocationJourney, streetCrowdConfig, urbanSoundscape, streetPlotTwist, streetPoll, streetDramaticMoment, streetSeasonalContext, crossStreetPivot]);
+
+  const quickGenDefaults = [
+    { label: 'Topic', value: clip.topic },
+    { label: 'Duration', value: `${clip.duration}s` },
+    { label: 'Scene', value: 'Busy Sidewalk' },
+    { label: 'Style', value: 'Man on Street' },
+    { label: 'Time', value: 'Midday' },
+  ];
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <PageHeader
         title="Street Interview"
-        description="One prompt generates a single 2-8 second clip. Sidewalk documentary style with authentic vox pop content."
+        description="Sidewalk documentary style with authentic vox pop content."
         clip={clip}
       />
 
-      <KeywordSection clip={clip} />
+      <CreationWizard clip={clip} steps={STEPS} accentColor="emerald" onGenerate={handleGenerate}>
+        <ContentStep clip={clip} onQuickGenerate={() => setShowQuickGen(true)} />
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6 space-y-6">
-        <TopicDurationRow clip={clip} />
+        <StreetSceneStep
+          clip={clip}
+          streetScene={streetScene}
+          setStreetScene={setStreetScene}
+          interviewStyle={interviewStyle}
+          setInterviewStyle={setInterviewStyle}
+          timeOfDay={timeOfDay}
+          setTimeOfDay={setTimeOfDay}
+          energyLevel={energyLevel}
+          setEnergyLevel={setEnergyLevel}
+        />
 
-        <div className="border-t border-zinc-800 pt-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span className="text-sm font-medium text-emerald-400">Street Interview Options</span>
-          </div>
-          <div className="space-y-5">
-            <StreetSceneSelector value={streetScene} onChange={setStreetScene} disabled={clip.busy} />
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <InterviewStyleSelector value={interviewStyle} onChange={setInterviewStyle} disabled={clip.busy} />
-              <TimeOfDaySelector value={timeOfDay} onChange={setTimeOfDay} disabled={clip.busy} />
-            </div>
-            <EnergyLevelSelector value={energyLevel} onChange={setEnergyLevel} />
-          </div>
+        <StreetEnhancementsStep
+          clip={clip}
+          neighborhood={neighborhood}
+          setNeighborhood={setNeighborhood}
+          streetMultiLocationJourney={streetMultiLocationJourney}
+          setStreetMultiLocationJourney={setStreetMultiLocationJourney}
+          streetCrowdConfig={streetCrowdConfig}
+          setStreetCrowdConfig={setStreetCrowdConfig}
+          urbanSoundscape={urbanSoundscape}
+          setUrbanSoundscape={setUrbanSoundscape}
+          streetPlotTwist={streetPlotTwist}
+          setStreetPlotTwist={setStreetPlotTwist}
+          streetPoll={streetPoll}
+          setStreetPoll={setStreetPoll}
+          streetDramaticMoment={streetDramaticMoment}
+          setStreetDramaticMoment={setStreetDramaticMoment}
+          streetSeasonalContext={streetSeasonalContext}
+          setStreetSeasonalContext={setStreetSeasonalContext}
+          crossStreetPivot={crossStreetPivot}
+          setCrossStreetPivot={setCrossStreetPivot}
+        />
 
-          <div className="border-t border-zinc-800 pt-6 mt-6">
-            <button
-              type="button"
-              onClick={() => setShowStreetEnhancements(!showStreetEnhancements)}
-              disabled={clip.busy}
-              className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors mb-4"
-            >
-              <MapPin className="h-4 w-4" />
-              <span>Street Interview Enhancements</span>
-              {showStreetEnhancements ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-            {showStreetEnhancements && (
-              <div className="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-                <NeighborhoodSelector value={neighborhood} onChange={setNeighborhood} disabled={clip.busy} />
-                <div className="border-t border-zinc-800 pt-4">
-                  <StreetJourneyBuilder value={streetMultiLocationJourney} onChange={setStreetMultiLocationJourney} disabled={clip.busy} />
-                </div>
-                <div className="border-t border-zinc-800 pt-4">
-                  <StreetCrowdPanel value={streetCrowdConfig} onChange={setStreetCrowdConfig} disabled={clip.busy} />
-                </div>
-                <div className="border-t border-zinc-800 pt-4">
-                  <UrbanSoundscapeSelector value={urbanSoundscape} onChange={setUrbanSoundscape} disabled={clip.busy} />
-                </div>
-                <div className="border-t border-zinc-800 pt-4">
-                  <StreetPlotTwistSelector value={streetPlotTwist} onChange={setStreetPlotTwist} disabled={clip.busy} maxDuration={clip.duration} />
-                </div>
-                <div className="border-t border-zinc-800 pt-4">
-                  <StreetPoll value={streetPoll} onChange={setStreetPoll} disabled={clip.busy} />
-                </div>
-                <div className="border-t border-zinc-800 pt-4">
-                  <StreetDramaticMoment value={streetDramaticMoment} onChange={setStreetDramaticMoment} disabled={clip.busy} maxDuration={clip.duration} />
-                </div>
-                <div className="border-t border-zinc-800 pt-4">
-                  <StreetSeasonalSelector value={streetSeasonalContext} onChange={setStreetSeasonalContext} disabled={clip.busy} />
-                </div>
-                <div className="border-t border-zinc-800 pt-4">
-                  <CrossStreetPivot value={crossStreetPivot} onChange={setCrossStreetPivot} disabled={clip.busy} />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <CharacterSection clip={clip} />
-        <ModelSection clip={clip} showSpeechScript={true} />
-        <AdvancedOptionsSection clip={clip} />
-        <GenerateSection
+        <GenerateStep
           clip={clip}
           onGenerate={handleGenerate}
+          showSpeechScript={true}
+          summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} />}
         />
-      </div>
+      </CreationWizard>
 
-      <p className="mt-6 text-xs text-zinc-600">
-        Street interview clips. Pick your scene, style, and time of day for authentic vox pop content.
-      </p>
-
+      <AdvancedSettingsDrawer clip={clip} />
       <EffectsModal clip={clip} />
+
+      <QuickGenerateModal
+        open={showQuickGen}
+        onClose={() => setShowQuickGen(false)}
+        onConfirm={() => { setShowQuickGen(false); handleGenerate(); }}
+        onCustomize={() => { setShowQuickGen(false); clip.nextStep(); }}
+        defaults={quickGenDefaults}
+      />
     </div>
   );
 }
