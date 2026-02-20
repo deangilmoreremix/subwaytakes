@@ -38,7 +38,7 @@ const NAV_SECTIONS: NavSection[] = [
     icon: PlusCircle,
     path: '/create',
     badge: 'New',
-    matchPaths: ['/create', '/clips', '/episodes', '/questions'],
+    matchPaths: ['/create', '/clips', '/episodes', '/compilations', '/questions'],
   },
   { id: 'library', label: 'Library', icon: Library, path: '/library' },
   { id: 'templates', label: 'Templates', icon: Palette, path: '/templates' },
@@ -67,6 +67,9 @@ function getTitleFromPath(pathname: string): string {
   if (pathname === '/episodes/new') return 'Episode Builder';
   if (pathname.startsWith('/episodes/') && pathname.endsWith('/enhance')) return 'Enhance Episode';
   if (pathname.startsWith('/episodes/')) return 'Episode';
+  if (pathname === '/compilations/new') return 'Stitch Clips';
+  if (pathname.startsWith('/compilations/') && pathname.endsWith('/enhance')) return 'Enhance Compilation';
+  if (pathname.startsWith('/compilations/')) return 'Compilation';
   return 'SubwayTakes';
 }
 

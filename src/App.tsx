@@ -18,6 +18,8 @@ import { TemplateManagerPage } from './pages/TemplateManagerPage';
 import { EnhancePage } from './pages/EnhancePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
+import CompilationBuilderPage from './pages/CompilationBuilderPage';
+import CompilationPage from './pages/CompilationPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
@@ -50,6 +52,9 @@ function AppContent() {
           <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
           <Route path="/episodes/:id" element={<EpisodePage />} />
           <Route path="/episodes/:id/enhance" element={<EnhancePage contentType="episode" />} />
+          <Route path="/compilations/new" element={<CompilationBuilderPage />} />
+          <Route path="/compilations/:id" element={<CompilationPage />} />
+          <Route path="/compilations/:id/enhance" element={<EnhancePage contentType="compilation" />} />
           <Route path="/questions" element={<QuestionBankPage />} />
           <Route path="/templates" element={<TemplateManagerPage />} />
           <Route path="/settings" element={<SettingsPage />} />

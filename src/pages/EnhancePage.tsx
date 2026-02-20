@@ -14,6 +14,7 @@ import { EnhancementPanel } from '../components/EnhancementPanel';
 import { ExportPanel } from '../components/ExportPanel';
 import { getClipById } from '../lib/clips';
 import { getEpisodeById } from '../lib/episodes';
+import { getCompilationById, triggerCompilationCompose } from '../lib/compilations';
 import {
   triggerClipCompose,
   triggerComposeOverlay,
@@ -22,10 +23,10 @@ import {
 import { getUserId } from '../lib/auth';
 import { prettyType, clsx } from '../lib/format';
 import { useRealtimeStatus } from '../hooks/useRealtimeStatus';
-import type { Clip, Episode, EnhancementConfig, ClipType } from '../lib/types';
+import type { Clip, Episode, Compilation, EnhancementConfig, ClipType } from '../lib/types';
 
 interface EnhancePageProps {
-  contentType: 'clip' | 'episode';
+  contentType: 'clip' | 'episode' | 'compilation';
 }
 
 const DEFAULT_CONFIG: EnhancementConfig = {
@@ -90,7 +91,13 @@ const TYPE_PRESETS: Record<ClipType, Partial<EnhancementConfig>> = {
   },
 };
 
-function getVideoUrl(content: Clip | Episode, type: 'clip' | 'episode'): string | null {
+type ContentUnion = Clip | Episode | Compilation;
+
+function getVideoUrl(content: ContentUnion, type: 'clip' | 'episode' | 'compilation'): string | null {
+  if (type === 'compilation') {
+    const comp = content as Compilation;
+    return comp.composed_video_url || comp.final_video_url || null;
+  }
   if (type === 'episode') {
     const ep = content as Episode;
     return ep.composed_video_url || ep.final_video_url || null;
@@ -99,7 +106,10 @@ function getVideoUrl(content: Clip | Episode, type: 'clip' | 'episode'): string 
   return clip.composed_video_url || clip.result_url || null;
 }
 
-function getRawVideoUrl(content: Clip | Episode, type: 'clip' | 'episode'): string | null {
+function getRawVideoUrl(content: ContentUnion, type: 'clip' | 'episode' | 'compilation'): string | null {
+  if (type === 'compilation') {
+    return (content as Compilation).final_video_url || null;
+  }
   if (type === 'episode') {
     return (content as Episode).final_video_url || null;
   }
@@ -110,7 +120,7 @@ export function EnhancePage({ contentType }: EnhancePageProps) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const contentId = id!;
-  const [content, setContent] = useState<Clip | Episode | null>(null);
+  const [content, setContent] = useState<ContentUnion | null>(null);
   const [loading, setLoading] = useState(true);
   const [enhancementConfig, setEnhancementConfig] = useState<EnhancementConfig>(DEFAULT_CONFIG);
   const [composing, setComposing] = useState(false);
@@ -124,8 +134,11 @@ export function EnhancePage({ contentType }: EnhancePageProps) {
       if (contentType === 'clip') {
         const data = await getClipById(contentId);
         setContent(data);
-      } else {
+      } else if (contentType === 'episode') {
         const data = await getEpisodeById(contentId);
+        setContent(data);
+      } else {
+        const data = await getCompilationById(contentId);
         setContent(data);
       }
     } catch (err) {
@@ -151,12 +164,16 @@ export function EnhancePage({ contentType }: EnhancePageProps) {
     setPresetApplied(true);
   }, [content, contentType, presetApplied]);
 
-  const overlayStatus = contentType === 'clip'
-    ? (content as Clip | null)?.overlay_status
-    : (content as Episode | null)?.overlay_status;
+  const overlayStatus = content
+    ? (content as Clip | Episode | Compilation).overlay_status
+    : undefined;
+
+  const realtimeTable = contentType === 'clip' ? 'clips'
+    : contentType === 'episode' ? 'episodes'
+    : 'compilations';
 
   useRealtimeStatus({
-    table: contentType === 'clip' ? 'clips' : 'episodes',
+    table: realtimeTable,
     id: contentId,
     enabled: overlayStatus === 'composing',
     onUpdate: (payload) => {
@@ -194,8 +211,10 @@ export function EnhancePage({ contentType }: EnhancePageProps) {
     try {
       if (contentType === 'clip') {
         await triggerClipCompose(contentId, config);
-      } else {
+      } else if (contentType === 'episode') {
         await triggerComposeOverlay(contentId, config);
+      } else {
+        await triggerCompilationCompose(contentId, config);
       }
     } catch (err) {
       console.error('Compose failed:', err);
@@ -233,7 +252,11 @@ export function EnhancePage({ contentType }: EnhancePageProps) {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-8 text-center">
           <AlertCircle className="mx-auto h-10 w-10 text-rose-400" />
           <h2 className="mt-4 text-lg font-semibold text-zinc-100">Content not found</h2>
-          <button onClick={() => navigate(contentType === 'clip' ? '/clips/' + id : '/episodes/' + id)} className="mt-4 rounded-xl bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700">
+          <button onClick={() => navigate(
+            contentType === 'clip' ? '/clips/' + id
+            : contentType === 'episode' ? '/episodes/' + id
+            : '/compilations/' + id
+          )} className="mt-4 rounded-xl bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700">
             Go back
           </button>
         </div>
@@ -243,22 +266,28 @@ export function EnhancePage({ contentType }: EnhancePageProps) {
 
   const videoUrl = getVideoUrl(content, contentType);
   const rawUrl = getRawVideoUrl(content, contentType);
-  const hasComposed = contentType === 'clip'
-    ? !!(content as Clip).composed_video_url
-    : !!(content as Episode).composed_video_url;
+  const hasComposed = !!(content as Clip & Episode & Compilation).composed_video_url;
 
   const title = contentType === 'clip'
     ? (content as Clip).topic
-    : `Episode ${(content as Episode).episode_number || ''}`;
+    : contentType === 'episode'
+    ? `Episode ${(content as Episode).episode_number || ''}`
+    : (content as Compilation).name;
 
   const subtitle = contentType === 'clip'
     ? prettyType((content as Clip).video_type)
-    : (content as Episode).city_style?.toUpperCase() || '';
+    : contentType === 'episode'
+    ? (content as Episode).city_style?.toUpperCase() || ''
+    : `${(content as Compilation).clips?.length || 0} clips`;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <button
-        onClick={() => navigate(contentType === 'clip' ? '/clips/' + id : '/episodes/' + id)}
+        onClick={() => navigate(
+          contentType === 'clip' ? '/clips/' + id
+          : contentType === 'episode' ? '/episodes/' + id
+          : '/compilations/' + id
+        )}
         className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition mb-6"
       >
         <ArrowLeft className="h-4 w-4" />

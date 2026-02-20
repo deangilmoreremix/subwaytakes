@@ -23,6 +23,7 @@ interface OverlayTextEntry {
 interface ComposeRequest {
   episode_id?: string;
   clip_id?: string;
+  compilation_id?: string;
 }
 
 interface VideoTemplate {
@@ -584,6 +585,193 @@ async function handleClipCompose(
   };
 }
 
+function buildCompilationOverlayEntries(
+  template: VideoTemplate,
+  compilation: {
+    name: string;
+    total_duration_seconds: number;
+  },
+  clips: Array<{
+    topic: string;
+    speech_script: string | null;
+    duration_seconds: number;
+    sequence: number;
+  }>
+): OverlayTextEntry[] {
+  const entries: OverlayTextEntry[] = [];
+  const totalDuration = compilation.total_duration_seconds;
+
+  const watermarkPos = positionToXY(template.watermark_position, 1080, 1920);
+  entries.push({
+    text: template.watermark_text,
+    x: watermarkPos.x,
+    y: watermarkPos.y,
+    fontSize: template.watermark_font_size,
+    color: template.watermark_color,
+    startTime: 0,
+    endTime: totalDuration,
+    boxEnabled: false,
+  });
+
+  const titleText = `${template.watermark_text} ${compilation.name}`;
+  const captionPos = positionToXY(template.caption_position, 1080, 1920);
+  const titleEnd = Math.min(10, totalDuration);
+  entries.push({
+    text: titleText,
+    x: captionPos.x,
+    y: captionPos.y,
+    fontSize: template.caption_font_size,
+    color: template.caption_color,
+    startTime: 0,
+    endTime: titleEnd,
+    boxEnabled: true,
+    boxColor: `black@${template.caption_bg_opacity}`,
+  });
+
+  if (template.reaction_text_enabled) {
+    let currentTime = 0;
+    for (const clip of clips) {
+      if (clip.speech_script) {
+        const captionText = clip.speech_script.length > 80
+          ? clip.speech_script.substring(0, 77) + "..."
+          : clip.speech_script;
+        entries.push({
+          text: captionText,
+          x: "32",
+          y: "(h-th-100)",
+          fontSize: template.reaction_text_font_size,
+          color: template.caption_color,
+          startTime: currentTime + 0.5,
+          endTime: currentTime + clip.duration_seconds - 0.5,
+          boxEnabled: true,
+          boxColor: `black@${template.caption_bg_opacity}`,
+        });
+      }
+      currentTime += clip.duration_seconds;
+    }
+  }
+
+  if (template.endcard_enabled) {
+    const endcardStart = Math.max(0, totalDuration - 3);
+    const ctaText = template.endcard_style === 'subscribe'
+      ? `Follow ${template.watermark_text}`
+      : template.endcard_style === 'cta'
+        ? `More at ${template.watermark_text}`
+        : template.watermark_text;
+
+    entries.push({
+      text: ctaText,
+      x: "(w-tw)/2",
+      y: "(h-th)/2",
+      fontSize: template.caption_font_size + 8,
+      color: template.watermark_color,
+      startTime: endcardStart,
+      endTime: totalDuration,
+      boxEnabled: true,
+      boxColor: `black@0.7`,
+    });
+  }
+
+  return entries;
+}
+
+async function handleCompilationCompose(
+  supabase: ReturnType<typeof createClient>,
+  compilationId: string
+) {
+  const { data: compilation, error: compError } = await supabase
+    .from("compilations")
+    .select("*, video_templates(*)")
+    .eq("id", compilationId)
+    .maybeSingle();
+
+  if (compError || !compilation) {
+    throw new Error(compError?.message || "Compilation not found");
+  }
+
+  if (!compilation.final_video_url) {
+    throw new Error("Compilation has no stitched video yet");
+  }
+
+  await supabase
+    .from("compilations")
+    .update({ overlay_status: "composing" })
+    .eq("id", compilationId);
+
+  const template = await getTemplate(supabase, compilation.video_templates, compilation.template_id);
+
+  const { data: clipEntries } = await supabase
+    .from("compilation_clips")
+    .select("sequence, clips(topic, speech_script, duration_seconds)")
+    .eq("compilation_id", compilationId)
+    .order("sequence");
+
+  const clips = (clipEntries || []).map((e: Record<string, unknown>) => ({
+    topic: (e.clips as Record<string, unknown>)?.topic as string || "",
+    speech_script: (e.clips as Record<string, unknown>)?.speech_script as string | null,
+    duration_seconds: (e.clips as Record<string, unknown>)?.duration_seconds as number || 0,
+    sequence: e.sequence as number,
+  }));
+
+  const overlays = buildCompilationOverlayEntries(template, {
+    name: compilation.name,
+    total_duration_seconds: compilation.total_duration_seconds,
+  }, clips);
+
+  const { serviceUrl, serviceKey } = getServiceConfig();
+
+  if (!serviceUrl) {
+    await supabase
+      .from("compilations")
+      .update({
+        overlay_status: "done",
+        composed_video_url: compilation.final_video_url,
+      })
+      .eq("id", compilationId);
+
+    return {
+      success: true,
+      composed_video_url: compilation.final_video_url,
+      note: "No FFmpeg service configured, using raw video",
+    };
+  }
+
+  const composedUrl = await composeWithFFmpegService(
+    compilation.final_video_url,
+    overlays,
+    serviceUrl,
+    serviceKey
+  );
+
+  if (composedUrl) {
+    const finalUrl = await uploadComposedVideo(supabase, composedUrl, compilationId, "episode-videos");
+
+    await supabase
+      .from("compilations")
+      .update({
+        overlay_status: "done",
+        composed_video_url: finalUrl,
+      })
+      .eq("id", compilationId);
+
+    return { success: true, composed_video_url: finalUrl };
+  }
+
+  await supabase
+    .from("compilations")
+    .update({
+      overlay_status: "done",
+      composed_video_url: compilation.final_video_url,
+    })
+    .eq("id", compilationId);
+
+  return {
+    success: true,
+    composed_video_url: compilation.final_video_url,
+    note: "Compose failed, using raw video as fallback",
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -596,9 +784,9 @@ Deno.serve(async (req: Request) => {
 
     const body: ComposeRequest = await req.json();
 
-    if (!body.episode_id && !body.clip_id) {
+    if (!body.episode_id && !body.clip_id && !body.compilation_id) {
       return new Response(
-        JSON.stringify({ error: "episode_id or clip_id is required" }),
+        JSON.stringify({ error: "episode_id, clip_id, or compilation_id is required" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -610,6 +798,8 @@ Deno.serve(async (req: Request) => {
 
     if (body.episode_id) {
       result = await handleEpisodeCompose(supabase, body.episode_id);
+    } else if (body.compilation_id) {
+      result = await handleCompilationCompose(supabase, body.compilation_id);
     } else {
       result = await handleClipCompose(supabase, body.clip_id!);
     }

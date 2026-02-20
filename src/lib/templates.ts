@@ -271,7 +271,7 @@ export async function assignTemplateToClip(clipId: string, templateId: string): 
 
 export async function createVideoExport(
   parentId: string,
-  parentType: 'clip' | 'episode',
+  parentType: 'clip' | 'episode' | 'compilation',
   platform: string,
   userId: string
 ): Promise<string | null> {

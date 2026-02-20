@@ -1719,4 +1719,41 @@ export type EnhanceableContent = {
 } | {
   type: 'episode';
   data: Episode;
+} | {
+  type: 'compilation';
+  data: Compilation;
 };
+
+export type CompilationStatus = 'queued' | 'stitching' | 'done' | 'error';
+export type TransitionType = 'crossfade' | 'cut' | 'dissolve';
+
+export interface Compilation {
+  id: string;
+  user_id: string;
+  name: string;
+  status: CompilationStatus;
+  transition_type: TransitionType;
+  transition_duration: number;
+  total_duration_seconds: number;
+  final_video_url: string | null;
+  caption_file_url: string | null;
+  thumbnail_url: string | null;
+  template_id: string | null;
+  overlay_status: string | null;
+  composed_video_url: string | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+  clips?: CompilationClipEntry[];
+}
+
+export interface CompilationClipEntry {
+  id: string;
+  compilation_id: string;
+  clip_id: string;
+  sequence: number;
+  trim_start: number;
+  trim_end: number | null;
+  created_at: string;
+  clip?: Clip;
+}

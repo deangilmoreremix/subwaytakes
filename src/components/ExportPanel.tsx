@@ -14,7 +14,7 @@ import { getExportsForContent } from '../lib/templates';
 
 interface ExportPanelProps {
   parentId: string;
-  parentType: 'clip' | 'episode';
+  parentType: 'clip' | 'episode' | 'compilation';
   videoUrl: string | null;
   onExport: (platform: string) => void;
   exporting: boolean;

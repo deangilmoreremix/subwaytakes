@@ -34,7 +34,7 @@ interface SoundEffect {
 interface EnhancementPanelProps {
   config: EnhancementConfig;
   onChange: (config: EnhancementConfig) => void;
-  contentType: 'clip' | 'episode';
+  contentType: 'clip' | 'episode' | 'compilation';
 }
 
 const COLOR_GRADES: { value: ColorGradePreset; label: string; preview: string }[] = [

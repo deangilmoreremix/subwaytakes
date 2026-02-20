@@ -300,7 +300,7 @@ export function DashboardPage() {
       {/* Quick Actions */}
       <div>
         <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <QuickActionCard
             icon={<Plus className="h-5 w-5 text-amber-400" />}
             title="Create New Clip"
@@ -316,6 +316,14 @@ export function DashboardPage() {
             onClick={() => navigate('/episodes/new')}
             hoverBorder="hover:border-sky-500/40"
             iconBg="bg-sky-500/10"
+          />
+          <QuickActionCard
+            icon={<Film className="h-5 w-5 text-teal-400" />}
+            title="Stitch Clips"
+            description="Combine clips into one video"
+            onClick={() => navigate('/compilations/new')}
+            hoverBorder="hover:border-teal-500/40"
+            iconBg="bg-teal-500/10"
           />
           <QuickActionCard
             icon={<Library className="h-5 w-5 text-emerald-400" />}

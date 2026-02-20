@@ -1,23 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, RefreshCw, Layers, Grid, Film, Clapperboard } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Search, RefreshCw, Layers, Grid, Film, Clapperboard, Scissors, Clock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { FilterTabs } from '../components/FilterTabs';
 import { ClipGrid } from '../components/ClipGrid';
 import { SeriesGroup } from '../components/SeriesGroup';
 import { EpisodeCard } from '../components/EpisodeCard';
 import { listClips, listClipsGroupedByBatch } from '../lib/clips';
 import { listEpisodes } from '../lib/episodes';
-import type { Clip, ClipType, Episode } from '../lib/types';
+import { listCompilations } from '../lib/compilations';
+import type { Clip, ClipType, Episode, Compilation } from '../lib/types';
 import { clsx } from '../lib/format';
 
 type FilterValue = 'all' | ClipType;
 type ViewMode = 'all' | 'grouped';
-type ContentMode = 'clips' | 'episodes';
+type ContentMode = 'clips' | 'episodes' | 'compilations';
 
 export function LibraryPage() {
   const navigate = useNavigate();
   const [clips, setClips] = useState<Clip[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [compilations, setCompilations] = useState<Compilation[]>([]);
   const [batches, setBatches] = useState<Map<string, Clip[]>>(new Map());
   const [singles, setSingles] = useState<Clip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,12 +31,20 @@ export function LibraryPage() {
   const fetchContent = useCallback(async () => {
     setLoading(true);
     try {
-      if (contentMode === 'episodes') {
+      if (contentMode === 'compilations') {
+        const compData = await listCompilations({ limit: 20 });
+        setCompilations(compData);
+        setClips([]);
+        setBatches(new Map());
+        setSingles([]);
+        setEpisodes([]);
+      } else if (contentMode === 'episodes') {
         const episodeData = await listEpisodes({ limit: 20 });
         setEpisodes(episodeData);
         setClips([]);
         setBatches(new Map());
         setSingles([]);
+        setCompilations([]);
       } else if (viewMode === 'grouped') {
         const { batches: batchData, singles: singlesData } = await listClipsGroupedByBatch({
           type: typeFilter,
@@ -44,6 +54,7 @@ export function LibraryPage() {
         setSingles(singlesData);
         setClips([]);
         setEpisodes([]);
+        setCompilations([]);
       } else {
         const data = await listClips({
           type: typeFilter,
@@ -54,6 +65,7 @@ export function LibraryPage() {
         setBatches(new Map());
         setSingles([]);
         setEpisodes([]);
+        setCompilations([]);
       }
     } catch (error) {
       console.error('Failed to fetch content:', error);
@@ -67,7 +79,14 @@ export function LibraryPage() {
   }, [fetchContent]);
 
   useEffect(() => {
-    if (contentMode === 'episodes') {
+    if (contentMode === 'compilations') {
+      const hasProcessing = compilations.some(
+        (c) => c.status === 'queued' || c.status === 'stitching'
+      );
+      if (!hasProcessing) return;
+      const interval = setInterval(fetchContent, 5000);
+      return () => clearInterval(interval);
+    } else if (contentMode === 'episodes') {
       const hasGenerating = episodes.some(
         (e) => e.status === 'queued' || e.status === 'generating' || e.status === 'stitching'
       );
@@ -88,7 +107,7 @@ export function LibraryPage() {
       const interval = setInterval(fetchContent, 5000);
       return () => clearInterval(interval);
     }
-  }, [clips, batches, singles, episodes, viewMode, contentMode, fetchContent]);
+  }, [clips, batches, singles, episodes, compilations, viewMode, contentMode, fetchContent]);
 
   const totalClips = viewMode === 'grouped'
     ? Array.from(batches.values()).reduce((acc, b) => acc + b.length, 0) + singles.length
@@ -131,6 +150,18 @@ export function LibraryPage() {
             >
               <Film className="h-4 w-4" />
               Episodes
+            </button>
+            <button
+              onClick={() => setContentMode('compilations')}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition',
+                contentMode === 'compilations'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+              )}
+            >
+              <Scissors className="h-4 w-4" />
+              Compilations
             </button>
           </div>
 
@@ -178,6 +209,20 @@ export function LibraryPage() {
               </div>
             )}
 
+            {contentMode === 'compilations' && (
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-zinc-500">
+                  {compilations.length} compilation{compilations.length !== 1 ? 's' : ''}
+                </div>
+                <Link
+                  to="/compilations/new"
+                  className="px-3 py-1.5 bg-white text-black rounded-lg text-xs font-medium hover:bg-zinc-200 transition-colors"
+                >
+                  + New
+                </Link>
+              </div>
+            )}
+
             <div className="flex items-center gap-3">
               {contentMode === 'clips' && (
                 <div className="relative flex-1 sm:w-64">
@@ -205,7 +250,79 @@ export function LibraryPage() {
           </div>
         </div>
 
-        {contentMode === 'episodes' ? (
+        {contentMode === 'compilations' ? (
+          loading && compilations.length === 0 ? (
+            <div className="grid grid-cols-1 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+                  <div className="flex gap-4">
+                    <div className="w-20 h-20 rounded-lg bg-zinc-800" />
+                    <div className="flex-1">
+                      <div className="h-4 w-32 rounded bg-zinc-800 mb-2" />
+                      <div className="h-3 w-24 rounded bg-zinc-800" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : compilations.length === 0 ? (
+            <div className="text-center py-12">
+              <Scissors className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-zinc-300 mb-2">No compilations yet</h3>
+              <p className="text-sm text-zinc-500 mb-4">
+                Stitch multiple clips together into composite videos
+              </p>
+              <Link
+                to="/compilations/new"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-black rounded-lg text-sm font-medium hover:bg-zinc-200 transition-colors"
+              >
+                <Scissors className="w-4 h-4" />
+                Create Compilation
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {compilations.map((comp) => {
+                const statusMap: Record<string, { label: string; color: string; Icon: typeof Film }> = {
+                  queued: { label: 'Queued', color: 'text-zinc-400 bg-zinc-500/20', Icon: Clock },
+                  stitching: { label: 'Stitching', color: 'text-amber-400 bg-amber-500/20', Icon: Loader2 },
+                  done: { label: 'Complete', color: 'text-emerald-400 bg-emerald-500/20', Icon: CheckCircle2 },
+                  error: { label: 'Error', color: 'text-red-400 bg-red-500/20', Icon: AlertCircle },
+                };
+                const status = statusMap[comp.status] || statusMap.queued;
+                const StatusIcon = status.Icon;
+
+                return (
+                  <button
+                    key={comp.id}
+                    onClick={() => navigate(`/compilations/${comp.id}`)}
+                    className="flex items-center gap-4 p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 transition-all text-left w-full group"
+                  >
+                    <div className="w-14 h-14 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+                      <Scissors className="w-6 h-6 text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate group-hover:text-amber-300 transition-colors">
+                        {comp.name || 'Untitled Compilation'}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {comp.total_duration_seconds}s
+                        </span>
+                        <span>{new Date(comp.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
+                      <StatusIcon className={`w-3 h-3 ${comp.status === 'stitching' ? 'animate-spin' : ''}`} />
+                      {status.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )
+        ) : contentMode === 'episodes' ? (
           loading && episodes.length === 0 ? (
             <div className="grid grid-cols-1 gap-4">
               {[1, 2, 3].map((i) => (
