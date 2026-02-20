@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsGuest(false);
         (async () => {
           await fetchProfile(s.user.id);
-        })();
+        })().catch(console.error);
       } else {
         activateGuestMode();
       }

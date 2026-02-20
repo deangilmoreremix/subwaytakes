@@ -20,17 +20,9 @@ export function formatDate(dateString: string): string {
   });
 }
 
-export function generateUserId(): string {
-  const stored = localStorage.getItem('clip_user_id');
-  if (stored) return stored;
-
-  const newId = crypto.randomUUID();
-  localStorage.setItem('clip_user_id', newId);
-  return newId;
-}
-
 export function formatDistanceToNow(dateString: string): string {
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Unknown';
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 

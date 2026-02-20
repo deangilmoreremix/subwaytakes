@@ -282,7 +282,7 @@ export function validateModeAgeAllowed(mode: InterviewMode | null | undefined, a
  * Validate age group selection
  */
 export function validateAgeGroup(ageGroup: AgeGroup | null | undefined): ValidationResult {
-  const validGroups: AgeGroup[] = ['kids', 'teens', 'young_adults', 'adults', 'all_ages'];
+  const validGroups: AgeGroup[] = ['kids', 'teens', 'adults', 'older_adults', 'all_ages'];
   
   if (!ageGroup || !validGroups.includes(ageGroup)) {
     return {

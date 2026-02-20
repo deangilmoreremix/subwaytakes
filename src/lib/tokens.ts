@@ -39,7 +39,7 @@ export async function getTokenBalance(): Promise<TokenBalance | null> {
 async function createDefaultTokenBalance(): Promise<TokenBalance> {
   const userId = getUserId();
   const now = new Date().toISOString();
-  const freePlan = SUBSCRIPTION_PLANS.find(p => p.tier === 'free')!;
+  const freePlan = SUBSCRIPTION_PLANS.find(p => p.tier === 'free') ?? SUBSCRIPTION_PLANS[0];
 
   const { data, error } = await supabase
     .from('token_balances')
@@ -84,7 +84,7 @@ async function resetMonthlyTokens(): Promise<TokenBalance> {
     .maybeSingle();
 
   const tier = sub?.tier || 'free';
-  const plan = SUBSCRIPTION_PLANS.find(p => p.tier === tier)!;
+  const plan = SUBSCRIPTION_PLANS.find(p => p.tier === tier) ?? SUBSCRIPTION_PLANS[0];
 
   const { data, error } = await supabase
     .from('token_balances')

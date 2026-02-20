@@ -35,6 +35,9 @@ async function triggerShotGeneration(shot: EpisodeShot): Promise<void> {
       .update({ status: 'running' })
       .eq('id', shot.id);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-video`, {
       method: 'POST',
       headers: {
@@ -52,7 +55,10 @@ async function triggerShotGeneration(shot: EpisodeShot): Promise<void> {
         is_episode_shot: true,
         episode_id: shot.episode_id,
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -283,6 +289,9 @@ export async function checkEpisodeCompletion(episodeId: string): Promise<boolean
 
 async function triggerStitching(episodeId: string): Promise<void> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     const response = await fetch(`${SUPABASE_URL}/functions/v1/stitch-episode`, {
       method: 'POST',
       headers: {
@@ -290,7 +299,10 @@ async function triggerStitching(episodeId: string): Promise<void> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ episode_id: episodeId }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();

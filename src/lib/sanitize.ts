@@ -22,12 +22,11 @@ export function sanitizeInput(input: string | null | undefined): string {
   // First, sanitize to remove any HTML/script tags
   const sanitized = DOMPurify.sanitize(input, purifyConfig);
   
-  // Additional safety: escape any remaining special characters
   return sanitized
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;');
 }
@@ -38,20 +37,17 @@ export function sanitizeInput(input: string | null | undefined): string {
  */
 export function sanitizeInputPreserveFormatting(input: string | null | undefined): string {
   if (!input) return '';
-  
-  // Replace newlines with a placeholder before sanitization
-  const withPlaceholder = input.replace(/\n/g, '___NEWLINE___');
-  
-  // Sanitize
+
+  const placeholder = '\x00NL\x00';
+  const withPlaceholder = input.replace(/\n/g, placeholder);
   const sanitized = DOMPurify.sanitize(withPlaceholder, purifyConfig);
-  
-  // Restore newlines and escape HTML
+
   return sanitized
-    .replace(/___NEWLINE___/g, '\n')
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(new RegExp(placeholder, 'g'), '\n')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;');
 }
 

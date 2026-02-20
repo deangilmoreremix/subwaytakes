@@ -56,6 +56,9 @@ async function triggerGeneration(clip: Clip, modelTier?: ModelTier, speechScript
       .update({ status: 'running' })
       .eq('id', clip.id);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-video`, {
       method: 'POST',
       headers: {
@@ -81,7 +84,10 @@ async function triggerGeneration(clip: Clip, modelTier?: ModelTier, speechScript
         studio_lighting: clip.studio_lighting,
         time_of_day: clip.time_of_day,
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
