@@ -19,6 +19,7 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
+  isGuest: boolean;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -29,11 +30,28 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function buildGuestProfile(): UserProfile {
+  const guestId = getUserId();
+  const now = new Date().toISOString();
+  return {
+    id: guestId,
+    display_name: 'Guest',
+    avatar_url: null,
+    default_city_style: 'nyc',
+    default_duration: 6,
+    credits_balance: 100,
+    subscription_tier: 'free',
+    created_at: now,
+    updated_at: now,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -42,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (s?.user) {
         fetchProfile(s.user.id);
       } else {
-        setLoading(false);
+        activateGuestMode();
       }
     });
 
@@ -50,17 +68,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
+        setIsGuest(false);
         (async () => {
           await fetchProfile(s.user.id);
         })();
       } else {
-        setProfile(null);
-        setLoading(false);
+        activateGuestMode();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  function activateGuestMode() {
+    setIsGuest(true);
+    setProfile(buildGuestProfile());
+    setLoading(false);
+  }
 
   async function fetchProfile(userId: string) {
     const { data, error } = await supabase
@@ -108,10 +132,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut();
-    setProfile(null);
+    activateGuestMode();
   }
 
   async function updateProfile(updates: Partial<UserProfile>) {
+    if (isGuest) {
+      setProfile(prev => prev ? { ...prev, ...updates, updated_at: new Date().toISOString() } : null);
+      return { error: null };
+    }
     if (!user) return { error: 'Not authenticated' };
     const { error } = await supabase
       .from('user_profiles')
@@ -125,6 +153,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function deductCredits(amount: number, _description: string): Promise<boolean> {
     if (!profile || profile.credits_balance < amount) return false;
     const newBalance = profile.credits_balance - amount;
+    if (isGuest) {
+      setProfile(prev => prev ? { ...prev, credits_balance: newBalance } : null);
+      return true;
+    }
     const { error } = await supabase
       .from('user_profiles')
       .update({ credits_balance: newBalance, updated_at: new Date().toISOString() })
@@ -140,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       profile,
       loading,
+      isGuest,
       signUp,
       signIn,
       signOut,

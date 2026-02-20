@@ -7,7 +7,7 @@ import { clsx } from '../lib/format';
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const { profile, updateProfile, user } = useAuth();
+  const { profile, updateProfile, user, isGuest } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
   const [defaultCity, setDefaultCity] = useState('nyc');
@@ -64,7 +64,7 @@ export function SettingsPage() {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-zinc-100">Profile</h2>
-              <p className="text-sm text-zinc-500">{user?.email}</p>
+              <p className="text-sm text-zinc-500">{isGuest ? 'Guest Mode' : user?.email}</p>
             </div>
           </div>
 

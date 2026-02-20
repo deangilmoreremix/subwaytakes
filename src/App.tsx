@@ -17,7 +17,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return (
@@ -25,10 +25,6 @@ function AppContent() {
         <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
       </div>
     );
-  }
-
-  if (!user) {
-    return <AuthPage />;
   }
 
   return (
@@ -48,6 +44,7 @@ function AppContent() {
           <Route path="/templates" element={<TemplateManagerPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/login" element={<AuthPage />} />
           <Route path="*" element={<Navigate to="/create" replace />} />
         </Routes>
       </ErrorBoundary>

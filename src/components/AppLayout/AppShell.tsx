@@ -11,6 +11,7 @@ import {
   Sparkles,
   Palette,
   LogOut,
+  LogIn,
   BarChart3,
 } from 'lucide-react';
 import { clsx } from '../../lib/format';
@@ -65,7 +66,7 @@ function getTitleFromPath(pathname: string): string {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, isGuest } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -198,9 +199,11 @@ export function AppShell({ children }: AppShellProps) {
                 <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl py-2 z-50">
                   <div className="px-4 py-2 border-b border-zinc-800">
                     <p className="text-sm font-medium text-zinc-200 truncate">
-                      {profile?.display_name || 'User'}
+                      {profile?.display_name || 'Guest'}
                     </p>
-                    <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
+                    {user?.email && (
+                      <p className="text-xs text-zinc-500 truncate">{user.email}</p>
+                    )}
                   </div>
                   <button
                     onClick={() => {
@@ -212,16 +215,29 @@ export function AppShell({ children }: AppShellProps) {
                     <Settings className="w-4 h-4" />
                     Settings
                   </button>
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      signOut();
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
+                  {isGuest ? (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        navigate('/login');
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-400 hover:bg-zinc-800 transition"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      Sign In
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        signOut();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </button>
+                  )}
                 </div>
               )}
             </div>
