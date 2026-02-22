@@ -83,7 +83,7 @@ export function CreateMotivationalPage() {
     });
   }
 
-  const activeEnhancements = [
+  const activeEnhancements = useMemo(() => [
     transformationArc?.enabled && 'Arc',
     audienceEnergy?.enabled && 'Audience',
     motivationalSoundscape?.enabled && 'Sound',
@@ -94,7 +94,7 @@ export function CreateMotivationalPage() {
     pauseForEffect?.enabled && 'Pause',
     achievementContext?.enabled && 'Achievement',
     ctaPivot?.enabled && 'CTA',
-  ].filter(Boolean) as string[];
+  ].filter(Boolean) as string[], [transformationArc?.enabled, audienceEnergy?.enabled, motivationalSoundscape?.enabled, breakthroughMoment?.enabled, eventEnergyArc?.enabled, liveChallenge?.enabled, speakerArchetype?.enabled, pauseForEffect?.enabled, achievementContext?.enabled, ctaPivot?.enabled]);
 
   const summaryGroups = useMemo(() => [
     {

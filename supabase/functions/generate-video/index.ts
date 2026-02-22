@@ -240,7 +240,7 @@ async function generateWithMiniMax(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "video-01",
+      model: modelConfig?.apiModel || "video-01",
       prompt: enhancedPrompt,
       prompt_optimizer: true,
     }),
@@ -264,7 +264,7 @@ async function pollMiniMaxStatus(jobId: string): Promise<string> {
   if (!apiKey) throw new Error("MINIMAX_API_KEY not configured");
 
   let attempts = 0;
-  const maxAttempts = 120;
+  const maxAttempts = 25;
 
   while (attempts < maxAttempts) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -362,7 +362,7 @@ async function generateWithVeo(
   const operationName = data.name;
 
   let attempts = 0;
-  const maxAttempts = 120;
+  const maxAttempts = 25;
 
   while (attempts < maxAttempts) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -416,7 +416,9 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    let parsedBody: Record<string, unknown> = {};
     const body: GenerateRequest = await req.json();
+    parsedBody = body as unknown as Record<string, unknown>;
     const {
       clip_id,
       video_type,
@@ -487,7 +489,7 @@ Deno.serve(async (req: Request) => {
         const { jobId } = await generateWithMiniMax(prompt, duration_seconds, speech_script);
 
         await supabase
-          .from("clips")
+          .from(is_episode_shot ? "episode_shots" : "clips")
           .update({ provider_job_id: jobId })
           .eq("id", clip_id);
 
@@ -545,14 +547,22 @@ Deno.serve(async (req: Request) => {
             .update({ status: "stitching" })
             .eq("id", episode_id);
 
-          fetch(`${supabaseUrl}/functions/v1/stitch-episode`, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${supabaseKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ episode_id }),
-          }).catch(console.error);
+          try {
+            const stitchResp = await fetch(`${supabaseUrl}/functions/v1/stitch-episode`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ episode_id }),
+            });
+            if (!stitchResp.ok) {
+              const errText = await stitchResp.text();
+              await supabase.from("episodes").update({ status: "error", error: `Stitch failed: ${errText}` }).eq("id", episode_id);
+            }
+          } catch (stitchErr) {
+            await supabase.from("episodes").update({ status: "error", error: `Stitch failed: ${stitchErr instanceof Error ? stitchErr.message : "Unknown"}` }).eq("id", episode_id);
+          }
         }
       }
     } else {
@@ -609,7 +619,7 @@ Deno.serve(async (req: Request) => {
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
-      const body = await req.clone().json().catch(() => ({}));
+      const body = parsedBody || {};
       if (body.clip_id) {
         if (body.is_episode_shot) {
           await supabase

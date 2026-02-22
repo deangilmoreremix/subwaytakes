@@ -40,7 +40,7 @@ export default function CompilationBuilderPage() {
   const initialClipIds = searchParams.get('clips')?.split(',').filter(Boolean) || [];
 
   const [step, setStep] = useState<Step>('select');
-  const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
+  const [selectedClipIds, setSelectedClipIds] = useState<string[]>(initialClipIds);
   const [orderedClips, setOrderedClips] = useState<Clip[]>([]);
   const [name, setName] = useState('');
   const [transitionType, setTransitionType] = useState<TransitionType>('crossfade');

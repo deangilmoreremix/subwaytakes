@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 interface UseRealtimeStatusOptions {
-  table: 'clips' | 'episodes' | 'episode_shots' | 'video_exports';
+  table: 'clips' | 'episodes' | 'episode_shots' | 'video_exports' | 'compilations';
   id: string;
   enabled?: boolean;
   onUpdate: (payload: Record<string, unknown>) => void;

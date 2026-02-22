@@ -1285,7 +1285,11 @@ export function CreatePage() {
               onKeywordChange={setKeyword}
               niche={niche}
               onNicheChange={setNiche}
-              onGenerate={() => setIsGeneratingKeywords(true)}
+              onGenerate={() => {
+                setIsGeneratingKeywords(true);
+                // Reset after a brief delay since generation is synchronous
+                setTimeout(() => setIsGeneratingKeywords(false), 0);
+              }}
               isGenerating={isGeneratingKeywords}
               disabled={busy}
             />

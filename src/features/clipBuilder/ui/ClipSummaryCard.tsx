@@ -11,7 +11,7 @@ export interface ClipSummaryCardProps {
 export function ClipSummaryCard({ state, className = "" }: ClipSummaryCardProps) {
   const persona = state.personaId ? PERSONAS.find((p) => p.id === state.personaId) : null;
   const vibe = state.vibeId ? VIBES.find((v) => v.id === state.vibeId) : null;
-  const topic = state.topic ? TOPICS.find((t) => t.id === state.topic) : null;
+  const topic = state.topic ? TOPICS.find((t) => t.id === state.topic || t.label === state.topic) : null;
 
   const isComplete = !!(state.videoType && state.personaId && state.vibeId && state.topic && state.question);
 
@@ -27,7 +27,7 @@ export function ClipSummaryCard({ state, className = "" }: ClipSummaryCardProps)
         <div className="flex items-center justify-between">
           <span className="text-zinc-400">Type</span>
           <span className="text-white font-medium">
-            {state.videoType?.replace("_", " ") || "—"}
+            {state.videoType?.replace(/_/g, " ") || "—"}
           </span>
         </div>
 
@@ -84,7 +84,7 @@ export function ClipSummaryCard({ state, className = "" }: ClipSummaryCardProps)
           <div className="flex items-center justify-between">
             <span className="text-zinc-400">Style</span>
             <span className="text-white font-medium">
-              {state.interviewStyle.replace("_", " ")}
+              {state.interviewStyle.replace(/_/g, " ")}
             </span>
           </div>
         )}

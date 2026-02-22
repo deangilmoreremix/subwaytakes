@@ -169,10 +169,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }
 
-  async function deductCredits(amount: number, _description: string): Promise<boolean> {
+  async function deductCredits(amount: number, description: string): Promise<boolean> {
     if (!profile || profile.credits_balance < amount) return false;
     if (isGuest) {
-      const newBalance = profile.credits_balance - amount;
+      const guestKey = `guest_credits_${getUserId()}`;
+      const stored = localStorage.getItem(guestKey);
+      const currentBalance = stored !== null ? Number(stored) : profile.credits_balance;
+      if (currentBalance < amount) return false;
+      const newBalance = currentBalance - amount;
+      localStorage.setItem(guestKey, String(newBalance));
       setProfile(prev => prev ? { ...prev, credits_balance: newBalance } : null);
       return true;
     }
@@ -239,10 +244,13 @@ export async function migrateGuestDataToUser(authUserId: string): Promise<void> 
   if (!guestId || guestId === authUserId) return;
 
   for (const table of TABLES_WITH_USER_ID) {
-    await supabase
+    const { error } = await supabase
       .from(table)
       .update({ user_id: authUserId })
       .eq('user_id', guestId);
+    if (error) {
+      console.error(`Failed to migrate ${table}:`, error);
+    }
   }
 
   localStorage.removeItem('clip_user_id');

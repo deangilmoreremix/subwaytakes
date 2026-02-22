@@ -549,9 +549,11 @@ export async function listClips(filters?: {
   }
 
   if (filters?.search) {
-    // Use parameterized queries to prevent SQL injection
-    const searchTerm = `%${filters.search}%`;
-    query = query.or(`topic.ilike.${searchTerm},angle_prompt.ilike.${searchTerm},interview_question.ilike.${searchTerm}`);
+    const sanitized = filters.search.replace(/[%_,().]/g, '');
+    if (sanitized.length > 0) {
+      const searchTerm = `%${sanitized}%`;
+      query = query.or(`topic.ilike.${searchTerm},angle_prompt.ilike.${searchTerm},interview_question.ilike.${searchTerm}`);
+    }
   }
 
   if (filters?.limit) {
@@ -685,10 +687,12 @@ export async function retryClip(clipId: string): Promise<Clip> {
 }
 
 export async function deleteBatch(batchId: string): Promise<void> {
+  const userId = getUserId();
   const { error } = await supabase
     .from('clips')
     .delete()
-    .eq('batch_id', batchId);
+    .eq('batch_id', batchId)
+    .eq('user_id', userId);
 
   if (error) throw new Error(error.message);
 }

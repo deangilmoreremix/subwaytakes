@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Check, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Settings, Zap } from 'lucide-react';
 import type { ClipCreationHook } from '../../hooks/useClipCreation';
 import type { WizardStepDef } from '../../hooks/useClipCreation';
 
@@ -113,7 +113,16 @@ export function CreationWizard({ clip, steps, children, accentColor = 'amber', o
         </button>
 
         <div className="flex items-center gap-3">
-          {!isLastStep && (
+          {isLastStep ? (
+            <button
+              type="button"
+              onClick={onGenerate}
+              className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-black rounded-xl ${accent.btnBg} ${accent.btnHover} transition-all`}
+            >
+              Generate
+              <Zap className="w-4 h-4" />
+            </button>
+          ) : (
             <button
               type="button"
               onClick={clip.nextStep}

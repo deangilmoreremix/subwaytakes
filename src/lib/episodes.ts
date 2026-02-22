@@ -332,10 +332,12 @@ export async function retryEpisodeShot(shotId: string): Promise<void> {
 }
 
 export async function deleteEpisode(id: string): Promise<void> {
+  const userId = getUserId();
   const { error } = await supabase
     .from('episodes')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', userId);
 
   if (error) throw new Error(error.message);
 }

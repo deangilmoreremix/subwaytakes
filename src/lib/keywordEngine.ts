@@ -171,7 +171,7 @@ export const KEYWORD_CATEGORIES: { value: KeywordCategory; label: string; emoji:
     value: 'comedy', 
     label: 'Comedy', 
     emoji: '😂',
-    keywords: ['funny', 'laugh', 'humor', 'joke', 'meme', 'silly', 'absurd', 'cringe', 'awkward', 'random', 'wild', 'crazy', ' hilarious']
+    keywords: ['funny', 'laugh', 'humor', 'joke', 'meme', 'silly', 'absurd', 'cringe', 'awkward', 'random', 'wild', 'crazy', 'hilarious']
   },
   { 
     value: 'educational', 
@@ -879,7 +879,7 @@ const NATURAL_LANGUAGE_PATTERNS = [
   { pattern: /(?:shocking|surprising|unexpected)/i, extract: () => ({ sentiment: 'shocking' }) },
   { pattern: /(?:controversial|hot.?take|polarizing)/i, extract: () => ({ sentiment: 'controversial' }) },
   { pattern: /(?:educational|informative|helpful|tips?|advice)/i, extract: () => ({ sentiment: 'educational' }) },
-  { pattern: /(?:for|targeting)\s+(?:tiktok|youtube|instagram)/i, extract: (m: RegExpMatchArray) => ({ platform: m[3].toLowerCase().replace('youtube', 'youtube_shorts') }) },
+  { pattern: /(?:for|targeting)\s+(tiktok|youtube|instagram)/i, extract: (m: RegExpMatchArray) => ({ platform: m[1].toLowerCase().replace('youtube', 'youtube_shorts') }) },
   { pattern: /(?:for|to)\s+(\w+)\s+(?:people|generation|demographic|audience)/i, extract: (m: RegExpMatchArray) => ({ demographic: mapDemographic(m[1]) }) },
   { pattern: /(?:about|on|regarding|topic:?)\s+([a-zA-Z\s]+?)(?:\s+for|\s+with|\s*$)/i, extract: (m: RegExpMatchArray) => ({ topic: m[1].trim().toLowerCase().replace(/\s+/g, '_') }) },
 ];

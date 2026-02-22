@@ -51,8 +51,8 @@ export const MATURE_WORD_LIST = [
 ];
 
 // Regex patterns for mature word detection
-const MATURE_WORD_PATTERNS = MATURE_WORD_LIST.map(word => 
-  new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
+const MATURE_WORD_PATTERNS = MATURE_WORD_LIST.map(word =>
+  new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
 );
 
 // === AGE GROUP HIERARCHY ===

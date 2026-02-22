@@ -547,7 +547,6 @@ Deno.serve(async (req: Request) => {
       source: "backend",
     };
 
-    const authHeader = req.headers.get("Authorization");
     if (authHeader) {
       const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },

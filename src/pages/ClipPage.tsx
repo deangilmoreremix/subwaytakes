@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Layers, MessageCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { ClipActions } from '../components/ClipActions';
@@ -51,11 +51,12 @@ export function ClipPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { profile } = useAuth();
-  const clipId = id!;
+  const clipId = id ?? '';
   const [clip, setClip] = useState<Clip | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [retrying, setRetrying] = useState(false);
   const [rerolling, setRerolling] = useState(false);
 
@@ -73,6 +74,12 @@ export function ClipPage() {
   useEffect(() => {
     fetchClip();
   }, [fetchClip]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   useRealtimeStatus({
     table: 'clips',
@@ -114,7 +121,8 @@ export function ClipPage() {
   function handleCopyLink() {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   }
 
   async function handleReroll(_options: RerollOptions) {

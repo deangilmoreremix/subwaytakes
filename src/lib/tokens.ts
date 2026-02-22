@@ -122,39 +122,14 @@ export async function deductTokens(
   description: string,
   clipId?: string
 ): Promise<boolean> {
-  const balance = await getTokenBalance();
-  if (!balance) return false;
-
-  const totalAvailable = balance.monthlyTokens + balance.purchasedTokens - balance.usedThisMonth;
-  if (totalAvailable < amount) return false;
-
   const userId = getUserId();
-  let remainingToDeduct = amount;
-  let newMonthlyTokens = balance.monthlyTokens;
-  let newPurchasedTokens = balance.purchasedTokens;
-  let newUsedThisMonth = balance.usedThisMonth;
 
-  const monthlyAvailable = balance.monthlyTokens - balance.usedThisMonth;
-  if (monthlyAvailable > 0) {
-    const fromMonthly = Math.min(monthlyAvailable, remainingToDeduct);
-    newUsedThisMonth += fromMonthly;
-    remainingToDeduct -= fromMonthly;
-  }
+  const { data, error } = await supabase.rpc('atomic_deduct_tokens', {
+    p_user_id: userId,
+    p_amount: amount,
+  });
 
-  if (remainingToDeduct > 0) {
-    newPurchasedTokens -= remainingToDeduct;
-  }
-
-  const { error } = await supabase
-    .from('token_balances')
-    .update({
-      monthly_tokens: newMonthlyTokens,
-      purchased_tokens: newPurchasedTokens,
-      used_this_month: newUsedThisMonth,
-    })
-    .eq('user_id', userId);
-
-  if (error) {
+  if (error || data === false) {
     console.error('Failed to deduct tokens:', error);
     return false;
   }

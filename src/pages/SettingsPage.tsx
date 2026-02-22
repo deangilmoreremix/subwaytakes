@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, MapPin, Clock, Save, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -14,6 +14,13 @@ export function SettingsPage() {
   const [defaultDuration, setDefaultDuration] = useState(6);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (profile) {
@@ -34,7 +41,8 @@ export function SettingsPage() {
     setSaving(false);
     if (!error) {
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 3000);
     }
   }
 

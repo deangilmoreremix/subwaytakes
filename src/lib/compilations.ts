@@ -255,10 +255,12 @@ export async function removeClipFromCompilation(compilationId: string, clipId: s
 }
 
 export async function deleteCompilation(id: string): Promise<void> {
+  const userId = getUserId();
   const { error } = await supabase
     .from('compilations')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', userId);
 
   if (error) throw new Error(error.message);
 }

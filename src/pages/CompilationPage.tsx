@@ -78,6 +78,7 @@ export default function CompilationPage() {
 
   async function handleDelete() {
     if (!id) return;
+    if (!window.confirm('Delete this compilation?')) return;
     await deleteCompilation(id);
     navigate('/library');
   }

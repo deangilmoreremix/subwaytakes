@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Share2, Clock, MapPin, Film, CheckCircle, AlertCircle, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import { getEpisodeById, retryEpisodeShot } from '../lib/episodes';
@@ -9,11 +9,19 @@ import type { Episode, EpisodeShot } from '../lib/types';
 export function EpisodePage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const episodeId = id!;
+  const episodeId = id ?? '';
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const shareTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    return () => {
+      if (shareTimerRef.current) clearTimeout(shareTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     loadEpisode();
@@ -110,9 +118,17 @@ export function EpisodePage() {
               <Download className="h-4 w-4" />
               Download
             </a>
-            <button className="flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-600 transition">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                setShareCopied(true);
+                if (shareTimerRef.current) clearTimeout(shareTimerRef.current);
+                shareTimerRef.current = setTimeout(() => setShareCopied(false), 2000);
+              }}
+              className="flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-600 transition"
+            >
               <Share2 className="h-4 w-4" />
-              Share
+              {shareCopied ? 'Copied!' : 'Share'}
             </button>
           </div>
         )}

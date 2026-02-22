@@ -68,9 +68,19 @@ export function SystemPromptsTab({ prompts, onRefresh }: Props) {
     }
   }
 
+  const COLOR_CLASS_MAP: Record<string, string> = {
+    amber: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    emerald: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    red: 'bg-red-500/15 text-red-400 border-red-500/30',
+    sky: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+    rose: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+    cyan: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+    zinc: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+  };
+
   function getColorClasses(videoType: string) {
     const color = VIDEO_TYPE_COLORS[videoType] || 'zinc';
-    return `bg-${color}-500/15 text-${color}-400 border-${color}-500/30`;
+    return COLOR_CLASS_MAP[color] || COLOR_CLASS_MAP.zinc;
   }
 
   if (prompts.length === 0) {

@@ -112,7 +112,9 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    let parsedBody: Record<string, unknown> = {};
     const body: StitchRequest = await req.json();
+    parsedBody = body as unknown as Record<string, unknown>;
     const { episode_id } = body;
 
     if (!episode_id) {
@@ -181,7 +183,7 @@ Deno.serve(async (req: Request) => {
         if (stitchResponse.ok) {
           const stitchResult = await stitchResponse.json();
           let attempts = 0;
-          const maxAttempts = 60;
+          const maxAttempts = 25;
 
           while (attempts < maxAttempts) {
             await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -286,7 +288,7 @@ Deno.serve(async (req: Request) => {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
     try {
-      const body = await req.clone().json().catch(() => ({}));
+      const body = parsedBody || {};
       if (body.episode_id) {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -320,7 +322,7 @@ function generateSrtCaptions(shots: EpisodeShot[]): string {
   for (const shot of shots) {
     if (shot.dialogue && shot.speaker) {
       const startTime = formatSrtTime(currentTime);
-      const endTime = formatSrtTime(currentTime + shot.duration_seconds - 0.5);
+      const endTime = formatSrtTime(Math.max(0, currentTime + shot.duration_seconds - 0.5));
 
       srt += `${index}\n`;
       srt += `${startTime} --> ${endTime}\n`;

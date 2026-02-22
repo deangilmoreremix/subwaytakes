@@ -65,16 +65,7 @@ export function AnalyticsPage() {
       const rangeStart = getDateRange(timeRange);
       const prevRange = getPreviousDateRange(timeRange);
 
-      const [
-        { count: totalClips },
-        { count: totalEpisodes },
-        { count: totalExports },
-        { data: rangeClips },
-        { count: previousClipsInRange },
-        { count: episodesInRange },
-        { count: exportsInRange },
-        { data: exportData },
-      ] = await Promise.all([
+      const results = await Promise.all([
         supabase.from('clips').select('*', { count: 'exact', head: true }),
         supabase.from('episodes').select('*', { count: 'exact', head: true }),
         supabase.from('video_exports').select('*', { count: 'exact', head: true }),
@@ -92,6 +83,24 @@ export function AnalyticsPage() {
           : supabase.from('video_exports').select('*', { count: 'exact', head: true }),
         supabase.from('video_exports').select('platform').not('platform', 'is', null),
       ]);
+
+      // Check for errors in all query results
+      for (const result of results) {
+        if (result.error) {
+          console.error('Supabase query error:', result.error);
+        }
+      }
+
+      const [
+        { count: totalClips },
+        { count: totalEpisodes },
+        { count: totalExports },
+        { data: rangeClips },
+        { count: previousClipsInRange },
+        { count: episodesInRange },
+        { count: exportsInRange },
+        { data: exportData },
+      ] = results;
 
       const clips = rangeClips || [];
 

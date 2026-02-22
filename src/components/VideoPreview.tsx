@@ -17,9 +17,16 @@ export function VideoPreview({ effects, clipType, onVideoLoaded }: VideoPreviewP
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    return () => {
+      if (videoSrc) URL.revokeObjectURL(videoSrc);
+    };
+  }, [videoSrc]);
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (videoSrc) URL.revokeObjectURL(videoSrc);
       const url = URL.createObjectURL(file);
       setVideoSrc(url);
     }
@@ -30,6 +37,7 @@ export function VideoPreview({ effects, clipType, onVideoLoaded }: VideoPreviewP
     setIsDragging(false);
     const file = event.dataTransfer.files?.[0];
     if (file && file.type.startsWith('video/')) {
+      if (videoSrc) URL.revokeObjectURL(videoSrc);
       const url = URL.createObjectURL(file);
       setVideoSrc(url);
     }
@@ -48,10 +56,14 @@ export function VideoPreview({ effects, clipType, onVideoLoaded }: VideoPreviewP
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
+        setIsPlaying(false);
       } else {
-        videoRef.current.play();
+        videoRef.current.play().then(() => {
+          setIsPlaying(true);
+        }).catch(() => {
+          setIsPlaying(false);
+        });
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -136,7 +148,7 @@ export function VideoPreview({ effects, clipType, onVideoLoaded }: VideoPreviewP
                   <div className="h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
-                      style={{ width: `${(currentTime / duration) * 100}%` }}
+                      style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
                     />
                   </div>
                 </div>

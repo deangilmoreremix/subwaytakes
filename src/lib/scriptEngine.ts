@@ -869,14 +869,11 @@ export async function regenerateScriptField(
   field: ScriptFieldKey,
   currentScript: Partial<EpisodeScript>
 ): Promise<string> {
-  const SUPABASE_URL_LOCAL = import.meta.env.VITE_SUPABASE_URL;
-  const SUPABASE_ANON_KEY_LOCAL = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
   try {
-    const response = await fetch(`${SUPABASE_URL_LOCAL}/functions/v1/generate-script`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-script`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY_LOCAL}`,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

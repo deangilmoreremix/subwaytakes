@@ -25,8 +25,16 @@ export function LibraryPage() {
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<FilterValue>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [contentMode, setContentMode] = useState<ContentMode>('clips');
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
 
   const fetchContent = useCallback(async () => {
     setLoading(true);
@@ -48,7 +56,7 @@ export function LibraryPage() {
       } else if (viewMode === 'grouped') {
         const { batches: batchData, singles: singlesData } = await listClipsGroupedByBatch({
           type: typeFilter,
-          search: searchQuery || undefined,
+          search: debouncedSearchQuery || undefined,
         });
         setBatches(batchData);
         setSingles(singlesData);
@@ -58,7 +66,7 @@ export function LibraryPage() {
       } else {
         const data = await listClips({
           type: typeFilter,
-          search: searchQuery || undefined,
+          search: debouncedSearchQuery || undefined,
           limit: 50,
         });
         setClips(data);
@@ -72,7 +80,7 @@ export function LibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [typeFilter, searchQuery, viewMode, contentMode]);
+  }, [typeFilter, debouncedSearchQuery, viewMode, contentMode]);
 
   useEffect(() => {
     fetchContent();

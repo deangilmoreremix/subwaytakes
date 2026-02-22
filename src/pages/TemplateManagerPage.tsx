@@ -40,7 +40,7 @@ export function TemplateManagerPage() {
     if (!confirmed) return;
     const success = await deleteTemplate(id);
     if (success) {
-      setTemplates(templates.filter((t) => t.id !== id));
+      setTemplates(prev => prev.filter((t) => t.id !== id));
     }
   }
 
@@ -51,7 +51,7 @@ export function TemplateManagerPage() {
       template.user_id
     );
     if (result) {
-      setTemplates([result, ...templates]);
+      setTemplates(prev => [result, ...prev]);
     }
   }
 

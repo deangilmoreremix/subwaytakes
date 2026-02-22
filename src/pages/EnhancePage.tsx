@@ -119,7 +119,7 @@ function getRawVideoUrl(content: ContentUnion, type: 'clip' | 'episode' | 'compi
 export function EnhancePage({ contentType }: EnhancePageProps) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const contentId = id!;
+  const contentId = id ?? '';
   const [content, setContent] = useState<ContentUnion | null>(null);
   const [loading, setLoading] = useState(true);
   const [enhancementConfig, setEnhancementConfig] = useState<EnhancementConfig>(DEFAULT_CONFIG);

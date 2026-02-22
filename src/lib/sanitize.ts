@@ -22,13 +22,7 @@ export function sanitizeInput(input: string | null | undefined): string {
   // First, sanitize to remove any HTML/script tags
   const sanitized = DOMPurify.sanitize(input, purifyConfig);
   
-  return sanitized
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+  return sanitized;
 }
 
 /**
@@ -42,13 +36,7 @@ export function sanitizeInputPreserveFormatting(input: string | null | undefined
   const withPlaceholder = input.replace(/\n/g, placeholder);
   const sanitized = DOMPurify.sanitize(withPlaceholder, purifyConfig);
 
-  return sanitized
-    .replace(new RegExp(placeholder, 'g'), '\n')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;');
+  return sanitized.replace(new RegExp(placeholder, 'g'), '\n');
 }
 
 /**
@@ -94,15 +82,15 @@ export function containsDangerousContent(input: string | null | undefined): bool
   if (!input) return false;
   
   const dangerousPatterns = [
-    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
-    /javascript:/gi,
-    /on\w+\s*=/gi, // onclick, onload, etc.
-    /<iframe/gi,
-    /<object/gi,
-    /<embed/gi,
-    /eval\s*\(/gi,
-    /expression\s*\(/gi,
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/i,
+    /javascript:/i,
+    /on\w+\s*=/i,
+    /<iframe/i,
+    /<object/i,
+    /<embed/i,
+    /eval\s*\(/i,
+    /expression\s*\(/i,
   ];
-  
+
   return dangerousPatterns.some(pattern => pattern.test(input));
 }

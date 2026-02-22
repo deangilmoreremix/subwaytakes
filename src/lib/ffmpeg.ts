@@ -285,7 +285,9 @@ export async function downloadVideoAsBlob(videoUrl: string): Promise<Blob> {
  * Convert base64 to Blob
  */
 export function base64ToBlob(base64: string, contentType: string = 'video/mp4'): Blob {
-  const byteCharacters = atob(base64.split(',')[1]);
+  const parts = base64.split(',');
+  const b64 = parts.length > 1 ? parts[1] : parts[0];
+  const byteCharacters = atob(b64);
   const byteNumbers = new Array(byteCharacters.length);
 
   for (let i = 0; i < byteCharacters.length; i++) {
@@ -302,7 +304,7 @@ export function base64ToBlob(base64: string, contentType: string = 'video/mp4'):
 export async function processAndUploadVideo(
   videoUrl: string,
   operation: 'thumbnail' | 'stitch' | 'add_captions' | 'convert' | 'trim',
-  options?: any
+  options?: Record<string, unknown>
 ): Promise<string> {
   let processedVideoUrl: string;
 

@@ -109,9 +109,9 @@ function generateSrtCaptions(
   for (const entry of entries) {
     const clip = entry.clips;
     if (clip.speech_script) {
-      const startTime = formatSrtTime(currentTime + entry.trim_start);
+      const startTime = formatSrtTime(currentTime);
       const duration = clip.duration_seconds - entry.trim_start - (entry.trim_end || 0);
-      const endTime = formatSrtTime(currentTime + entry.trim_start + duration - 0.5);
+      const endTime = formatSrtTime(Math.max(0, currentTime + duration - 0.5));
 
       srt += `${index}\n`;
       srt += `${startTime} --> ${endTime}\n`;
@@ -154,7 +154,9 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    let parsedBody: Record<string, unknown> = {};
     const body: StitchClipsRequest = await req.json();
+    parsedBody = body as unknown as Record<string, unknown>;
     const { compilation_id } = body;
 
     if (!compilation_id) {
@@ -233,7 +235,7 @@ Deno.serve(async (req: Request) => {
         if (stitchResponse.ok) {
           const stitchResult = await stitchResponse.json();
           let attempts = 0;
-          const maxAttempts = 120;
+          const maxAttempts = 25;
 
           while (attempts < maxAttempts) {
             await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -343,7 +345,7 @@ Deno.serve(async (req: Request) => {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
     try {
-      const body = await req.clone().json().catch(() => ({}));
+      const body = parsedBody || {};
       if (body.compilation_id) {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
