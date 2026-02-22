@@ -98,6 +98,7 @@ export function CreateWisdomPage() {
           onGenerate={handleGenerate}
           showSpeechScript={true}
           summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} />}
+          scriptContext={{ wisdomTone, wisdomFormat, wisdomDemographic, wisdomSetting }}
         />
       </CreationWizard>
 

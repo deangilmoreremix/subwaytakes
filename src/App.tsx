@@ -18,6 +18,7 @@ import { TemplateManagerPage } from './pages/TemplateManagerPage';
 import { EnhancePage } from './pages/EnhancePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
+import { PromptsPage } from './pages/prompts/PromptsPage';
 import CompilationBuilderPage from './pages/CompilationBuilderPage';
 import CompilationPage from './pages/CompilationPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -59,6 +60,7 @@ function AppContent() {
           <Route path="/templates" element={<TemplateManagerPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/prompts" element={<PromptsPage />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="*" element={<Navigate to="/create" replace />} />
         </Routes>

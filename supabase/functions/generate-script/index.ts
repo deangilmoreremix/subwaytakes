@@ -1,12 +1,19 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-type VideoType = "subway_interview" | "street_interview" | "motivational" | "studio_interview" | "wisdom_interview";
+type VideoType =
+  | "subway_interview"
+  | "street_interview"
+  | "motivational"
+  | "studio_interview"
+  | "wisdom_interview";
 
 interface ScriptRequest {
   topic: string;
@@ -17,6 +24,16 @@ interface ScriptRequest {
   demographic?: string;
   setting?: string;
   studio_setup?: string;
+  energy_level?: string;
+  interview_style?: string;
+  scene_type?: string;
+  neighborhood?: string;
+  speaker_style?: string;
+  camera_style?: string;
+  lighting_mood?: string;
+  target_age_group?: string;
+  regenerateField?: string;
+  currentScript?: Record<string, string>;
 }
 
 interface GeneratedScript {
@@ -28,7 +45,17 @@ interface GeneratedScript {
   close_punchline: string;
 }
 
-const TOPIC_CONTEXT: Record<string, string> = {
+interface SystemPromptRow {
+  id: string;
+  system_prompt: string;
+  user_prompt_template: string;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  metadata: Record<string, unknown>;
+}
+
+const DEFAULT_TOPIC_CONTEXT: Record<string, string> = {
   money: "finances, wealth, spending habits, financial decisions",
   dating: "relationships, dating apps, love life, romantic experiences",
   hottakes: "controversial opinions, unpopular beliefs, spicy takes",
@@ -55,7 +82,10 @@ const TOPIC_CONTEXT: Record<string, string> = {
   wisdom: "hard-earned life lessons, advice for younger generations",
 };
 
-function buildSystemPrompt(videoType: VideoType, body: ScriptRequest): string {
+function buildHardcodedSystemPrompt(
+  videoType: VideoType,
+  body: ScriptRequest
+): string {
   switch (videoType) {
     case "subway_interview":
       return `You are an elite script writer for viral subway interview shows filmed on the NYC subway. Your content has generated millions of views across TikTok, YouTube Shorts, and Instagram Reels.
@@ -142,7 +172,8 @@ SETTING: Professional ${setup} studio environment.`;
 
     case "wisdom_interview": {
       const tone = body.tone?.replace(/_/g, " ") || "gentle";
-      const demographic = body.demographic?.replace(/_/g, " ") || "experienced adults";
+      const demographic =
+        body.demographic?.replace(/_/g, " ") || "experienced adults";
       const setting = body.setting?.replace(/_/g, " ") || "relaxed setting";
       return `You are a script writer specializing in wisdom and life experience content for audiences 55+. Your content resonates with older adults and younger viewers who appreciate genuine wisdom.
 
@@ -175,10 +206,115 @@ SETTING: ${setting} with warm, natural atmosphere.`;
   }
 }
 
-function buildUserPrompt(videoType: VideoType, topic: string, topicContext: string, body: ScriptRequest): string {
-  const customQuestion = body.question ? `\nSuggested question angle: "${body.question}"` : "";
+function buildContextEnrichment(body: ScriptRequest): string {
+  const parts: string[] = [];
 
-  const base = `Generate a viral script for the topic: "${topic}" (related to: ${topicContext}).${customQuestion}
+  if (body.energy_level) {
+    const energyMap: Record<string, string> = {
+      calm: "Keep the energy calm and reflective. Thoughtful pauses.",
+      conversational:
+        "Natural conversational energy. Easy, flowing dialogue.",
+      high_energy:
+        "HIGH ENERGY delivery. Animated, excited, exclamation-worthy.",
+      chaotic: "CHAOTIC energy. Unexpected, wild, surprising at every turn.",
+    };
+    if (energyMap[body.energy_level])
+      parts.push(`ENERGY: ${energyMap[body.energy_level]}`);
+  }
+
+  if (body.interview_style) {
+    const styleMap: Record<string, string> = {
+      quick_fire: "RAPID FIRE format - quick questions, punchy one-liner answers.",
+      hot_take: "HOT TAKE format - bold, controversial opinion delivery.",
+      confessional: "CONFESSIONAL format - intimate, vulnerable, personal reveal.",
+      debate_challenge: "DEBATE format - point-counterpoint, intellectual sparring.",
+      storytelling: "STORYTELLING format - vivid personal anecdote, narrative arc.",
+      unpopular_opinion: "UNPOPULAR OPINION format - defending controversial stance.",
+      would_you_rather: "WOULD YOU RATHER format - choosing between options.",
+      deep_conversation: "DEEP DIVE format - thoughtful, philosophical exchange.",
+      man_on_street: "MAN ON THE STREET format - casual, spontaneous stop.",
+      friendly_chat: "FRIENDLY CHAT format - warm, easy rapport.",
+    };
+    if (styleMap[body.interview_style])
+      parts.push(`INTERVIEW STYLE: ${styleMap[body.interview_style]}`);
+  }
+
+  if (body.scene_type) {
+    parts.push(`SCENE: ${body.scene_type.replace(/_/g, " ")}`);
+  }
+
+  if (body.neighborhood) {
+    parts.push(`NEIGHBORHOOD VIBE: ${body.neighborhood.replace(/_/g, " ")}`);
+  }
+
+  if (body.speaker_style) {
+    const speakerMap: Record<string, string> = {
+      intense_coach: "Speaker has INTENSE COACH energy - drill sergeant, commanding.",
+      calm_mentor: "Speaker is a CALM MENTOR - wise, measured, reassuring.",
+      hype_man: "Speaker is a HYPE MAN - animated, crowd-pumping, infectious.",
+      wise_elder: "Speaker is a WISE ELDER - sage-like, earned authority.",
+      corporate_exec: "Speaker is a CORPORATE EXEC - polished, strategic.",
+      athlete: "Speaker is an ATHLETE - competitive, disciplined, intense.",
+    };
+    if (speakerMap[body.speaker_style])
+      parts.push(speakerMap[body.speaker_style]);
+  }
+
+  if (
+    body.target_age_group === "older_adults" &&
+    body.video_type !== "wisdom_interview"
+  ) {
+    parts.push(
+      "TARGET AUDIENCE: 55+ adults. Use clear, respectful language. No excessive slang."
+    );
+  }
+
+  return parts.length > 0 ? "\n\nCONTEXT:\n" + parts.join("\n") : "";
+}
+
+function buildUserPrompt(
+  dbTemplate: SystemPromptRow | null,
+  videoType: VideoType,
+  topic: string,
+  topicContext: string,
+  body: ScriptRequest
+): string {
+  if (body.regenerateField && body.currentScript) {
+    return `Regenerate ONLY the "${body.regenerateField}" field for a ${videoType.replace(/_/g, " ")} script about "${topic}".
+
+Current script:
+${JSON.stringify(body.currentScript, null, 2)}
+
+Generate a new, different version of "${body.regenerateField}" that is fresh and creative. Keep the same tone and energy as the rest of the script.
+
+Return ONLY valid JSON with all 6 fields, changing only "${body.regenerateField}":
+{
+  "hook_question": "...",
+  "guest_answer": "...",
+  "follow_up_question": "...",
+  "follow_up_answer": "...",
+  "reaction_line": "...",
+  "close_punchline": "..."
+}`;
+  }
+
+  if (dbTemplate) {
+    const customQuestion = body.question
+      ? `\nSuggested question angle: "${body.question}"`
+      : "";
+    return dbTemplate.user_prompt_template
+      .replace("{{topic}}", topic)
+      .replace("{{topic_context}}", topicContext)
+      .replace("{{custom_question}}", customQuestion);
+  }
+
+  const customQuestion = body.question
+    ? `\nSuggested question angle: "${body.question}"`
+    : "";
+
+  const contextEnrichment = buildContextEnrichment(body);
+
+  const base = `Generate a viral script for the topic: "${topic}" (related to: ${topicContext}).${customQuestion}${contextEnrichment}
 
 INSTRUCTIONS:
 - Make it feel like a REAL conversation, not scripted
@@ -232,11 +368,36 @@ MOTIVATIONAL-SPECIFIC:
 ${formatSuffix}`;
   }
 
+  if (videoType === "street_interview") {
+    return `${base}
+
+STREET-SPECIFIC:
+- Authentic street energy, real people, real reactions
+- Quick exchanges that feel spontaneous
+- The hook should stop someone mid-scroll
+- Capture the vibe of the neighborhood
+${formatSuffix}`;
+  }
+
+  if (videoType === "subway_interview") {
+    return `${base}
+
+SUBWAY-SPECIFIC:
+- NYC subway energy, diverse commuters, authentic reactions
+- The interviewer uses a subway card as a microphone (brand signature)
+- Quick-paced, the train is coming - every second counts
+- Gen-Z/millennial crossover appeal
+${formatSuffix}`;
+  }
+
   return `${base}
 ${formatSuffix}`;
 }
 
-function generateFallbackScript(videoType: VideoType, topic: string): GeneratedScript {
+function generateFallbackScript(
+  videoType: VideoType,
+  topic: string
+): GeneratedScript {
   const fallbacks: Record<VideoType, GeneratedScript> = {
     subway_interview: {
       hook_question: `Yo, what's your hottest take on ${topic}?`,
@@ -283,12 +444,44 @@ function generateFallbackScript(videoType: VideoType, topic: string): GeneratedS
   return fallbacks[videoType] || fallbacks.subway_interview;
 }
 
+async function loadSystemPromptFromDB(
+  videoType: VideoType
+): Promise<SystemPromptRow | null> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) return null;
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data } = await supabase
+      .from("system_prompts")
+      .select("*")
+      .eq("video_type", videoType)
+      .eq("is_active", true)
+      .is("user_id", null)
+      .order("version", { ascending: false })
+      .limit(1);
+
+    return data?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveTopicContext(
+  topic: string,
+  dbRow: SystemPromptRow | null
+): string {
+  const dbContexts =
+    (dbRow?.metadata as { topic_contexts?: Record<string, string> })
+      ?.topic_contexts || {};
+  const merged = { ...DEFAULT_TOPIC_CONTEXT, ...dbContexts };
+  return merged[topic.toLowerCase()] || topic;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -309,45 +502,58 @@ Deno.serve(async (req: Request) => {
 
     if (!openaiApiKey) {
       const fallback = generateFallbackScript(video_type, topic);
-      return new Response(
-        JSON.stringify(fallback),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ ...fallback, source: "fallback" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const topicContext = TOPIC_CONTEXT[topic.toLowerCase()] || topic;
-    const systemPrompt = buildSystemPrompt(video_type, body);
-    const userPrompt = buildUserPrompt(video_type, topic, topicContext, body);
+    const dbPrompt = await loadSystemPromptFromDB(video_type);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.9,
-        max_tokens: 600,
-      }),
-    });
+    const systemPrompt = dbPrompt
+      ? dbPrompt.system_prompt
+      : buildHardcodedSystemPrompt(video_type, body);
+
+    const topicContext = resolveTopicContext(topic, dbPrompt);
+
+    const userPrompt = buildUserPrompt(
+      dbPrompt,
+      video_type,
+      topic,
+      topicContext,
+      body
+    );
+
+    const model = dbPrompt?.model || "gpt-4o-mini";
+    const temperature = dbPrompt?.temperature ?? 0.9;
+    const maxTokens = dbPrompt?.max_tokens ?? 600;
+
+    const response = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("OpenAI API error:", errorText);
       const fallback = generateFallbackScript(video_type, topic);
-      return new Response(
-        JSON.stringify(fallback),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ ...fallback, source: "fallback" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const data = await response.json();
@@ -368,42 +574,42 @@ Deno.serve(async (req: Request) => {
     } catch (parseError) {
       console.error("Parse error:", parseError, "Content:", content);
       const fallback = generateFallbackScript(video_type, topic);
-      return new Response(
-        JSON.stringify(fallback),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ ...fallback, source: "fallback" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    if (!script.hook_question || !script.guest_answer || !script.follow_up_question ||
-        !script.follow_up_answer || !script.reaction_line || !script.close_punchline) {
+    if (
+      !script.hook_question ||
+      !script.guest_answer ||
+      !script.follow_up_question ||
+      !script.follow_up_answer ||
+      !script.reaction_line ||
+      !script.close_punchline
+    ) {
       const fallback = generateFallbackScript(video_type, topic);
-      return new Response(
-        JSON.stringify(fallback),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ ...fallback, source: "fallback" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(
-      JSON.stringify(script),
+      JSON.stringify({
+        ...script,
+        source: "ai",
+        system_prompt_id: dbPrompt?.id || null,
+      }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   } catch (error) {
     console.error("Generate script error:", error);
-
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

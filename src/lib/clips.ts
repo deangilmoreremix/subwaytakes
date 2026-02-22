@@ -36,7 +36,6 @@ import { createClipPlan, createVariationPrompt, createBatchVariationPrompt } fro
 import {
   validateClipCreationOptions,
   validateBatchSize,
-  validateDuration,
 } from './validation';
 import {
   sanitizeTopicInput,
@@ -48,6 +47,81 @@ import {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+interface BackendPromptResult {
+  provider_prompt: string;
+  negative_prompt: string;
+  template_id: string | null;
+  source: string;
+}
+
+async function buildPromptFromBackend(
+  options: CreateClipOptions,
+  sanitizedTopic: string,
+  sanitizedAngle?: string,
+  sanitizedQuestion?: string,
+): Promise<BackendPromptResult | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/build-prompt`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        video_type: options.videoType,
+        topic: sanitizedTopic,
+        duration_seconds: options.durationSeconds,
+        angle_prompt: sanitizedAngle || undefined,
+        interview_question: sanitizedQuestion || undefined,
+        scene_type: options.sceneType || undefined,
+        city_style: options.cityStyle || undefined,
+        energy_level: options.energyLevel || undefined,
+        speaker_style: options.speakerStyle || undefined,
+        motivational_setting: options.motivationalSetting || undefined,
+        camera_style: options.cameraStyle || undefined,
+        lighting_mood: options.lightingMood || undefined,
+        street_scene: options.streetScene || undefined,
+        interview_style: options.interviewStyle || undefined,
+        time_of_day: options.timeOfDay || undefined,
+        interviewer_type: options.interviewerType || undefined,
+        interviewer_position: options.interviewerPosition || undefined,
+        subject_demographic: options.subjectDemographic || undefined,
+        subject_gender: options.subjectGender || undefined,
+        subject_style: options.subjectStyle || undefined,
+        subway_line: options.subwayLine || undefined,
+        neighborhood: options.neighborhood || undefined,
+        studio_setup: options.studioSetup || undefined,
+        studio_lighting: options.studioLighting || undefined,
+        wisdom_tone: options.wisdomTone || undefined,
+        wisdom_format: options.wisdomFormat || undefined,
+        wisdom_demographic: options.wisdomDemographic || undefined,
+        wisdom_setting: options.wisdomSetting || undefined,
+        target_age_group: options.targetAgeGroup || undefined,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (!data.provider_prompt) return null;
+
+    return {
+      provider_prompt: data.provider_prompt,
+      negative_prompt: data.negative_prompt || '',
+      template_id: data.template_id || null,
+      source: data.source || 'backend',
+    };
+  } catch {
+    return null;
+  }
+}
 
 async function triggerGeneration(clip: Clip, modelTier?: ModelTier, speechScript?: string): Promise<void> {
   try {
@@ -220,34 +294,49 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
   }
 
   const userId = getUserId();
-  const plan = createClipPlan({
-    videoType,
-    topic: sanitizedTopic,
-    durationSeconds,
-    anglePrompt: sanitizedAngle,
-    interviewQuestion: sanitizedQuestion,
-    sceneType,
-    cityStyle,
-    energyLevel,
-    speakerStyle,
-    motivationalSetting,
-    cameraStyle,
-    lightingMood,
-    streetScene,
-    interviewStyle,
-    timeOfDay,
-    interviewerType,
-    interviewerPosition,
-    subjectDemographic,
-    subjectGender,
-    subjectStyle,
-    studioSetup,
-    studioLighting,
-    wisdomTone,
-    wisdomFormat,
-    wisdomDemographic,
-    wisdomSetting,
-  });
+
+  const backendResult = await buildPromptFromBackend(
+    options, sanitizedTopic, sanitizedAngle, sanitizedQuestion
+  );
+
+  let providerPrompt: string;
+  let negativePrompt: string;
+
+  if (backendResult) {
+    providerPrompt = backendResult.provider_prompt;
+    negativePrompt = backendResult.negative_prompt;
+  } else {
+    const plan = createClipPlan({
+      videoType,
+      topic: sanitizedTopic,
+      durationSeconds,
+      anglePrompt: sanitizedAngle,
+      interviewQuestion: sanitizedQuestion,
+      sceneType,
+      cityStyle,
+      energyLevel,
+      speakerStyle,
+      motivationalSetting,
+      cameraStyle,
+      lightingMood,
+      streetScene,
+      interviewStyle,
+      timeOfDay,
+      interviewerType,
+      interviewerPosition,
+      subjectDemographic,
+      subjectGender,
+      subjectStyle,
+      studioSetup,
+      studioLighting,
+      wisdomTone,
+      wisdomFormat,
+      wisdomDemographic,
+      wisdomSetting,
+    });
+    providerPrompt = plan.provider_prompt;
+    negativePrompt = plan.negative_prompt;
+  }
 
   const { data, error } = await supabase
     .from('clips')
@@ -281,8 +370,8 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
       wisdom_setting: wisdomSetting || null,
       provider: modelTier === 'premium' ? 'google' : 'minimax',
       status: 'queued',
-      provider_prompt: plan.provider_prompt,
-      negative_prompt: plan.negative_prompt,
+      provider_prompt: providerPrompt,
+      negative_prompt: negativePrompt,
       model_tier: modelTier,
       speech_script: sanitizedScript || null,
       has_speech: !!sanitizedScript,

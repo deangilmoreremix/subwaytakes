@@ -182,6 +182,7 @@ export function CreateStreetPage() {
           onGenerate={handleGenerate}
           showSpeechScript={true}
           summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} />}
+          scriptContext={{ interviewStyle, energyLevel, neighborhood }}
         />
       </CreationWizard>
 
