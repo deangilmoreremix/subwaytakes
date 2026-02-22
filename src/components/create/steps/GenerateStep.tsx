@@ -25,6 +25,9 @@ interface GenerateStepProps {
     neighborhood?: string;
     speakerStyle?: string;
     studioSetup?: string;
+    studioLighting?: string;
+    cameraStyle?: string;
+    lightingMood?: string;
     wisdomTone?: string;
     wisdomFormat?: string;
     wisdomDemographic?: string;
@@ -59,6 +62,10 @@ export function GenerateStep({
         neighborhood: scriptContext?.neighborhood,
         speakerStyle: scriptContext?.speakerStyle,
         studioSetup: scriptContext?.studioSetup,
+        studioLighting: scriptContext?.studioLighting,
+        cameraStyle: scriptContext?.cameraStyle,
+        lightingMood: scriptContext?.lightingMood,
+        durationSeconds: clip.durationSeconds,
         wisdomTone: scriptContext?.wisdomTone,
         wisdomFormat: scriptContext?.wisdomFormat,
         wisdomDemographic: scriptContext?.wisdomDemographic,

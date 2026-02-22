@@ -23,6 +23,10 @@ export interface GenerateClipScriptOptions {
   neighborhood?: string;
   speakerStyle?: string;
   studioSetup?: string;
+  studioLighting?: string;
+  cameraStyle?: string;
+  lightingMood?: string;
+  durationSeconds?: number;
   wisdomTone?: string;
   wisdomFormat?: string;
   wisdomDemographic?: string;
@@ -55,6 +59,10 @@ export async function generateClipScript(
           neighborhood: options.neighborhood || undefined,
           speaker_style: options.speakerStyle || undefined,
           studio_setup: options.studioSetup || undefined,
+          studio_lighting: options.studioLighting || undefined,
+          camera_style: options.cameraStyle || undefined,
+          lighting_mood: options.lightingMood || undefined,
+          duration_seconds: options.durationSeconds || undefined,
           tone: options.wisdomTone || undefined,
           format: options.wisdomFormat || undefined,
           demographic: options.wisdomDemographic || undefined,
