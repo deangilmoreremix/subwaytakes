@@ -192,8 +192,19 @@ async function generateThumbnailWithFFmpeg(
     }
   }
 
-  // Option 3: Fallback - generate SVG placeholder (current implementation)
-  console.log('Thumbnail config:', config);
+  function escapeSvgText(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
+  }
+
+  const safeEmoji = escapeSvgText(config.emoji || '');
+  const safeOverlay = config.overlayText ? escapeSvgText(config.overlayText) : '';
+  const safeStyle = escapeSvgText(config.style || '');
+
   return `data:image/svg+xml,${encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">
       <defs>
@@ -203,9 +214,9 @@ async function generateThumbnailWithFFmpeg(
         </linearGradient>
       </defs>
       <rect fill="url(#bg)" width="1280" height="720"/>
-      <text x="50%" y="45%" text-anchor="middle" font-size="160" font-family="Arial">${config.emoji}</text>
-      ${config.overlayText ? `<text x="50%" y="70%" text-anchor="middle" font-size="48" fill="white" font-family="Arial">${config.overlayText}</text>` : ''}
-      <text x="50%" y="92%" text-anchor="middle" font-size="24" fill="#888" font-family="Arial" text-transform="uppercase">${config.style}</text>
+      <text x="50%" y="45%" text-anchor="middle" font-size="160" font-family="Arial">${safeEmoji}</text>
+      ${safeOverlay ? `<text x="50%" y="70%" text-anchor="middle" font-size="48" fill="white" font-family="Arial">${safeOverlay}</text>` : ''}
+      <text x="50%" y="92%" text-anchor="middle" font-size="24" fill="#888" font-family="Arial" text-transform="uppercase">${safeStyle}</text>
     </svg>
   `)}`;
 }
@@ -392,6 +403,14 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Authorization header is required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -426,6 +445,14 @@ Deno.serve(async (req: Request) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+
+    const VALID_VIDEO_TYPES = ["subway_interview", "street_interview", "motivational", "studio_interview", "wisdom_interview"];
+    if (video_type && !VALID_VIDEO_TYPES.includes(video_type)) {
+      return new Response(
+        JSON.stringify({ error: `Invalid video_type. Must be one of: ${VALID_VIDEO_TYPES.join(", ")}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -529,7 +556,6 @@ Deno.serve(async (req: Request) => {
         }
       }
     } else {
-      // Generate thumbnail if enabled
       const thumbnailUrl = await generateThumbnailWithFFmpeg(resultUrl, thumbnailConfig);
 
       const { error: updateError } = await supabase
@@ -544,11 +570,20 @@ Deno.serve(async (req: Request) => {
       if (updateError) {
         throw updateError;
       }
-    }
 
-    let responseThumbnailUrl: string | null = null;
-    if (!is_episode_shot) {
-      responseThumbnailUrl = await generateThumbnailWithFFmpeg(resultUrl, thumbnailConfig);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          clip_id,
+          result_url: resultUrl,
+          thumbnail_url: thumbnailUrl,
+          model_used: selectedModel,
+          is_episode_shot: false,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     return new Response(
@@ -556,7 +591,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         clip_id,
         result_url: resultUrl,
-        thumbnail_url: responseThumbnailUrl,
+        thumbnail_url: null,
         model_used: selectedModel,
         is_episode_shot,
       }),

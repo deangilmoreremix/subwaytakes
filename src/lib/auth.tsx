@@ -152,17 +152,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function deductCredits(amount: number, _description: string): Promise<boolean> {
     if (!profile || profile.credits_balance < amount) return false;
-    const newBalance = profile.credits_balance - amount;
     if (isGuest) {
+      const newBalance = profile.credits_balance - amount;
       setProfile(prev => prev ? { ...prev, credits_balance: newBalance } : null);
       return true;
     }
-    const { error } = await supabase
-      .from('user_profiles')
-      .update({ credits_balance: newBalance, updated_at: new Date().toISOString() })
-      .eq('id', profile.id);
-    if (error) return false;
-    setProfile(prev => prev ? { ...prev, credits_balance: newBalance } : null);
+    const { data, error } = await supabase
+      .rpc('deduct_credits', { p_user_id: profile.id, p_amount: amount });
+    if (error || data === false) return false;
+    await refreshProfile();
     return true;
   }
 
