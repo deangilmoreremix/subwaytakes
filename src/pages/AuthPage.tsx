@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Film, Mail, Lock, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 
 export function AuthPage() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, isGuest } = useAuth();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -11,6 +13,12 @@ export function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!isGuest) {
+      navigate('/create', { replace: true });
+    }
+  }, [isGuest, navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

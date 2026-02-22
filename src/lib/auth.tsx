@@ -1,6 +1,12 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { supabase } from './supabase';
 import type { User, Session } from '@supabase/supabase-js';
+
+let _currentAuthUserId: string | null = null;
+
+export function setCurrentAuthUser(userId: string | null) {
+  _currentAuthUserId = userId;
+}
 
 export interface UserProfile {
   id: string;
@@ -31,7 +37,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 function buildGuestProfile(): UserProfile {
-  const guestId = getUserId();
+  const guestId = getGuestId();
   const now = new Date().toISOString();
   return {
     id: guestId,
@@ -53,32 +59,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
 
+  const handleAuthUser = useCallback(async (authUser: User, isNewLogin: boolean) => {
+    setCurrentAuthUser(authUser.id);
+    setIsGuest(false);
+    if (isNewLogin) {
+      await migrateGuestDataToUser(authUser.id);
+    }
+    await fetchProfile(authUser.id);
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
+        setCurrentAuthUser(s.user.id);
         fetchProfile(s.user.id);
       } else {
+        setCurrentAuthUser(null);
         activateGuestMode();
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        setIsGuest(false);
+        const isNewLogin = event === 'SIGNED_IN';
         (async () => {
-          await fetchProfile(s.user.id);
+          await handleAuthUser(s.user, isNewLogin);
         })().catch(console.error);
       } else {
+        setCurrentAuthUser(null);
         activateGuestMode();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [handleAuthUser]);
 
   function activateGuestMode() {
     setIsGuest(true);
@@ -131,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    setCurrentAuthUser(null);
     await supabase.auth.signOut();
     activateGuestMode();
   }
@@ -190,9 +209,41 @@ export function useAuth() {
 }
 
 export function getUserId(): string {
+  if (_currentAuthUserId) return _currentAuthUserId;
   const stored = localStorage.getItem('clip_user_id');
   if (stored) return stored;
   const newId = crypto.randomUUID();
   localStorage.setItem('clip_user_id', newId);
   return newId;
+}
+
+export function getGuestId(): string {
+  const stored = localStorage.getItem('clip_user_id');
+  if (stored) return stored;
+  const newId = crypto.randomUUID();
+  localStorage.setItem('clip_user_id', newId);
+  return newId;
+}
+
+const TABLES_WITH_USER_ID = [
+  'clips',
+  'episodes',
+  'episode_scripts',
+  'character_bibles',
+  'compilations',
+  'video_exports',
+] as const;
+
+export async function migrateGuestDataToUser(authUserId: string): Promise<void> {
+  const guestId = localStorage.getItem('clip_user_id');
+  if (!guestId || guestId === authUserId) return;
+
+  for (const table of TABLES_WITH_USER_ID) {
+    await supabase
+      .from(table)
+      .update({ user_id: authUserId })
+      .eq('user_id', guestId);
+  }
+
+  localStorage.removeItem('clip_user_id');
 }

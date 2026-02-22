@@ -34,6 +34,13 @@ function PageLoader() {
   );
 }
 
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { isGuest, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (isGuest) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
 function AppContent() {
   const { loading } = useAuth();
 
@@ -46,38 +53,47 @@ function AppContent() {
   }
 
   return (
-    <AppShell>
-      <ErrorBoundary>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/" element={<Navigate to="/create" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/create" element={<CreateHubPage />} />
-            <Route path="/create/subway" element={<CreateSubwayPage />} />
-            <Route path="/create/street" element={<CreateStreetPage />} />
-            <Route path="/create/motivational" element={<CreateMotivationalPage />} />
-            <Route path="/create/wisdom" element={<CreateWisdomPage />} />
-            <Route path="/create/studio" element={<CreateStudioPage />} />
-            <Route path="/library" element={<LibraryPage />} />
-            <Route path="/clips/:id" element={<ClipPage />} />
-            <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />
-            <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
-            <Route path="/episodes/:id" element={<EpisodePage />} />
-            <Route path="/episodes/:id/enhance" element={<EnhancePage contentType="episode" />} />
-            <Route path="/compilations/new" element={<CompilationBuilderPage />} />
-            <Route path="/compilations/:id" element={<CompilationPage />} />
-            <Route path="/compilations/:id/enhance" element={<EnhancePage contentType="compilation" />} />
-            <Route path="/questions" element={<QuestionBankPage />} />
-            <Route path="/templates" element={<TemplateManagerPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/prompts" element={<PromptsPage />} />
-            <Route path="/login" element={<AuthPage />} />
-            <Route path="*" element={<Navigate to="/create" replace />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
-    </AppShell>
+    <Routes>
+      <Route path="/login" element={<AuthPage />} />
+      <Route
+        path="*"
+        element={
+          <RequireAuth>
+            <AppShell>
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/create" replace />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/create" element={<CreateHubPage />} />
+                    <Route path="/create/subway" element={<CreateSubwayPage />} />
+                    <Route path="/create/street" element={<CreateStreetPage />} />
+                    <Route path="/create/motivational" element={<CreateMotivationalPage />} />
+                    <Route path="/create/wisdom" element={<CreateWisdomPage />} />
+                    <Route path="/create/studio" element={<CreateStudioPage />} />
+                    <Route path="/library" element={<LibraryPage />} />
+                    <Route path="/clips/:id" element={<ClipPage />} />
+                    <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />
+                    <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
+                    <Route path="/episodes/:id" element={<EpisodePage />} />
+                    <Route path="/episodes/:id/enhance" element={<EnhancePage contentType="episode" />} />
+                    <Route path="/compilations/new" element={<CompilationBuilderPage />} />
+                    <Route path="/compilations/:id" element={<CompilationPage />} />
+                    <Route path="/compilations/:id/enhance" element={<EnhancePage contentType="compilation" />} />
+                    <Route path="/questions" element={<QuestionBankPage />} />
+                    <Route path="/templates" element={<TemplateManagerPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/analytics" element={<AnalyticsPage />} />
+                    <Route path="/prompts" element={<PromptsPage />} />
+                    <Route path="*" element={<Navigate to="/create" replace />} />
+                  </Routes>
+                </Suspense>
+              </ErrorBoundary>
+            </AppShell>
+          </RequireAuth>
+        }
+      />
+    </Routes>
   );
 }
 
