@@ -485,8 +485,24 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Authorization header is required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const body: ScriptRequest = await req.json();
     const { topic, video_type = "subway_interview" } = body;
+
+    const VALID_VIDEO_TYPES = ["subway_interview", "street_interview", "motivational", "studio_interview", "wisdom_interview"];
+    if (!VALID_VIDEO_TYPES.includes(video_type)) {
+      return new Response(
+        JSON.stringify({ error: `Invalid video_type. Must be one of: ${VALID_VIDEO_TYPES.join(", ")}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!topic) {
       return new Response(
