@@ -1646,9 +1646,9 @@ export const ACHIEVEMENT_CONTEXT_TYPES: { value: AchievementContextType; label: 
   { value: 'award_ceremony', label: 'Award Ceremony', description: 'Recognition and achievement celebration' },
   { value: 'graduation', label: 'Graduation', description: 'Academic achievement milestone' },
   { value: 'grand_opening', label: 'Grand Opening', description: 'New venture or business launch' },
-  { value: 'record_breaking', label: 'Record Breaking', description: '超越个人或世界纪录的时刻' },
-  { value: 'comeback_victory', label: 'Comeback Victory', description: '逆境重生的励志故事' },
-  { value: 'lifetime_achievement', label: 'Lifetime Achievement', description: '长期贡献与成就' },
+  { value: 'record_breaking', label: 'Record Breaking', description: 'Surpassing a personal or world record' },
+  { value: 'comeback_victory', label: 'Comeback Victory', description: 'Triumph after adversity' },
+  { value: 'lifetime_achievement', label: 'Lifetime Achievement', description: 'Long-term contributions and legacy' },
 ];
 
 // Interviewer Positions (alias for SUBJECT_POSITIONS)

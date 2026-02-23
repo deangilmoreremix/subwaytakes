@@ -213,12 +213,13 @@ export interface CreateClipOptions {
   wisdomDemographic?: WisdomDemographic;
   wisdomSetting?: WisdomSetting;
   subwayLine?: string;
-  subwayEnhancements?: unknown;
+  subwayEnhancements?: Record<string, unknown>;
   neighborhood?: string;
-  streetEnhancements?: unknown;
-  motivationalEnhancements?: unknown;
+  streetEnhancements?: Record<string, unknown>;
+  motivationalEnhancements?: Record<string, unknown>;
+  speakerArchetype?: string;
   targetAgeGroup?: string;
-  effects?: unknown;
+  effects?: Record<string, unknown>;
   // New feature fields
   language?: SupportedLanguage;
   niche?: NicheCategory;
@@ -272,6 +273,16 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     customLocation,
     scenarioDescription,
     socialDynamics,
+  } = options;
+
+  const {
+    subwayLine,
+    subwayEnhancements,
+    neighborhood,
+    streetEnhancements,
+    motivationalEnhancements,
+    speakerArchetype,
+    targetAgeGroup,
   } = options;
 
   // Validate inputs
@@ -395,6 +406,13 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
       custom_location: customLocation || null,
       scenario_description: scenarioDescription || null,
       social_dynamics: socialDynamics || null,
+      subway_line: subwayLine || null,
+      subway_enhancements: subwayEnhancements || null,
+      neighborhood: neighborhood || null,
+      street_enhancements: streetEnhancements || null,
+      motivational_enhancements: motivationalEnhancements || null,
+      speaker_archetype: speakerArchetype || null,
+      target_age_group: targetAgeGroup || null,
     })
     .select()
     .single();
