@@ -530,6 +530,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (topic.length > 500) {
+      return new Response(
+        JSON.stringify({ error: "topic exceeds maximum length of 500 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (body.question && body.question.length > 1000) {
+      return new Response(
+        JSON.stringify({ error: "question exceeds maximum length of 1000 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
     if (!openaiApiKey) {
@@ -559,6 +573,9 @@ Deno.serve(async (req: Request) => {
     const temperature = dbPrompt?.temperature ?? 0.9;
     const maxTokens = dbPrompt?.max_tokens ?? 600;
 
+    const openaiController = new AbortController();
+    const openaiTimeout = setTimeout(() => openaiController.abort(), 30000);
+
     const response = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -576,8 +593,11 @@ Deno.serve(async (req: Request) => {
           temperature,
           max_tokens: maxTokens,
         }),
+        signal: openaiController.signal,
       }
     );
+
+    clearTimeout(openaiTimeout);
 
     if (!response.ok) {
       console.error("OpenAI API error:", response.status);

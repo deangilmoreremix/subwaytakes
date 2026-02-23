@@ -310,6 +310,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const isStitchFallback = !finalVideoUrl;
     if (!finalVideoUrl) {
       finalVideoUrl = videoUrls[0];
     }
@@ -347,6 +348,7 @@ Deno.serve(async (req: Request) => {
         caption_file_url: captionFileUrl,
         thumbnail_url: thumbnailUrl,
         completed_at: new Date().toISOString(),
+        ...(isStitchFallback ? { error: "Stitching unavailable - using first clip as preview" } : {}),
       })
       .eq("id", compilation_id);
 

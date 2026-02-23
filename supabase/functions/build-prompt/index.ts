@@ -535,6 +535,41 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (topic.length > 500) {
+      return new Response(
+        JSON.stringify({ error: "topic exceeds maximum length of 500 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (body.angle_prompt && body.angle_prompt.length > 2000) {
+      return new Response(
+        JSON.stringify({ error: "angle_prompt exceeds maximum length of 2000 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (body.scenario_description && body.scenario_description.length > 2000) {
+      return new Response(
+        JSON.stringify({ error: "scenario_description exceeds maximum length of 2000 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (body.custom_location && body.custom_location.length > 500) {
+      return new Response(
+        JSON.stringify({ error: "custom_location exceeds maximum length of 500 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (body.interview_question && body.interview_question.length > 1000) {
+      return new Response(
+        JSON.stringify({ error: "interview_question exceeds maximum length of 1000 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { data: templates } = await supabase
       .from("prompt_templates")
       .select("*")

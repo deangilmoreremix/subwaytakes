@@ -298,8 +298,11 @@ async function generateWithVeo(
     ? `${prompt}\n\nDialogue: The person says: "${speechScript}"`
     : prompt;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 150000);
+
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning`,
+    `https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning`,
     {
       method: "POST",
       headers: {
@@ -319,8 +322,11 @@ async function generateWithVeo(
           generateAudio: true,
         },
       }),
+      signal: controller.signal,
     }
   );
+
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     const error = await response.text();
@@ -436,6 +442,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (prompt && prompt.length > 10000) {
+      return new Response(
+        JSON.stringify({ error: "prompt exceeds maximum length of 10000 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (speech_script && speech_script.length > 5000) {
+      return new Response(
+        JSON.stringify({ error: "speech_script exceeds maximum length of 5000 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const VALID_VIDEO_TYPES = ["subway_interview", "street_interview", "motivational", "studio_interview", "wisdom_interview"];
     if (video_type && !VALID_VIDEO_TYPES.includes(video_type)) {
       return new Response(
@@ -498,6 +518,8 @@ Deno.serve(async (req: Request) => {
     const hasMinimaxKey = !!Deno.env.get("MINIMAX_API_KEY");
     const hasGoogleKey = !!Deno.env.get("GOOGLE_AI_API_KEY");
 
+    let isDemoFallback = false;
+
     if (modelConfig.provider === 'minimax' && hasMinimaxKey) {
       try {
         const { jobId } = await generateWithMiniMax(prompt, duration_seconds, modelConfig, speech_script);
@@ -511,6 +533,7 @@ Deno.serve(async (req: Request) => {
         resultUrl = await getMiniMaxVideoUrl(fileId);
       } catch (error) {
         console.error("MiniMax error:", error);
+        isDemoFallback = true;
         const videos = DEMO_VIDEOS[video_type] || DEMO_VIDEOS.motivational;
         resultUrl = videos[Math.floor(Math.random() * videos.length)];
       }
@@ -519,11 +542,12 @@ Deno.serve(async (req: Request) => {
         resultUrl = await generateWithVeo(prompt, duration_seconds, speech_script);
       } catch (error) {
         console.error("Veo error:", error);
+        isDemoFallback = true;
         const videos = DEMO_VIDEOS[video_type] || DEMO_VIDEOS.motivational;
         resultUrl = videos[Math.floor(Math.random() * videos.length)];
       }
     } else {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      isDemoFallback = true;
       const videos = DEMO_VIDEOS[video_type] || DEMO_VIDEOS.motivational;
       resultUrl = videos[Math.floor(Math.random() * videos.length)];
     }
@@ -532,8 +556,9 @@ Deno.serve(async (req: Request) => {
       const { error: updateError } = await supabase
         .from("episode_shots")
         .update({
-          status: "done",
+          status: isDemoFallback ? "demo" : "done",
           result_url: resultUrl,
+          ...(isDemoFallback ? { error: "Used demo video - no API key configured or generation failed" } : {}),
         })
         .eq("id", clip_id);
 
@@ -584,9 +609,10 @@ Deno.serve(async (req: Request) => {
       const { error: updateError } = await supabase
         .from("clips")
         .update({
-          status: "done",
+          status: isDemoFallback ? "demo" : "done",
           result_url: resultUrl,
           thumbnail_url: thumbnailUrl,
+          ...(isDemoFallback ? { error: "Used demo video - no API key configured or generation failed" } : {}),
         })
         .eq("id", clip_id);
 
@@ -602,6 +628,7 @@ Deno.serve(async (req: Request) => {
           thumbnail_url: thumbnailUrl,
           model_used: selectedModel,
           is_episode_shot: false,
+          is_demo: isDemoFallback,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -617,6 +644,7 @@ Deno.serve(async (req: Request) => {
         thumbnail_url: null,
         model_used: selectedModel,
         is_episode_shot,
+        is_demo: isDemoFallback,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
