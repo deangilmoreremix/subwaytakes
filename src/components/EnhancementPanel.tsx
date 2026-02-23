@@ -159,10 +159,12 @@ export function EnhancementPanel({ config, onChange, contentType }: EnhancementP
 
   useEffect(() => {
     fetchTemplates().then(setTemplates);
-    supabase.from('music_tracks').select('id, name, mood, duration_seconds, bpm').order('name').then(({ data }) => {
+    supabase.from('music_tracks').select('id, name, mood, duration_seconds, bpm').order('name').then(({ data, error }) => {
+      if (error) { console.error('Failed to load music tracks:', error); return; }
       if (data) setMusicTracks(data);
     });
-    supabase.from('sound_effects').select('id, name, category, duration_seconds').order('name').then(({ data }) => {
+    supabase.from('sound_effects').select('id, name, category, duration_seconds').order('name').then(({ data, error }) => {
+      if (error) { console.error('Failed to load sound effects:', error); return; }
       if (data) setSoundEffects(data);
     });
   }, []);

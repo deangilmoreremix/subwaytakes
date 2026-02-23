@@ -77,11 +77,13 @@ async function resetMonthlyTokens(): Promise<TokenBalance> {
   const userId = getUserId();
   const now = new Date().toISOString();
 
-  const { data: sub } = await supabase
+  const { data: sub, error: subError } = await supabase
     .from('subscriptions')
     .select('tier')
     .eq('user_id', userId)
     .maybeSingle();
+
+  if (subError) console.error('Failed to fetch subscription:', subError);
 
   const tier = sub?.tier || 'free';
   const plan = SUBSCRIPTION_PLANS.find(p => p.tier === tier) ?? SUBSCRIPTION_PLANS[0];
@@ -148,13 +150,14 @@ async function recordTransaction(
   params: Omit<TokenTransaction, 'id' | 'userId' | 'createdAt'>
 ): Promise<void> {
   const userId = getUserId();
-  await supabase.from('token_transactions').insert({
+  const { error } = await supabase.from('token_transactions').insert({
     user_id: userId,
     type: params.type,
     amount: params.amount,
     description: params.description,
     clip_id: params.clipId,
   });
+  if (error) console.error('Failed to record transaction:', error);
 }
 
 export function calculateTokenCost(

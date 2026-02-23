@@ -211,12 +211,14 @@ export async function reorderCompilationClips(
 }
 
 export async function addClipToCompilation(compilationId: string, clipId: string): Promise<void> {
-  const { data: existing } = await supabase
+  const { data: existing, error: seqError } = await supabase
     .from('compilation_clips')
     .select('sequence')
     .eq('compilation_id', compilationId)
     .order('sequence', { ascending: false })
     .limit(1);
+
+  if (seqError) throw new Error(seqError.message);
 
   const nextSequence = existing && existing.length > 0 ? existing[0].sequence + 1 : 1;
 
@@ -240,11 +242,13 @@ export async function removeClipFromCompilation(compilationId: string, clipId: s
 
   if (error) throw new Error(error.message);
 
-  const { data: remaining } = await supabase
+  const { data: remaining, error: remainError } = await supabase
     .from('compilation_clips')
     .select('clip_id')
     .eq('compilation_id', compilationId)
     .order('sequence', { ascending: true });
+
+  if (remainError) throw new Error(remainError.message);
 
   if (remaining && remaining.length > 0) {
     await reorderCompilationClips(compilationId, remaining.map(r => r.clip_id));

@@ -8,6 +8,20 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = 30000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 interface OverlayTextEntry {
   text: string;
   x: string;
@@ -294,14 +308,14 @@ async function composeWithFFmpegService(
       headers["Authorization"] = `Bearer ${serviceKey}`;
     }
 
-    const response = await fetch(`${serviceUrl}/add-watermark`, {
+    const response = await fetchWithTimeout(`${serviceUrl}/add-watermark`, {
       method: "POST",
       headers,
       body: JSON.stringify({
         videoUrl,
         overlays,
       }),
-    });
+    }, 90000);
 
     if (!response.ok) {
       console.error("FFmpeg compose error:", response.status);

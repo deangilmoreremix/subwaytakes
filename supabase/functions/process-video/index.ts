@@ -294,7 +294,7 @@ async function addCaptions(
   const { serviceUrl, serviceKey } = getServiceConfig();
 
   if (serviceUrl && options?.captionText) {
-    const response = await fetch(`${serviceUrl}/add-captions`, {
+    const response = await fetchWithTimeout(`${serviceUrl}/add-captions`, {
       method: 'POST',
       headers: serviceHeaders(serviceKey),
       body: JSON.stringify({
@@ -302,7 +302,7 @@ async function addCaptions(
         captionText: options.captionText,
         captionStyle: options.captionStyle,
       }),
-    });
+    }, 90000);
 
     if (!response.ok) {
       throw new Error(`Caption addition failed: ${response.status}`);
@@ -334,7 +334,7 @@ async function convertVideo(
   const { serviceUrl, serviceKey } = getServiceConfig();
 
   if (serviceUrl) {
-    const response = await fetch(`${serviceUrl}/convert-video`, {
+    const response = await fetchWithTimeout(`${serviceUrl}/convert-video`, {
       method: 'POST',
       headers: serviceHeaders(serviceKey),
       body: JSON.stringify({
@@ -342,7 +342,7 @@ async function convertVideo(
         format,
         quality: options?.quality,
       }),
-    });
+    }, 90000);
 
     if (!response.ok) {
       throw new Error(`Video conversion failed: ${response.status}`);
@@ -373,7 +373,7 @@ async function trimVideo(
   const { serviceUrl, serviceKey } = getServiceConfig();
 
   if (serviceUrl && options?.startTime && options?.endTime) {
-    const response = await fetch(`${serviceUrl}/trim-video`, {
+    const response = await fetchWithTimeout(`${serviceUrl}/trim-video`, {
       method: 'POST',
       headers: serviceHeaders(serviceKey),
       body: JSON.stringify({
@@ -381,7 +381,7 @@ async function trimVideo(
         startTime: options.startTime,
         endTime: options.endTime,
       }),
-    });
+    }, 90000);
 
     if (!response.ok) {
       throw new Error(`Video trimming failed: ${response.status}`);
@@ -411,11 +411,11 @@ async function getVideoInfo(
   const { serviceUrl, serviceKey } = getServiceConfig();
 
   if (serviceUrl) {
-    const response = await fetch(`${serviceUrl}/get-video-info`, {
+    const response = await fetchWithTimeout(`${serviceUrl}/get-video-info`, {
       method: 'POST',
       headers: serviceHeaders(serviceKey),
       body: JSON.stringify({ videoUrl }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       throw new Error(`Video info failed: ${response.status}`);

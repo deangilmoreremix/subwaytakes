@@ -65,92 +65,38 @@ export function AnalyticsPage() {
       const rangeStart = getDateRange(timeRange);
       const prevRange = getPreviousDateRange(timeRange);
 
-      const results = await Promise.all([
-        supabase.from('clips').select('*', { count: 'exact', head: true }),
-        supabase.from('episodes').select('*', { count: 'exact', head: true }),
-        supabase.from('video_exports').select('*', { count: 'exact', head: true }),
-        rangeStart
-          ? supabase.from('clips').select('*').gte('created_at', rangeStart.toISOString()).order('created_at', { ascending: false })
-          : supabase.from('clips').select('*').order('created_at', { ascending: false }),
-        prevRange
-          ? supabase.from('clips').select('*', { count: 'exact', head: true }).gte('created_at', prevRange.start.toISOString()).lt('created_at', prevRange.end.toISOString())
-          : supabase.from('clips').select('*', { count: 'exact', head: true }),
-        rangeStart
-          ? supabase.from('episodes').select('*', { count: 'exact', head: true }).gte('created_at', rangeStart.toISOString())
-          : supabase.from('episodes').select('*', { count: 'exact', head: true }),
-        rangeStart
-          ? supabase.from('video_exports').select('*', { count: 'exact', head: true }).gte('created_at', rangeStart.toISOString())
-          : supabase.from('video_exports').select('*', { count: 'exact', head: true }),
-        supabase.from('video_exports').select('platform').not('platform', 'is', null),
-      ]);
+      const { data: result, error } = await supabase.rpc('get_analytics_summary', {
+        p_range_start: rangeStart?.toISOString() ?? null,
+        p_prev_start: prevRange?.start.toISOString() ?? null,
+        p_prev_end: prevRange?.end.toISOString() ?? null,
+      });
 
-      // Check for errors in all query results
-      for (const result of results) {
-        if (result.error) {
-          console.error('Supabase query error:', result.error);
-        }
+      if (error) {
+        console.error('Analytics RPC error:', error);
+        return;
       }
 
-      const [
-        { count: totalClips },
-        { count: totalEpisodes },
-        { count: totalExports },
-        { data: rangeClips },
-        { count: previousClipsInRange },
-        { count: episodesInRange },
-        { count: exportsInRange },
-        { data: exportData },
-      ] = results;
-
-      const clips = rangeClips || [];
-
-      const statusBreakdown: Record<string, number> = {};
-      const typeBreakdown: Record<string, number> = {};
-      let viralTotal = 0;
-      let viralCount = 0;
-
-      clips.forEach((clip: Clip) => {
-        statusBreakdown[clip.status] = (statusBreakdown[clip.status] || 0) + 1;
-        typeBreakdown[clip.video_type] = (typeBreakdown[clip.video_type] || 0) + 1;
-        if (clip.viral_score && clip.viral_score.overall > 0) {
-          viralTotal += clip.viral_score.overall;
-          viralCount++;
-        }
-      });
-
-      const platformBreakdown: Record<string, number> = {};
-      (exportData || []).forEach((exp: { platform: string }) => {
-        platformBreakdown[exp.platform] = (platformBreakdown[exp.platform] || 0) + 1;
-      });
-
-      const topClips = clips
-        .filter((c: Clip) => c.viral_score && c.viral_score.overall > 0)
-        .sort((a: Clip, b: Clip) => (b.viral_score?.overall || 0) - (a.viral_score?.overall || 0))
-        .slice(0, 5) as Array<Clip & { viral_score: ViralScore }>;
-
-      const dailyMap = new Map<string, number>();
-      clips.forEach((clip: Clip) => {
-        const day = clip.created_at.slice(0, 10);
-        dailyMap.set(day, (dailyMap.get(day) || 0) + 1);
-      });
-      const dailyClips = Array.from(dailyMap.entries())
-        .map(([date, count]) => ({ date, count }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+      const r = result as Record<string, unknown>;
+      const topClipsRaw = (r.topClips as Array<Record<string, unknown>>) || [];
+      const dailyRaw = (r.dailyClips as Array<{ d: string; count: number }>) || [];
 
       setData({
-        totalClips: totalClips || 0,
-        totalEpisodes: totalEpisodes || 0,
-        totalExports: totalExports || 0,
-        clipsInRange: clips.length,
-        previousClipsInRange: previousClipsInRange || 0,
-        episodesInRange: episodesInRange || 0,
-        exportsInRange: exportsInRange || 0,
-        avgViralScore: viralCount > 0 ? Math.round(viralTotal / viralCount) : 0,
-        statusBreakdown,
-        typeBreakdown,
-        platformBreakdown,
-        topClips,
-        dailyClips,
+        totalClips: (r.totalClips as number) || 0,
+        totalEpisodes: (r.totalEpisodes as number) || 0,
+        totalExports: (r.totalExports as number) || 0,
+        clipsInRange: (r.clipsInRange as number) || 0,
+        previousClipsInRange: (r.previousClipsInRange as number) || 0,
+        episodesInRange: (r.episodesInRange as number) || 0,
+        exportsInRange: (r.exportsInRange as number) || 0,
+        avgViralScore: (r.avgViralScore as number) || 0,
+        statusBreakdown: (r.statusBreakdown as Record<string, number>) || {},
+        typeBreakdown: (r.typeBreakdown as Record<string, number>) || {},
+        platformBreakdown: (r.platformBreakdown as Record<string, number>) || {},
+        topClips: topClipsRaw.map((c) => ({
+          ...c,
+          viral_score: c.viral_score as ViralScore,
+        })) as Array<Clip & { viral_score: ViralScore }>,
+        dailyClips: dailyRaw.map((d) => ({ date: d.d, count: d.count })),
       });
     } catch (error) {
       console.error('Failed to load analytics:', error);
