@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
@@ -98,9 +98,6 @@ function getModelForTier(tier: ModelTier): VideoModel {
   return tier === 'premium' ? 'veo-3.1-fast' : 'hailuo-2.3-fast';
 }
 
-// FFmpeg-based thumbnail generation
-// For Supabase Edge Functions, we use an external service
-// In a full deployment, you'd run FFmpeg via a Node.js container or use a service
 async function generateThumbnailWithFFmpeg(
   videoUrl: string,
   config: ThumbnailConfig
@@ -109,7 +106,6 @@ async function generateThumbnailWithFFmpeg(
     return null;
   }
 
-  // Option 1: Use the FFmpeg thumbnail service (recommended for Edge Functions)
   const ffmpegServiceUrl = Deno.env.get("FFMPEG_SERVICE_URL") || Deno.env.get("THUMBNAIL_SERVICE_URL");
   const ffmpegServiceKey = Deno.env.get("FFMPEG_SERVICE_KEY") || Deno.env.get("THUMBNAIL_SERVICE_KEY");
 
@@ -141,51 +137,22 @@ async function generateThumbnailWithFFmpeg(
 
       if (response.ok) {
         const data = await response.json();
-        // The service returns base64 data URL, return it directly
         return data.thumbnail;
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("FFmpeg service error:", response.status, errorData);
+        console.error("FFmpeg service error:", response.status);
       }
     } catch (error) {
       console.error("FFmpeg service request error:", error);
     }
   }
 
-  // Option 2: Use Cloudinary for video thumbnails (recommended)
   const cloudinaryCloudName = Deno.env.get("CLOUDINARY_CLOUD_NAME");
   const cloudinaryApiKey = Deno.env.get("CLOUDINARY_API_KEY");
   const cloudinaryApiSecret = Deno.env.get("CLOUDINARY_API_SECRET");
 
   if (cloudinaryCloudName && cloudinaryApiKey && cloudinaryApiSecret) {
     try {
-      // Extract public ID from video URL or use clip_id
-      const publicId = `thumbnail_${Date.now()}`;
-      
-      // Generate transformation URL for Cloudinary
-      // This creates a thumbnail with emoji overlay
-      const transformations = [
-        "w_1280,h_720,c_fill",
-        "q_auto",
-        "so_0", // Start at 0 seconds
-        "du_5", // 5 second duration for animated thumbnail
-      ];
-      
-      if (config.emoji) {
-        // Use Cloudinary text overlay for emoji
-        transformations.push(`l_text:Arial_72:${encodeURIComponent(config.emoji)},fl_layer_apply,g_center`);
-      }
-
-      if (config.overlayText) {
-        transformations.push(`l_text:Arial_36:${encodeURIComponent(config.overlayText)},fl_layer_apply,g_south`);
-      }
-
-      const transformationStr = transformations.join(",");
-      const thumbnailUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/video/upload/${transformationStr}/${encodeURIComponent(videoUrl)}`;
-      
-      // For static thumbnail (not animated)
       const staticThumbnailUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/video/upload/so_2,w_1280,h_720,c_fill,l_text:Arial_72:${encodeURIComponent(config.emoji)},fl_layer_apply,g_center/${encodeURIComponent(videoUrl)}.jpg`;
-      
       return staticThumbnailUrl;
     } catch (error) {
       console.error("Cloudinary error:", error);
@@ -223,7 +190,8 @@ async function generateThumbnailWithFFmpeg(
 
 async function generateWithMiniMax(
   prompt: string,
-  durationSeconds: number,
+  _durationSeconds: number,
+  modelConfig: ModelConfig,
   speechScript?: string
 ): Promise<{ jobId: string }> {
   const apiKey = Deno.env.get("MINIMAX_API_KEY");
@@ -240,7 +208,7 @@ async function generateWithMiniMax(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: modelConfig?.apiModel || "video-01",
+      model: modelConfig.apiModel || "video-01",
       prompt: enhancedPrompt,
       prompt_optimizer: true,
     }),
@@ -402,6 +370,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  let parsedBody: Record<string, unknown> = {};
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -412,18 +382,33 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
+    let authenticatedUserId: string | null = null;
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    if (!isInternalCall) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ error: "Invalid or expired token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      authenticatedUserId = authUser.id;
+    }
 
-    let parsedBody: Record<string, unknown> = {};
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
     const body: GenerateRequest = await req.json();
     parsedBody = body as unknown as Record<string, unknown>;
     const {
       clip_id,
       video_type,
       prompt,
-      negative_prompt,
       duration_seconds,
       model_tier = 'standard',
       speech_script,
@@ -432,7 +417,6 @@ Deno.serve(async (req: Request) => {
       effects,
     } = body;
 
-    // Extract thumbnail config
     const thumbnailConfig: ThumbnailConfig = {
       enabled: effects?.thumbnail?.enabled ?? false,
       style: effects?.thumbnail?.style ?? 'viral',
@@ -456,6 +440,34 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: `Invalid video_type. Must be one of: ${VALID_VIDEO_TYPES.join(", ")}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    if (authenticatedUserId) {
+      if (is_episode_shot && episode_id) {
+        const { data: epCheck } = await supabase
+          .from("episodes")
+          .select("user_id")
+          .eq("id", episode_id)
+          .maybeSingle();
+        if (epCheck?.user_id && epCheck.user_id !== authenticatedUserId) {
+          return new Response(
+            JSON.stringify({ error: "Not found" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        const { data: clipCheck } = await supabase
+          .from("clips")
+          .select("user_id")
+          .eq("id", clip_id)
+          .maybeSingle();
+        if (clipCheck?.user_id && clipCheck.user_id !== authenticatedUserId) {
+          return new Response(
+            JSON.stringify({ error: "Not found" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
     }
 
     const selectedModel = getModelForTier(model_tier);
@@ -486,7 +498,7 @@ Deno.serve(async (req: Request) => {
 
     if (modelConfig.provider === 'minimax' && hasMinimaxKey) {
       try {
-        const { jobId } = await generateWithMiniMax(prompt, duration_seconds, speech_script);
+        const { jobId } = await generateWithMiniMax(prompt, duration_seconds, modelConfig, speech_script);
 
         await supabase
           .from(is_episode_shot ? "episode_shots" : "clips")
@@ -551,17 +563,16 @@ Deno.serve(async (req: Request) => {
             const stitchResp = await fetch(`${supabaseUrl}/functions/v1/stitch-episode`, {
               method: "POST",
               headers: {
-                "Authorization": `Bearer ${supabaseKey}`,
+                "Authorization": `Bearer ${serviceRoleKey}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({ episode_id }),
             });
             if (!stitchResp.ok) {
-              const errText = await stitchResp.text();
-              await supabase.from("episodes").update({ status: "error", error: `Stitch failed: ${errText}` }).eq("id", episode_id);
+              await supabase.from("episodes").update({ status: "error", error: "Stitch trigger failed" }).eq("id", episode_id);
             }
-          } catch (stitchErr) {
-            await supabase.from("episodes").update({ status: "error", error: `Stitch failed: ${stitchErr instanceof Error ? stitchErr.message : "Unknown"}` }).eq("id", episode_id);
+          } catch {
+            await supabase.from("episodes").update({ status: "error", error: "Stitch trigger failed" }).eq("id", episode_id);
           }
         }
       }
@@ -612,8 +623,6 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Generation error:", error);
 
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -624,35 +633,26 @@ Deno.serve(async (req: Request) => {
         if (body.is_episode_shot) {
           await supabase
             .from("episode_shots")
-            .update({
-              status: "error",
-              error: errorMessage,
-            })
+            .update({ status: "error", error: "Generation failed" })
             .eq("id", body.clip_id);
 
           if (body.episode_id) {
             await supabase
               .from("episodes")
-              .update({
-                status: "error",
-                error: `Shot generation failed: ${errorMessage}`,
-              })
+              .update({ status: "error", error: "Shot generation failed" })
               .eq("id", body.episode_id);
           }
         } else {
           await supabase
             .from("clips")
-            .update({
-              status: "error",
-              error: errorMessage,
-            })
+            .update({ status: "error", error: "Generation failed" })
             .eq("id", body.clip_id);
         }
       }
-    } catch {}
+    } catch { /* best effort cleanup */ }
 
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "Video generation failed" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

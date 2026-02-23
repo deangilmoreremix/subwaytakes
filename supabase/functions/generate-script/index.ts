@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
@@ -445,14 +445,10 @@ function generateFallbackScript(
 }
 
 async function loadSystemPromptFromDB(
+  supabase: ReturnType<typeof createClient>,
   videoType: VideoType
 ): Promise<SystemPromptRow | null> {
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !supabaseKey) return null;
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
     const { data } = await supabase
       .from("system_prompts")
       .select("*")
@@ -493,6 +489,26 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
+
+    if (!isInternalCall) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ error: "Invalid or expired token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
     const body: ScriptRequest = await req.json();
     const { topic, video_type = "subway_interview" } = body;
 
@@ -523,7 +539,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const dbPrompt = await loadSystemPromptFromDB(video_type);
+    const dbPrompt = await loadSystemPromptFromDB(supabase, video_type);
 
     const systemPrompt = dbPrompt
       ? dbPrompt.system_prompt
@@ -564,8 +580,7 @@ Deno.serve(async (req: Request) => {
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenAI API error:", errorText);
+      console.error("OpenAI API error:", response.status);
       const fallback = generateFallbackScript(video_type, topic);
       return new Response(JSON.stringify({ ...fallback, source: "fallback" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -587,8 +602,7 @@ Deno.serve(async (req: Request) => {
       } else {
         throw new Error("No JSON found in response");
       }
-    } catch (parseError) {
-      console.error("Parse error:", parseError, "Content:", content);
+    } catch {
       const fallback = generateFallbackScript(video_type, topic);
       return new Response(JSON.stringify({ ...fallback, source: "fallback" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -621,9 +635,7 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     console.error("Generate script error:", error);
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

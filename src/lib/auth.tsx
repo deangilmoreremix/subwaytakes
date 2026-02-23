@@ -36,22 +36,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function buildGuestProfile(): UserProfile {
-  const guestId = getGuestId();
-  const now = new Date().toISOString();
-  return {
-    id: guestId,
-    display_name: 'Guest',
-    avatar_url: null,
-    default_city_style: 'nyc',
-    default_duration: 6,
-    credits_balance: 100,
-    subscription_tier: 'free',
-    created_at: now,
-    updated_at: now,
-  };
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -59,12 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
 
-  const handleAuthUser = useCallback(async (authUser: User, isNewLogin: boolean) => {
+  const initAuth = useCallback(async (authUser: User) => {
     setCurrentAuthUser(authUser.id);
-    setIsGuest(false);
-    if (isNewLogin) {
-      await migrateGuestDataToUser(authUser.id);
-    }
+    setIsGuest(authUser.is_anonymous ?? false);
     await fetchProfile(authUser.id);
   }, []);
 
@@ -73,11 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        setCurrentAuthUser(s.user.id);
-        fetchProfile(s.user.id);
+        initAuth(s.user);
       } else {
-        setCurrentAuthUser(null);
-        activateGuestMode();
+        startAnonymousSession();
       }
     });
 
@@ -85,23 +64,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        const isNewLogin = event === 'SIGNED_IN';
         (async () => {
-          await handleAuthUser(s.user, isNewLogin);
+          await initAuth(s.user);
         })().catch(console.error);
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setCurrentAuthUser(null);
-        activateGuestMode();
+        startAnonymousSession();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [handleAuthUser]);
+  }, [initAuth]);
 
-  function activateGuestMode() {
-    setIsGuest(true);
-    setProfile(buildGuestProfile());
-    setLoading(false);
+  async function startAnonymousSession() {
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) {
+      setLoading(false);
+    }
   }
 
   async function fetchProfile(userId: string) {
@@ -137,6 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signUp(email: string, password: string) {
+    if (user?.is_anonymous) {
+      const { error } = await supabase.auth.updateUser({ email, password });
+      if (error) return { error: error.message };
+      setIsGuest(false);
+      return { error: null };
+    }
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message };
     return { error: null };
@@ -151,14 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     setCurrentAuthUser(null);
     await supabase.auth.signOut();
-    activateGuestMode();
   }
 
   async function updateProfile(updates: Partial<UserProfile>) {
-    if (isGuest) {
-      setProfile(prev => prev ? { ...prev, ...updates, updated_at: new Date().toISOString() } : null);
-      return { error: null };
-    }
     if (!user) return { error: 'Not authenticated' };
     const { error } = await supabase
       .from('user_profiles')
@@ -169,18 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }
 
-  async function deductCredits(amount: number, description: string): Promise<boolean> {
+  async function deductCredits(amount: number, _description: string): Promise<boolean> {
     if (!profile || profile.credits_balance < amount) return false;
-    if (isGuest) {
-      const guestKey = `guest_credits_${getUserId()}`;
-      const stored = localStorage.getItem(guestKey);
-      const currentBalance = stored !== null ? Number(stored) : profile.credits_balance;
-      if (currentBalance < amount) return false;
-      const newBalance = currentBalance - amount;
-      localStorage.setItem(guestKey, String(newBalance));
-      setProfile(prev => prev ? { ...prev, credits_balance: newBalance } : null);
-      return true;
-    }
     const { data, error } = await supabase
       .rpc('deduct_credits', { p_user_id: profile.id, p_amount: amount });
     if (error || data === false) return false;
@@ -215,43 +185,5 @@ export function useAuth() {
 
 export function getUserId(): string {
   if (_currentAuthUserId) return _currentAuthUserId;
-  const stored = localStorage.getItem('clip_user_id');
-  if (stored) return stored;
-  const newId = crypto.randomUUID();
-  localStorage.setItem('clip_user_id', newId);
-  return newId;
-}
-
-export function getGuestId(): string {
-  const stored = localStorage.getItem('clip_user_id');
-  if (stored) return stored;
-  const newId = crypto.randomUUID();
-  localStorage.setItem('clip_user_id', newId);
-  return newId;
-}
-
-const TABLES_WITH_USER_ID = [
-  'clips',
-  'episodes',
-  'episode_scripts',
-  'character_bibles',
-  'compilations',
-  'video_exports',
-] as const;
-
-export async function migrateGuestDataToUser(authUserId: string): Promise<void> {
-  const guestId = localStorage.getItem('clip_user_id');
-  if (!guestId || guestId === authUserId) return;
-
-  for (const table of TABLES_WITH_USER_ID) {
-    const { error } = await supabase
-      .from(table)
-      .update({ user_id: authUserId })
-      .eq('user_id', guestId);
-    if (error) {
-      console.error(`Failed to migrate ${table}:`, error);
-    }
-  }
-
-  localStorage.removeItem('clip_user_id');
+  return '';
 }

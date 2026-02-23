@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
@@ -490,6 +490,28 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
+    let authenticatedUserId: string | null = null;
+
+    if (!isInternalCall) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ error: "Invalid or expired token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      authenticatedUserId = authUser.id;
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
     const body: BuildPromptRequest = await req.json();
     const { video_type, topic, duration_seconds } = body;
 
@@ -512,10 +534,6 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { data: templates } = await supabase
       .from("prompt_templates")
@@ -596,30 +614,23 @@ Deno.serve(async (req: Request) => {
       source: "backend",
     };
 
-    if (authHeader) {
-      const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
+    if (authenticatedUserId) {
+      await supabase.from("prompt_generation_logs").insert({
+        user_id: authenticatedUserId,
+        video_type,
+        template_id: template.id,
+        input_params: body,
+        generated_prompt: provider_prompt,
+        source: "backend",
       });
-      const { data: { user } } = await userClient.auth.getUser();
-      if (user) {
-        await supabase.from("prompt_generation_logs").insert({
-          user_id: user.id,
-          video_type,
-          template_id: template.id,
-          input_params: body,
-          generated_prompt: provider_prompt,
-          source: "backend",
-        });
-      }
     }
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Build prompt error:", message);
-    return new Response(JSON.stringify({ error: message, source: "error" }), {
+    console.error("Build prompt error:", error);
+    return new Response(JSON.stringify({ error: "Internal server error", source: "error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

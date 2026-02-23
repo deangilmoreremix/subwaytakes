@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
@@ -400,6 +400,23 @@ async function getTemplate(
   };
 }
 
+async function verifyOwnership(
+  supabase: ReturnType<typeof createClient>,
+  table: string,
+  id: string,
+  userId: string | null
+): Promise<boolean> {
+  if (!userId) return true;
+  const { data } = await supabase
+    .from(table)
+    .select("user_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return false;
+  if (data.user_id && data.user_id !== userId) return false;
+  return true;
+}
+
 async function handleEpisodeCompose(
   supabase: ReturnType<typeof createClient>,
   episodeId: string
@@ -787,8 +804,26 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
+    let authenticatedUserId: string | null = null;
+
+    if (!isInternalCall) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ error: "Invalid or expired token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      authenticatedUserId = authUser.id;
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const body: ComposeRequest = await req.json();
 
@@ -800,6 +835,29 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    if (body.episode_id) {
+      if (!(await verifyOwnership(supabase, "episodes", body.episode_id, authenticatedUserId))) {
+        return new Response(
+          JSON.stringify({ error: "Not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else if (body.clip_id) {
+      if (!(await verifyOwnership(supabase, "clips", body.clip_id, authenticatedUserId))) {
+        return new Response(
+          JSON.stringify({ error: "Not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else if (body.compilation_id) {
+      if (!(await verifyOwnership(supabase, "compilations", body.compilation_id, authenticatedUserId))) {
+        return new Response(
+          JSON.stringify({ error: "Not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     let result;
@@ -818,9 +876,7 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     console.error("Compose overlay error:", err);
     return new Response(
-      JSON.stringify({
-        error: err instanceof Error ? err.message : "Unknown error",
-      }),
+      JSON.stringify({ error: "Overlay composition failed" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

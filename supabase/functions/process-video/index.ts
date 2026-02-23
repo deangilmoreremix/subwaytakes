@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
@@ -40,6 +40,15 @@ function serviceHeaders(serviceKey: string | undefined): Record<string, string> 
     headers["Authorization"] = `Bearer ${serviceKey}`;
   }
   return headers;
+}
+
+function isValidVideoUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 async function uploadBase64ToStorage(
@@ -102,6 +111,24 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
+
+    if (!isInternalCall) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ error: "Invalid or expired token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const body: ProcessVideoRequest = await req.json();
     const { operation, videoUrls, videoUrl, options } = body;
 
@@ -115,7 +142,25 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let result: any;
+    if (videoUrl && !isValidVideoUrl(videoUrl)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid video URL" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (videoUrls) {
+      for (const u of videoUrls) {
+        if (!isValidVideoUrl(u)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid video URL in list" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
+
+    let result: Record<string, unknown>;
 
     switch (operation) {
       case 'thumbnail':
@@ -152,9 +197,8 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     console.error("Video processing error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "Video processing failed" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -184,8 +228,7 @@ async function generateThumbnail(
     });
 
     if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
-      throw new Error(`Thumbnail generation failed: ${response.status} ${errBody}`);
+      throw new Error(`Thumbnail generation failed: ${response.status}`);
     }
 
     const data = await response.json();
@@ -220,8 +263,7 @@ async function stitchVideos(
     });
 
     if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
-      throw new Error(`Video stitching failed: ${response.status} ${errBody}`);
+      throw new Error(`Video stitching failed: ${response.status}`);
     }
 
     const data = await response.json();
@@ -260,8 +302,7 @@ async function addCaptions(
     });
 
     if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
-      throw new Error(`Caption addition failed: ${response.status} ${errBody}`);
+      throw new Error(`Caption addition failed: ${response.status}`);
     }
 
     const data = await response.json();
@@ -301,8 +342,7 @@ async function convertVideo(
     });
 
     if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
-      throw new Error(`Video conversion failed: ${response.status} ${errBody}`);
+      throw new Error(`Video conversion failed: ${response.status}`);
     }
 
     const data = await response.json();
@@ -341,8 +381,7 @@ async function trimVideo(
     });
 
     if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
-      throw new Error(`Video trimming failed: ${response.status} ${errBody}`);
+      throw new Error(`Video trimming failed: ${response.status}`);
     }
 
     const data = await response.json();
@@ -365,7 +404,7 @@ async function trimVideo(
 
 async function getVideoInfo(
   videoUrl: string
-): Promise<{ info: any }> {
+): Promise<{ info: Record<string, unknown> }> {
   const { serviceUrl, serviceKey } = getServiceConfig();
 
   if (serviceUrl) {
@@ -376,8 +415,7 @@ async function getVideoInfo(
     });
 
     if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
-      throw new Error(`Video info failed: ${response.status} ${errBody}`);
+      throw new Error(`Video info failed: ${response.status}`);
     }
 
     const data = await response.json();

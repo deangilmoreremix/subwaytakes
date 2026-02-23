@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
@@ -99,6 +99,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  let parsedBody: Record<string, unknown> = {};
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -109,10 +111,27 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
+    let authenticatedUserId: string | null = null;
 
-    let parsedBody: Record<string, unknown> = {};
+    if (!isInternalCall) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ error: "Invalid or expired token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      authenticatedUserId = authUser.id;
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
     const body: StitchRequest = await req.json();
     parsedBody = body as unknown as Record<string, unknown>;
     const { episode_id } = body;
@@ -124,6 +143,19 @@ Deno.serve(async (req: Request) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+
+    const { data: episode } = await supabase
+      .from("episodes")
+      .select("user_id")
+      .eq("id", episode_id)
+      .maybeSingle();
+
+    if (authenticatedUserId && episode?.user_id && episode.user_id !== authenticatedUserId) {
+      return new Response(
+        JSON.stringify({ error: "Not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -285,8 +317,6 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Stitch error:", error);
 
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
     try {
       const body = parsedBody || {};
       if (body.episode_id) {
@@ -296,16 +326,13 @@ Deno.serve(async (req: Request) => {
 
         await supabase
           .from("episodes")
-          .update({
-            status: "error",
-            error: errorMessage,
-          })
+          .update({ status: "error", error: "Stitching failed" })
           .eq("id", body.episode_id);
       }
-    } catch {}
+    } catch { /* best effort */ }
 
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "Episode stitching failed" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
