@@ -45,7 +45,10 @@ function serviceHeaders(serviceKey: string | undefined): Record<string, string> 
 function isValidVideoUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
+    if (parsed.protocol !== "https:") return false;
+    const hostname = parsed.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname.startsWith("10.") || hostname.startsWith("172.") || hostname.startsWith("192.168.") || hostname === "169.254.169.254") return false;
+    return true;
   } catch {
     return false;
   }

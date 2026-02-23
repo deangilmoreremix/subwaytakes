@@ -184,12 +184,13 @@ export async function updateCompilationStatus(
   status: CompilationStatus,
   updates?: Partial<Pick<Compilation, 'final_video_url' | 'caption_file_url' | 'thumbnail_url' | 'error' | 'completed_at'>>
 ): Promise<Compilation> {
-  const { data, error } = await supabase
+  const userId = getUserId();
+  const query = supabase
     .from('compilations')
     .update({ status, ...updates })
-    .eq('id', id)
-    .select()
-    .single();
+    .eq('id', id);
+  if (userId) query.eq('user_id', userId);
+  const { data, error } = await query.select().single();
 
   if (error) throw new Error(error.message);
   return data as Compilation;

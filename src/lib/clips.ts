@@ -633,12 +633,13 @@ export async function updateClipStatus(
   status: Clip['status'],
   updates?: Partial<Pick<Clip, 'result_url' | 'error' | 'provider_job_id'>>
 ): Promise<Clip> {
-  const { data, error } = await supabase
+  const userId = getUserId();
+  const query = supabase
     .from('clips')
     .update({ status, ...updates })
-    .eq('id', id)
-    .select()
-    .single();
+    .eq('id', id);
+  if (userId) query.eq('user_id', userId);
+  const { data, error } = await query.select().single();
 
   if (error) throw new Error(error.message);
   return data as Clip;
@@ -683,6 +684,27 @@ export async function regenerateClip(
       subject_demographic: original.subject_demographic,
       subject_gender: original.subject_gender,
       subject_style: original.subject_style,
+      subway_line: original.subway_line,
+      subway_enhancements: original.subway_enhancements,
+      neighborhood: original.neighborhood,
+      street_enhancements: original.street_enhancements,
+      motivational_enhancements: original.motivational_enhancements,
+      speaker_archetype: original.speaker_archetype,
+      target_age_group: original.target_age_group,
+      language: original.language,
+      niche: original.niche,
+      interview_format: original.interview_format,
+      duration_preset: original.duration_preset,
+      caption_style: original.caption_style,
+      export_platforms: original.export_platforms,
+      product_placement: original.product_placement,
+      custom_location: original.custom_location,
+      scenario_description: original.scenario_description,
+      social_dynamics: original.social_dynamics,
+      studio_setup: original.studio_setup,
+      studio_lighting: original.studio_lighting,
+      template_id: original.template_id,
+      effects: original.effects,
       provider: modelTier === 'premium' ? 'google' : 'minimax',
       status: 'queued',
       provider_prompt: providerPrompt,

@@ -76,6 +76,7 @@ export const AGE_GROUP_RATINGS: Record<AgeGroup, ContentRating[]> = {
 
 // Get the strictness level of an age group
 export function getAgeGroupStrictness(ageGroup: AgeGroup): number {
+  if (ageGroup === 'all_ages') return 0;
   return AGE_GROUP_HIERARCHY.indexOf(ageGroup);
 }
 
@@ -84,9 +85,9 @@ export function isContentAgeAppropriate(
   content: { ageGroups?: AgeGroup[]; contentRating?: ContentRating },
   ageGroup: AgeGroup
 ): boolean {
-  // If content has specific age groups defined, check against them
   if (content.ageGroups && content.ageGroups.length > 0) {
-    return content.ageGroups.includes(ageGroup) || ageGroup === 'all_ages';
+    if (ageGroup === 'all_ages') return content.ageGroups.includes('kids');
+    return content.ageGroups.includes(ageGroup);
   }
   
   // If content has a rating, check against allowed ratings

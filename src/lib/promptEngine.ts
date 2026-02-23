@@ -258,6 +258,7 @@ const CITY_VISUAL_CUES: Record<CityStyle, string> = {
   tokyo: `Tokyo Metro aesthetic, ultra-clean platforms, organized queuing lines on floor, digital screens, bright white lighting, orderly commuters.\n\nINTERVIEWER CARD MIC: Hold Suica/ICOCA/Pasmo - thin RFID card, quick tap motion between thumb and finger. Card shows cute character design.`,
   paris: `Paris Metro aesthetic, Art Nouveau entrance style, dark green railings, vintage tilework, Metropolitain signage, narrow platforms.\n\nINTERVIEWER CARD MIC: Hold Navigo card - rectangular card with weekly/monthly pass display window, displayed to show validation strip. Classic French transit card handling.`,
   generic: `Generic modern urban subway station, concrete pillars, fluorescent lighting, standard transit infrastructure.\n\nINTERVIEWER CARD MIC: Hold generic transit card - plain rectangular card without prominent branding, used as microphone.`,
+  custom: `Modern urban transit station, clean platform, standard transit infrastructure, fluorescent lighting.\n\nINTERVIEWER CARD MIC: Hold generic transit card - plain rectangular card, used as microphone.`,
 };
 
 const ENERGY_DESCRIPTIONS: Record<EnergyLevel, string> = {

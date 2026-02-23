@@ -197,7 +197,7 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
     currentStep, totalSteps, goToStep, nextStep, prevStep,
     showAdvanced, setShowAdvanced,
     topic, setTopic,
-    duration, setDuration,
+    duration, setDuration, durationSeconds: duration,
     angle, setAngle,
     status, errorMessage,
     modelTier, setModelTier,
