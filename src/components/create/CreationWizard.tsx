@@ -83,22 +83,15 @@ export function CreationWizard({ clip, steps, children, accentColor = 'amber', o
         </button>
       </div>
 
-      <div className="relative overflow-hidden">
-        {children.map((child, i) => (
-          <div
-            key={i}
-            className={`transition-all duration-300 ease-in-out ${
-              i === clip.currentStep
-                ? 'opacity-100 translate-x-0'
-                : i < clip.currentStep
-                  ? 'opacity-0 -translate-x-8 absolute inset-0 pointer-events-none'
-                  : 'opacity-0 translate-x-8 absolute inset-0 pointer-events-none'
-            }`}
-            style={{ display: i === clip.currentStep ? 'block' : 'none' }}
-          >
-            {child}
-          </div>
-        ))}
+      <div className="relative">
+        {children.map((child, i) => {
+          if (i !== clip.currentStep) return null;
+          return (
+            <div key={i}>
+              {child}
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex items-center justify-between mt-8 pt-6 border-t border-zinc-800">
@@ -117,9 +110,10 @@ export function CreationWizard({ clip, steps, children, accentColor = 'amber', o
             <button
               type="button"
               onClick={onGenerate}
-              className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-black rounded-xl ${accent.btnBg} ${accent.btnHover} transition-all`}
+              disabled={clip.busy}
+              className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-black rounded-xl ${accent.btnBg} ${accent.btnHover} transition-all disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              Generate
+              {clip.busy ? 'Working...' : 'Generate'}
               <Zap className="w-4 h-4" />
             </button>
           ) : (
