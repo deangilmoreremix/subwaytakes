@@ -250,14 +250,17 @@ export async function updateEpisodeStatus(
   updates?: Partial<Pick<Episode, 'final_video_url' | 'caption_file_url' | 'thumbnail_url' | 'error' | 'completed_at'>>
 ): Promise<Episode> {
   const userId = getUserId();
-  const query = supabase
+  if (!userId) throw new Error('Not authenticated');
+  const { data, error } = await supabase
     .from('episodes')
     .update({ status, ...updates })
-    .eq('id', id);
-  if (userId) query.eq('user_id', userId);
-  const { data, error } = await query.select().single();
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select()
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!data) throw new Error('Episode not found or access denied');
   return data as Episode;
 }
 

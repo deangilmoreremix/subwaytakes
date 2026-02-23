@@ -634,14 +634,17 @@ export async function updateClipStatus(
   updates?: Partial<Pick<Clip, 'result_url' | 'error' | 'provider_job_id'>>
 ): Promise<Clip> {
   const userId = getUserId();
-  const query = supabase
+  if (!userId) throw new Error('Not authenticated');
+  const { data, error } = await supabase
     .from('clips')
     .update({ status, ...updates })
-    .eq('id', id);
-  if (userId) query.eq('user_id', userId);
-  const { data, error } = await query.select().single();
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select()
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!data) throw new Error('Clip not found or access denied');
   return data as Clip;
 }
 

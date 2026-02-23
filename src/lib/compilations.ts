@@ -185,14 +185,17 @@ export async function updateCompilationStatus(
   updates?: Partial<Pick<Compilation, 'final_video_url' | 'caption_file_url' | 'thumbnail_url' | 'error' | 'completed_at'>>
 ): Promise<Compilation> {
   const userId = getUserId();
-  const query = supabase
+  if (!userId) throw new Error('Not authenticated');
+  const { data, error } = await supabase
     .from('compilations')
     .update({ status, ...updates })
-    .eq('id', id);
-  if (userId) query.eq('user_id', userId);
-  const { data, error } = await query.select().single();
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select()
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!data) throw new Error('Compilation not found or access denied');
   return data as Compilation;
 }
 
@@ -200,13 +203,11 @@ export async function reorderCompilationClips(
   compilationId: string,
   orderedClipIds: string[]
 ): Promise<void> {
-  for (let i = 0; i < orderedClipIds.length; i++) {
-    await supabase
-      .from('compilation_clips')
-      .update({ sequence: i + 1 })
-      .eq('compilation_id', compilationId)
-      .eq('clip_id', orderedClipIds[i]);
-  }
+  const { error } = await supabase.rpc('reorder_compilation_clips', {
+    p_compilation_id: compilationId,
+    p_ordered_clip_ids: orderedClipIds,
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function addClipToCompilation(compilationId: string, clipId: string): Promise<void> {
@@ -241,17 +242,12 @@ export async function removeClipFromCompilation(compilationId: string, clipId: s
 
   const { data: remaining } = await supabase
     .from('compilation_clips')
-    .select('id, clip_id')
+    .select('clip_id')
     .eq('compilation_id', compilationId)
     .order('sequence', { ascending: true });
 
-  if (remaining) {
-    for (let i = 0; i < remaining.length; i++) {
-      await supabase
-        .from('compilation_clips')
-        .update({ sequence: i + 1 })
-        .eq('id', remaining[i].id);
-    }
+  if (remaining && remaining.length > 0) {
+    await reorderCompilationClips(compilationId, remaining.map(r => r.clip_id));
   }
 }
 

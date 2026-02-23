@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
   ClipType,
@@ -41,6 +41,13 @@ export interface WizardStepDef {
 
 export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) {
   const navigate = useNavigate();
+  const navTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    return () => {
+      if (navTimerRef.current) clearTimeout(navTimerRef.current);
+    };
+  }, []);
 
   const totalSteps = stepDefs?.length ?? 1;
   const [currentStep, setCurrentStep] = useState(0);
@@ -179,11 +186,11 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
       if (batchMode && clipType === 'subway_interview') {
         const clips = await createClipBatch(options, batchSize);
         setStatus('generating');
-        setTimeout(() => navigate('/clips/' + clips[0].id), 500);
+        navTimerRef.current = setTimeout(() => navigate('/clips/' + clips[0].id), 500);
       } else {
         const clip = await createClip(options);
         setStatus('generating');
-        setTimeout(() => navigate('/clips/' + clip.id), 500);
+        navTimerRef.current = setTimeout(() => navigate('/clips/' + clip.id), 500);
       }
     } catch (error) {
       setStatus('error');

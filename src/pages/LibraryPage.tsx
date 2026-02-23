@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Search, RefreshCw, Layers, Grid, Film, Clapperboard, Scissors, Clock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { FilterTabs } from '../components/FilterTabs';
@@ -28,6 +28,8 @@ export function LibraryPage() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [contentMode, setContentMode] = useState<ContentMode>('clips');
+  const fetchIdRef = useRef(0);
+  const pollingRef = useRef(false);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -37,10 +39,12 @@ export function LibraryPage() {
   }, [searchQuery]);
 
   const fetchContent = useCallback(async () => {
-    setLoading(true);
+    const id = ++fetchIdRef.current;
+    if (!pollingRef.current) setLoading(true);
     try {
       if (contentMode === 'compilations') {
         const compData = await listCompilations({ limit: 20 });
+        if (id !== fetchIdRef.current) return;
         setCompilations(compData);
         setClips([]);
         setBatches(new Map());
@@ -48,6 +52,7 @@ export function LibraryPage() {
         setEpisodes([]);
       } else if (contentMode === 'episodes') {
         const episodeData = await listEpisodes({ limit: 20 });
+        if (id !== fetchIdRef.current) return;
         setEpisodes(episodeData);
         setClips([]);
         setBatches(new Map());
@@ -58,6 +63,7 @@ export function LibraryPage() {
           type: typeFilter,
           search: debouncedSearchQuery || undefined,
         });
+        if (id !== fetchIdRef.current) return;
         setBatches(batchData);
         setSingles(singlesData);
         setClips([]);
@@ -69,6 +75,7 @@ export function LibraryPage() {
           search: debouncedSearchQuery || undefined,
           limit: 50,
         });
+        if (id !== fetchIdRef.current) return;
         setClips(data);
         setBatches(new Map());
         setSingles([]);
@@ -76,45 +83,36 @@ export function LibraryPage() {
         setCompilations([]);
       }
     } catch (error) {
+      if (id !== fetchIdRef.current) return;
       console.error('Failed to fetch content:', error);
     } finally {
-      setLoading(false);
+      if (id === fetchIdRef.current) setLoading(false);
     }
   }, [typeFilter, debouncedSearchQuery, viewMode, contentMode]);
 
   useEffect(() => {
+    pollingRef.current = false;
     fetchContent();
   }, [fetchContent]);
 
   useEffect(() => {
+    let hasProcessing = false;
     if (contentMode === 'compilations') {
-      const hasProcessing = compilations.some(
-        (c) => c.status === 'queued' || c.status === 'stitching'
-      );
-      if (!hasProcessing) return;
-      const interval = setInterval(fetchContent, 5000);
-      return () => clearInterval(interval);
+      hasProcessing = compilations.some(c => c.status === 'queued' || c.status === 'stitching');
     } else if (contentMode === 'episodes') {
-      const hasGenerating = episodes.some(
-        (e) => e.status === 'queued' || e.status === 'generating' || e.status === 'stitching'
-      );
-      if (!hasGenerating) return;
-      const interval = setInterval(fetchContent, 5000);
-      return () => clearInterval(interval);
+      hasProcessing = episodes.some(e => e.status === 'queued' || e.status === 'generating' || e.status === 'stitching');
     } else {
       const allClips = viewMode === 'grouped'
         ? [...Array.from(batches.values()).flat(), ...singles]
         : clips;
-
-      const hasGenerating = allClips.some(
-        (c) => c.status === 'queued' || c.status === 'running'
-      );
-
-      if (!hasGenerating) return;
-
-      const interval = setInterval(fetchContent, 5000);
-      return () => clearInterval(interval);
+      hasProcessing = allClips.some(c => c.status === 'queued' || c.status === 'running');
     }
+    if (!hasProcessing) return;
+    const interval = setInterval(() => {
+      pollingRef.current = true;
+      fetchContent();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [clips, batches, singles, episodes, compilations, viewMode, contentMode, fetchContent]);
 
   const totalClips = viewMode === 'grouped'

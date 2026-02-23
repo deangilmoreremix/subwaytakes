@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { supabase } from './supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -43,47 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
 
-  const initAuth = useCallback(async (authUser: User) => {
-    setCurrentAuthUser(authUser.id);
-    setIsGuest(authUser.is_anonymous ?? false);
-    await fetchProfile(authUser.id);
-  }, []);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        initAuth(s.user);
-      } else {
-        startAnonymousSession();
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        (async () => {
-          await initAuth(s.user);
-        })().catch(console.error);
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentAuthUser(null);
-        startAnonymousSession();
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [initAuth]);
-
-  async function startAnonymousSession() {
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) {
-      setLoading(false);
-    }
-  }
-
-  async function fetchProfile(userId: string) {
+  const fetchProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from('user_profiles')
       .select('*')
@@ -107,15 +67,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(data);
     }
     setLoading(false);
-  }
+  }, []);
 
-  async function refreshProfile() {
-    if (user) {
-      await fetchProfile(user.id);
-    }
-  }
+  const initAuth = useCallback(async (authUser: User) => {
+    setCurrentAuthUser(authUser.id);
+    setIsGuest(authUser.is_anonymous ?? false);
+    await fetchProfile(authUser.id);
+  }, [fetchProfile]);
 
-  async function signUp(email: string, password: string) {
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      setUser(s?.user ?? null);
+      if (s?.user) {
+        (async () => {
+          await initAuth(s.user);
+        })().catch(console.error);
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentAuthUser(null);
+        setProfile(null);
+        setIsGuest(false);
+      }
+    });
+
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      setUser(s?.user ?? null);
+      if (s?.user) {
+        initAuth(s.user);
+      } else {
+        supabase.auth.signInAnonymously().then(({ error }) => {
+          if (error) setLoading(false);
+        });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [initAuth]);
+
+  const signUp = useCallback(async (email: string, password: string) => {
     if (user?.is_anonymous) {
       const { error } = await supabase.auth.updateUser({ email, password });
       if (error) return { error: error.message };
@@ -125,53 +115,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message };
     return { error: null };
-  }
+  }, [user]);
 
-  async function signIn(email: string, password: string) {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
     return { error: null };
-  }
+  }, []);
 
-  async function signOut() {
+  const handleSignOut = useCallback(async () => {
     setCurrentAuthUser(null);
     await supabase.auth.signOut();
-  }
+  }, []);
 
-  async function updateProfile(updates: Partial<UserProfile>) {
+  const refreshProfile = useCallback(async () => {
+    if (user) {
+      await fetchProfile(user.id);
+    }
+  }, [user, fetchProfile]);
+
+  const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user) return { error: 'Not authenticated' };
     const { error } = await supabase
       .from('user_profiles')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', user.id);
     if (error) return { error: error.message };
-    await refreshProfile();
+    await fetchProfile(user.id);
     return { error: null };
-  }
+  }, [user, fetchProfile]);
 
-  async function deductCredits(amount: number, _description: string): Promise<boolean> {
+  const deductCredits = useCallback(async (amount: number, _description: string): Promise<boolean> => {
     if (!profile || profile.credits_balance < amount) return false;
     const { data, error } = await supabase
       .rpc('deduct_credits', { p_user_id: profile.id, p_amount: amount });
     if (error || data === false) return false;
-    await refreshProfile();
+    if (user) await fetchProfile(user.id);
     return true;
-  }
+  }, [profile, user, fetchProfile]);
+
+  const value = useMemo(() => ({
+    user,
+    session,
+    profile,
+    loading,
+    isGuest,
+    signUp,
+    signIn,
+    signOut: handleSignOut,
+    refreshProfile,
+    updateProfile,
+    deductCredits,
+  }), [user, session, profile, loading, isGuest, signUp, signIn, handleSignOut, refreshProfile, updateProfile, deductCredits]);
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      session,
-      profile,
-      loading,
-      isGuest,
-      signUp,
-      signIn,
-      signOut,
-      refreshProfile,
-      updateProfile,
-      deductCredits,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
