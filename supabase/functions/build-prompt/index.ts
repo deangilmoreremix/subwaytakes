@@ -39,6 +39,13 @@ interface BuildPromptRequest {
   wisdom_setting?: string;
   target_age_group?: string;
   interview_mode?: string;
+  custom_location?: string;
+  scenario_description?: string;
+  social_dynamics?: {
+    crowdReaction?: string;
+    passerbyInteraction?: string;
+    bodyLanguage?: string;
+  };
 }
 
 interface BuildPromptResponse {
@@ -164,12 +171,45 @@ function buildCharacterDescription(
   return parts.join("\n");
 }
 
+function buildLocationContext(
+  fragments: PromptFragment[],
+  req: BuildPromptRequest,
+  category: string,
+  defaultKey: string
+): string {
+  if (req.custom_location && req.city_style === "custom") {
+    return req.custom_location;
+  }
+  return lookupFragment(fragments, category, req.city_style || defaultKey);
+}
+
+function buildScenarioContext(req: BuildPromptRequest): string {
+  if (!req.scenario_description) return "";
+  return `\n\nSCENARIO: ${req.scenario_description}`;
+}
+
+function buildSocialDynamicsContext(req: BuildPromptRequest): string {
+  if (!req.social_dynamics) return "";
+  const parts: string[] = [];
+  if (req.social_dynamics.crowdReaction) {
+    parts.push(`crowd reaction: ${req.social_dynamics.crowdReaction}`);
+  }
+  if (req.social_dynamics.passerbyInteraction) {
+    parts.push(`passerby interaction: ${req.social_dynamics.passerbyInteraction}`);
+  }
+  if (req.social_dynamics.bodyLanguage) {
+    parts.push(`body language: ${req.social_dynamics.bodyLanguage}`);
+  }
+  if (parts.length === 0) return "";
+  return `\n\nSOCIAL DYNAMICS: ${parts.join(", ")}.`;
+}
+
 function assembleSubwayPrompt(
   template: PromptTemplate,
   fragments: PromptFragment[],
   req: BuildPromptRequest
 ): string {
-  const cityContent = lookupFragment(fragments, "city", req.city_style || "nyc");
+  const cityContent = buildLocationContext(fragments, req, "city", "nyc");
   const sceneContent = lookupFragment(
     fragments,
     "scene",
@@ -200,6 +240,9 @@ function assembleSubwayPrompt(
     .replace("{{question_context}}", questionContext)
     .replace("{{energy_description}}", energyContent);
 
+  prompt += buildScenarioContext(req);
+  prompt += buildSocialDynamicsContext(req);
+
   if (req.angle_prompt) {
     prompt += `\n\nSpecific creative direction: ${req.angle_prompt}`;
   }
@@ -217,6 +260,9 @@ function assembleStreetPrompt(
     "scene",
     req.street_scene || "busy_sidewalk"
   );
+  const locationContent = req.custom_location
+    ? req.custom_location
+    : sceneContent;
   const interviewStyleContent = lookupFragment(
     fragments,
     "interview_style",
@@ -236,12 +282,15 @@ function assembleStreetPrompt(
 
   let prompt = template.base_prompt
     .replace("{{duration}}", String(req.duration_seconds))
-    .replace("{{location_description}}", sceneContent)
+    .replace("{{location_description}}", locationContent)
     .replace("{{time_description}}", timeContent)
     .replace("{{interview_style}}", interviewStyleContent)
     .replace("{{character_description}}", charDesc)
     .replace("{{topic}}", req.topic.toLowerCase())
     .replace("{{energy_description}}", energyContent);
+
+  prompt += buildScenarioContext(req);
+  prompt += buildSocialDynamicsContext(req);
 
   if (req.angle_prompt) {
     prompt += `\n\nSpecific creative direction: ${req.angle_prompt}`;

@@ -25,6 +25,7 @@ import type {
   SeasonalContext,
   TransferPoint,
   SubwayEnhancementConfig,
+  SocialDynamicsConfig,
 } from '../../lib/types';
 
 const STEPS: WizardStepDef[] = [
@@ -44,6 +45,13 @@ export function CreateSubwayPage() {
   const [energyLevel, setEnergyLevel] = useState<EnergyLevel>('conversational');
   const [interviewStyle, setInterviewStyle] = useState<InterviewStyle>('man_on_street');
   const [subwayLine, setSubwayLine] = useState<SubwayLine | undefined>('any');
+  const [customLocation, setCustomLocation] = useState('');
+  const [scenarioDescription, setScenarioDescription] = useState('');
+  const [socialDynamics, setSocialDynamics] = useState<SocialDynamicsConfig>({
+    crowdReaction: 'curious',
+    passerbyInteraction: 'light',
+    bodyLanguage: 'natural',
+  });
 
   const [multiStopJourney, setMultiStopJourney] = useState<MultiStopJourney | undefined>();
   const [crowdReactions, setCrowdReactions] = useState<CrowdReactionConfig | undefined>();
@@ -78,6 +86,9 @@ export function CreateSubwayPage() {
       energyLevel,
       interviewStyle,
       subwayLine,
+      customLocation: cityStyle === 'custom' ? customLocation : undefined,
+      scenarioDescription: scenarioDescription || undefined,
+      socialDynamics,
       subwayEnhancements: buildSubwayEnhancements(),
     });
   }
@@ -146,12 +157,18 @@ export function CreateSubwayPage() {
           setSceneType={setSceneType}
           cityStyle={cityStyle}
           setCityStyle={setCityStyle}
+          customLocation={customLocation}
+          setCustomLocation={setCustomLocation}
           energyLevel={energyLevel}
           setEnergyLevel={setEnergyLevel}
           interviewStyle={interviewStyle}
           setInterviewStyle={setInterviewStyle}
           subwayLine={subwayLine}
           setSubwayLine={setSubwayLine}
+          scenarioDescription={scenarioDescription}
+          setScenarioDescription={setScenarioDescription}
+          socialDynamics={socialDynamics}
+          setSocialDynamics={setSocialDynamics}
         />
 
         <SubwayEnhancementsStep

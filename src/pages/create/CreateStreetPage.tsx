@@ -25,6 +25,7 @@ import type {
   StreetSeasonalContext,
   CrossStreetPivot as CrossStreetPivotType,
   StreetEnhancementConfig,
+  SocialDynamicsConfig,
 } from '../../lib/types';
 
 const STEPS: WizardStepDef[] = [
@@ -42,6 +43,12 @@ export function CreateStreetPage() {
   const [interviewStyle, setInterviewStyle] = useState<InterviewStyle>('man_on_street');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('midday');
   const [energyLevel, setEnergyLevel] = useState<EnergyLevel>('conversational');
+  const [scenarioDescription, setScenarioDescription] = useState('');
+  const [socialDynamics, setSocialDynamics] = useState<SocialDynamicsConfig>({
+    crowdReaction: 'mixed',
+    passerbyInteraction: 'moderate',
+    bodyLanguage: 'natural',
+  });
 
   const [neighborhood, setNeighborhood] = useState<Neighborhood | undefined>('soho');
   const [streetMultiLocationJourney, setStreetMultiLocationJourney] = useState<StreetMultiLocationJourney | undefined>();
@@ -83,6 +90,8 @@ export function CreateStreetPage() {
       timeOfDay,
       energyLevel,
       neighborhood,
+      scenarioDescription: scenarioDescription || undefined,
+      socialDynamics,
       streetEnhancements: buildStreetEnhancements(),
     });
   }
@@ -153,6 +162,10 @@ export function CreateStreetPage() {
           setTimeOfDay={setTimeOfDay}
           energyLevel={energyLevel}
           setEnergyLevel={setEnergyLevel}
+          scenarioDescription={scenarioDescription}
+          setScenarioDescription={setScenarioDescription}
+          socialDynamics={socialDynamics}
+          setSocialDynamics={setSocialDynamics}
         />
 
         <StreetEnhancementsStep

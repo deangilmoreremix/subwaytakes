@@ -187,7 +187,7 @@ export type SubwaySceneType =
   | 'late_night'
   | 'walking_through';
 
-export type CityStyle = 'nyc' | 'london' | 'tokyo' | 'paris' | 'generic';
+export type CityStyle = 'nyc' | 'london' | 'tokyo' | 'paris' | 'generic' | 'custom';
 
 // Transit card types - maps to city for authentic card mic visuals
 export type TransitCardType =
@@ -743,6 +743,18 @@ export interface StreetEnhancementConfig {
   dramaticMoment?: StreetDramaticMoment;
   seasonalContext?: StreetSeasonalContext;
   crossStreetPivot?: CrossStreetPivot;
+}
+
+// === SOCIAL DYNAMICS & SCENE CUSTOMIZATION TYPES ===
+
+export type CrowdReactionStyle = 'supportive' | 'skeptical' | 'curious' | 'mixed';
+export type PasserbyInteraction = 'none' | 'light' | 'moderate' | 'heavy';
+export type BodyLanguageIntensity = 'reserved' | 'natural' | 'animated' | 'dramatic';
+
+export interface SocialDynamicsConfig {
+  crowdReaction: CrowdReactionStyle;
+  passerbyInteraction: PasserbyInteraction;
+  bodyLanguage: BodyLanguageIntensity;
 }
 
 // === MOTIVATIONAL ENHANCEMENT TYPES ===
@@ -1450,6 +1462,9 @@ export interface Clip {
   caption_style: string | null;
   export_platforms: ExportPlatform[] | null;
   product_placement: ProductPlacementConfig | null;
+  custom_location: string | null;
+  scenario_description: string | null;
+  social_dynamics: SocialDynamicsConfig | null;
   // Universal overlay/compose fields
   overlay_status: string | null;
   composed_video_url: string | null;
@@ -1527,6 +1542,9 @@ export interface GenerateRequest {
   wisdomFormat?: WisdomFormat;
   wisdomDemographic?: WisdomDemographic;
   wisdomSetting?: WisdomSetting;
+  customLocation?: string;
+  scenarioDescription?: string;
+  socialDynamics?: SocialDynamicsConfig;
   // Remotion effects
   effects?: RemotionEffectsConfig;
 }

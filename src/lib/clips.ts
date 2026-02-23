@@ -30,6 +30,7 @@ import type {
   DurationPreset,
   ProductPlacementConfig,
   ExportPlatform,
+  SocialDynamicsConfig,
 } from './types';
 import { getUserId } from './auth';
 import { createClipPlan, createVariationPrompt, createBatchVariationPrompt } from './promptEngine';
@@ -101,6 +102,9 @@ async function buildPromptFromBackend(
         wisdom_demographic: options.wisdomDemographic || undefined,
         wisdom_setting: options.wisdomSetting || undefined,
         target_age_group: options.targetAgeGroup || undefined,
+        custom_location: options.customLocation || undefined,
+        scenario_description: options.scenarioDescription || undefined,
+        social_dynamics: options.socialDynamics || undefined,
       }),
       signal: controller.signal,
     });
@@ -223,6 +227,9 @@ export interface CreateClipOptions {
   caption_style?: string;
   export_platforms?: ExportPlatform[];
   product_placement?: ProductPlacementConfig;
+  customLocation?: string;
+  scenarioDescription?: string;
+  socialDynamics?: SocialDynamicsConfig;
 }
 
 export async function createClip(options: CreateClipOptions): Promise<Clip> {
@@ -262,6 +269,9 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     caption_style,
     export_platforms,
     product_placement,
+    customLocation,
+    scenarioDescription,
+    socialDynamics,
   } = options;
 
   // Validate inputs
@@ -382,6 +392,9 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
       caption_style: caption_style || null,
       export_platforms: export_platforms || null,
       product_placement: product_placement || null,
+      custom_location: customLocation || null,
+      scenario_description: scenarioDescription || null,
+      social_dynamics: socialDynamics || null,
     })
     .select()
     .single();
@@ -505,6 +518,9 @@ export async function createClipBatch(
       caption_style: options.caption_style || null,
       export_platforms: options.export_platforms || null,
       product_placement: options.product_placement || null,
+      custom_location: options.customLocation || null,
+      scenario_description: options.scenarioDescription || null,
+      social_dynamics: options.socialDynamics || null,
     };
   });
 

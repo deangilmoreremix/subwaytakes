@@ -13,7 +13,6 @@ import {
   LogOut,
   LogIn,
   BarChart3,
-  FileText,
 } from 'lucide-react';
 import { clsx } from '../../lib/format';
 import { useAuth } from '../../lib/auth';
@@ -44,7 +43,6 @@ const NAV_SECTIONS: NavSection[] = [
   { id: 'library', label: 'Library', icon: Library, path: '/library' },
   { id: 'templates', label: 'Templates', icon: Palette, path: '/templates' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/analytics' },
-  { id: 'prompts', label: 'Prompts', icon: FileText, path: '/prompts' },
 ];
 
 const PAGE_TITLES: Record<string, string> = {
@@ -60,7 +58,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/questions': 'Question Bank',
   '/settings': 'Settings',
   '/analytics': 'Analytics',
-  '/prompts': 'Prompt Manager',
 };
 
 function getTitleFromPath(pathname: string): string {

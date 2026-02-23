@@ -1848,6 +1848,7 @@ export const CITY_TRANSIT_CARDS: Record<CityStyle, TransitCardType> = {
   tokyo: 'suica',
   paris: 'navigo',
   generic: 'generic',
+  custom: 'generic',
 };
 
 // Transit card descriptions for UI and prompts

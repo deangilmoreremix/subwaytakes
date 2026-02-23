@@ -22,7 +22,6 @@ const TemplateManagerPage = lazy(() => import('./pages/TemplateManagerPage').the
 const EnhancePage = lazy(() => import('./pages/EnhancePage').then(m => ({ default: m.EnhancePage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
-const PromptsPage = lazy(() => import('./pages/prompts/PromptsPage').then(m => ({ default: m.PromptsPage })));
 const CompilationBuilderPage = lazy(() => import('./pages/CompilationBuilderPage'));
 const CompilationPage = lazy(() => import('./pages/CompilationPage'));
 
@@ -71,7 +70,6 @@ function AppContent() {
             <Route path="/templates" element={<TemplateManagerPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/prompts" element={<PromptsPage />} />
             <Route path="/login" element={<AuthPage />} />
             <Route path="*" element={<Navigate to="/create" replace />} />
           </Routes>
