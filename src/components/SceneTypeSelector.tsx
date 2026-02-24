@@ -5,6 +5,7 @@ import { SUBWAY_SCENES } from '../lib/constants';
 interface SceneTypeSelectorProps {
   value: SubwaySceneType | null;
   onChange: (value: SubwaySceneType) => void;
+  disabled?: boolean;
 }
 
 const SCENE_ICONS: Record<SubwaySceneType, typeof TrainFront> = {
@@ -16,7 +17,7 @@ const SCENE_ICONS: Record<SubwaySceneType, typeof TrainFront> = {
   walking_through: Footprints,
 };
 
-export function SceneTypeSelector({ value, onChange }: SceneTypeSelectorProps) {
+export function SceneTypeSelector({ value, onChange, disabled }: SceneTypeSelectorProps) {
   return (
     <div className="space-y-3">
       <label className="block text-sm font-medium text-zinc-300">
@@ -31,8 +32,9 @@ export function SceneTypeSelector({ value, onChange }: SceneTypeSelectorProps) {
             <button
               key={scene.value}
               type="button"
+              disabled={disabled}
               onClick={() => onChange(scene.value)}
-              className={`flex flex-col items-start gap-1 p-3 rounded-lg border transition-all text-left ${
+              className={`flex flex-col items-start gap-1 p-3 rounded-lg border transition-all text-left ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${
                 isSelected
                   ? 'bg-amber-500/15 border-amber-500/50 ring-1 ring-amber-500/30'
                   : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800'

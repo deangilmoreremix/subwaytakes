@@ -6,6 +6,7 @@ interface CityStyleSelectorProps {
   value: CityStyle | null;
   onChange: (value: CityStyle) => void;
   compact?: boolean;
+  disabled?: boolean;
 }
 
 const CITY_THEMES: Record<CityStyle, { primary: string; secondary: string; accent: string; icon: string }> = {
@@ -41,7 +42,7 @@ const CITY_THEMES: Record<CityStyle, { primary: string; secondary: string; accen
   },
 };
 
-export function CityStyleSelector({ value, onChange, compact = false }: CityStyleSelectorProps) {
+export function CityStyleSelector({ value, onChange, compact = false, disabled }: CityStyleSelectorProps) {
   if (compact) {
     return (
       <div className="flex flex-wrap gap-2">
@@ -53,6 +54,7 @@ export function CityStyleSelector({ value, onChange, compact = false }: CityStyl
             <button
               key={city.value}
               type="button"
+              disabled={disabled}
               onClick={() => onChange(city.value)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
                 isSelected
@@ -86,8 +88,9 @@ export function CityStyleSelector({ value, onChange, compact = false }: CityStyl
             <button
               key={city.value}
               type="button"
+              disabled={disabled}
               onClick={() => onChange(city.value)}
-              className={`relative overflow-hidden rounded-xl border p-4 transition-all ${
+              className={`relative overflow-hidden rounded-xl border p-4 transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${
                 isSelected
                   ? `${theme.secondary} ring-1 ring-offset-1 ring-offset-zinc-900`
                   : 'border-zinc-700 hover:border-zinc-600'

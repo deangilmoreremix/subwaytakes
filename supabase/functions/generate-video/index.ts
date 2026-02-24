@@ -538,8 +538,15 @@ Deno.serve(async (req: Request) => {
         resultUrl = videos[Math.floor(Math.random() * videos.length)];
       }
     } else if (modelConfig.provider === 'google' && hasGoogleKey) {
+      if (duration_seconds > 8) {
+        console.warn(`Veo duration capped: requested ${duration_seconds}s, using 8s max`);
+        await supabase
+          .from(is_episode_shot ? "episode_shots" : "clips")
+          .update({ error: `Note: Duration was capped from ${duration_seconds}s to 8s (Veo maximum)` })
+          .eq("id", clip_id);
+      }
       try {
-        resultUrl = await generateWithVeo(prompt, duration_seconds, speech_script);
+        resultUrl = await generateWithVeo(prompt, duration_seconds, speech_script, negative_prompt);
       } catch (error) {
         console.error("Veo error:", error);
         isDemoFallback = true;

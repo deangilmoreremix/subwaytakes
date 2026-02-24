@@ -127,6 +127,20 @@ export function generateMotivationalEnhancementPrompt(config: MotivationalEnhanc
     parts.push(`Audience challenge: ${config.liveChallenge.challengeType}`);
   }
 
+  // Soundscape / audio
+  if (config.soundscape?.enabled) {
+    parts.push(`Music: ${config.soundscape.musicType.replace(/_/g, ' ')} at ${config.soundscape.musicIntensity} intensity`);
+    if (config.soundscape.crowdSounds) {
+      parts.push('Crowd sound effects layered in');
+    }
+  }
+
+  // Audience energy
+  if (config.audienceEnergy?.enabled && config.audienceEnergy.moments.length > 0) {
+    const reactions = config.audienceEnergy.moments.map(m => `${m.type} (${m.intensity})`).join(', ');
+    parts.push(`Audience reactions: ${reactions}`);
+  }
+
   // Pause for effect
   if (config.pauseForEffect?.enabled) {
     parts.push(`Strategic pause at ${config.pauseForEffect.timing}s: ${config.pauseForEffect.duration}s ${config.pauseForEffect.cameraAction}`);

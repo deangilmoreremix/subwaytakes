@@ -197,7 +197,7 @@ export function CreateSubwayPage() {
           onGenerate={handleGenerate}
           showSpeechScript={true}
           showBatchMode={true}
-          summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} />}
+          summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} clip={clip} />}
           scriptContext={{ interviewStyle, energyLevel, sceneType }}
         />
       </CreationWizard>

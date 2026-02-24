@@ -81,7 +81,7 @@ export function CreateStudioPage() {
           clip={clip}
           onGenerate={handleGenerate}
           showSpeechScript={true}
-          summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} />}
+          summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} clip={clip} />}
           scriptContext={{ studioSetup, studioLighting }}
         />
       </CreationWizard>

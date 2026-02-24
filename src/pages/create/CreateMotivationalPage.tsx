@@ -179,7 +179,7 @@ export function CreateMotivationalPage() {
           clip={clip}
           onGenerate={handleGenerate}
           showSpeechScript={false}
-          summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} />}
+          summaryCard={<SelectionSummary groups={summaryGroups} onEditStep={clip.goToStep} clip={clip} />}
           scriptContext={{ speakerStyle, cameraStyle, lightingMood }}
         />
       </CreationWizard>

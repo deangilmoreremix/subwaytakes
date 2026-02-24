@@ -4,6 +4,7 @@ import { ENERGY_LEVELS } from '../lib/constants';
 interface EnergyLevelSelectorProps {
   value: EnergyLevel | null;
   onChange: (value: EnergyLevel) => void;
+  disabled?: boolean;
 }
 
 const ENERGY_COLORS: Record<EnergyLevel, { bg: string; border: string; text: string }> = {
@@ -13,7 +14,7 @@ const ENERGY_COLORS: Record<EnergyLevel, { bg: string; border: string; text: str
   chaotic: { bg: 'bg-red-500/15', border: 'border-red-500/50', text: 'text-red-400' },
 };
 
-export function EnergyLevelSelector({ value, onChange }: EnergyLevelSelectorProps) {
+export function EnergyLevelSelector({ value, onChange, disabled }: EnergyLevelSelectorProps) {
   return (
     <div className="space-y-3">
       <label className="block text-sm font-medium text-zinc-300">
@@ -28,8 +29,9 @@ export function EnergyLevelSelector({ value, onChange }: EnergyLevelSelectorProp
             <button
               key={energy.value}
               type="button"
+              disabled={disabled}
               onClick={() => onChange(energy.value)}
-              className={`px-4 py-2 rounded-lg border transition-all ${
+              className={`px-4 py-2 rounded-lg border transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${
                 isSelected
                   ? `${colors.bg} ${colors.border} ring-1 ring-current/30`
                   : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800'
