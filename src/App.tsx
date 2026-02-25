@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/auth';
 import { AppShell } from './components/AppLayout/AppShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -33,49 +33,95 @@ function PageLoader() {
   );
 }
 
+function FullScreenLoader() {
+  return (
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+    </div>
+  );
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return <FullScreenLoader />;
+
+  if (!isAuthenticated) {
+    const returnTo = location.pathname + location.search;
+    const loginPath = returnTo && returnTo !== '/' && returnTo !== '/login'
+      ? `/login?returnTo=${encodeURIComponent(returnTo)}`
+      : '/login';
+    return <Navigate to={loginPath} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return <FullScreenLoader />;
+
+  if (isAuthenticated) {
+    const params = new URLSearchParams(location.search);
+    const returnTo = params.get('returnTo') || '/create';
+    return <Navigate to={returnTo} replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppContent() {
   const { loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <FullScreenLoader />;
 
   return (
-    <AppShell>
-      <ErrorBoundary>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/" element={<Navigate to="/create" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/create" element={<CreateHubPage />} />
-            <Route path="/create/subway" element={<CreateSubwayPage />} />
-            <Route path="/create/street" element={<CreateStreetPage />} />
-            <Route path="/create/motivational" element={<CreateMotivationalPage />} />
-            <Route path="/create/wisdom" element={<CreateWisdomPage />} />
-            <Route path="/create/studio" element={<CreateStudioPage />} />
-            <Route path="/library" element={<LibraryPage />} />
-            <Route path="/clips/:id" element={<ClipPage />} />
-            <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />
-            <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
-            <Route path="/episodes/:id" element={<EpisodePage />} />
-            <Route path="/episodes/:id/enhance" element={<EnhancePage contentType="episode" />} />
-            <Route path="/compilations/new" element={<CompilationBuilderPage />} />
-            <Route path="/compilations/:id" element={<CompilationPage />} />
-            <Route path="/compilations/:id/enhance" element={<EnhancePage contentType="compilation" />} />
-            <Route path="/questions" element={<QuestionBankPage />} />
-            <Route path="/templates" element={<TemplateManagerPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/login" element={<AuthPage />} />
-            <Route path="*" element={<Navigate to="/create" replace />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
-    </AppShell>
+    <ErrorBoundary>
+      <Suspense fallback={<FullScreenLoader />}>
+        <Routes>
+          <Route path="/login" element={
+            <PublicOnlyRoute>
+              <AuthPage />
+            </PublicOnlyRoute>
+          } />
+          <Route path="/*" element={
+            <ProtectedRoute>
+              <AppShell>
+                <Suspense fallback={<PageLoader />}>
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/create" replace />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/create" element={<CreateHubPage />} />
+                    <Route path="/create/subway" element={<CreateSubwayPage />} />
+                    <Route path="/create/street" element={<CreateStreetPage />} />
+                    <Route path="/create/motivational" element={<CreateMotivationalPage />} />
+                    <Route path="/create/wisdom" element={<CreateWisdomPage />} />
+                    <Route path="/create/studio" element={<CreateStudioPage />} />
+                    <Route path="/library" element={<LibraryPage />} />
+                    <Route path="/clips/:id" element={<ClipPage />} />
+                    <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />
+                    <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
+                    <Route path="/episodes/:id" element={<EpisodePage />} />
+                    <Route path="/episodes/:id/enhance" element={<EnhancePage contentType="episode" />} />
+                    <Route path="/compilations/new" element={<CompilationBuilderPage />} />
+                    <Route path="/compilations/:id" element={<CompilationPage />} />
+                    <Route path="/compilations/:id/enhance" element={<EnhancePage contentType="compilation" />} />
+                    <Route path="/questions" element={<QuestionBankPage />} />
+                    <Route path="/templates" element={<TemplateManagerPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/analytics" element={<AnalyticsPage />} />
+                    <Route path="*" element={<Navigate to="/create" replace />} />
+                  </Routes>
+                </Suspense>
+              </AppShell>
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

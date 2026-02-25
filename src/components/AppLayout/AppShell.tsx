@@ -11,7 +11,6 @@ import {
   Sparkles,
   Palette,
   LogOut,
-  LogIn,
   BarChart3,
 } from 'lucide-react';
 import { clsx } from '../../lib/format';
@@ -74,7 +73,7 @@ function getTitleFromPath(pathname: string): string {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const { user, profile, signOut, isGuest } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -223,29 +222,16 @@ export function AppShell({ children }: AppShellProps) {
                     <Settings className="w-4 h-4" />
                     Settings
                   </button>
-                  {isGuest ? (
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        navigate('/login');
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-400 hover:bg-zinc-800 transition"
-                    >
-                      <LogIn className="w-4 h-4" />
-                      Sign In
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        signOut();
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Sign Out
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      signOut();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
                 </div>
               )}
             </div>

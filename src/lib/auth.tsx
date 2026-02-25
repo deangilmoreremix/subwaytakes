@@ -1,10 +1,10 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { supabase } from './supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
 let _currentAuthUserId: string | null = null;
 
-export function setCurrentAuthUser(userId: string | null) {
+function setCurrentAuthUser(userId: string | null) {
   _currentAuthUserId = userId;
 }
 
@@ -25,6 +25,7 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
+  isAuthenticated: boolean;
   isGuest: boolean;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -41,81 +42,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isGuest, setIsGuest] = useState(false);
+  const initializedRef = useRef(false);
+
+  const isAuthenticated = !!user && !user.is_anonymous;
+  const isGuest = !isAuthenticated;
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (error || !data) {
-      const { data: newProfile } = await supabase
+    try {
+      const { data, error } = await supabase
         .from('user_profiles')
-        .upsert({
-          id: userId,
-          credits_balance: 100,
-          subscription_tier: 'free',
-          default_city_style: 'nyc',
-          default_duration: 6,
-        }, { onConflict: 'id' })
-        .select()
+        .select('*')
+        .eq('id', userId)
         .maybeSingle();
-      setProfile(newProfile);
-    } else {
-      setProfile(data);
+
+      if (error || !data) {
+        const { data: newProfile } = await supabase
+          .from('user_profiles')
+          .upsert({
+            id: userId,
+            credits_balance: 100,
+            subscription_tier: 'free',
+            default_city_style: 'nyc',
+            default_duration: 6,
+          }, { onConflict: 'id' })
+          .select()
+          .maybeSingle();
+        setProfile(newProfile);
+      } else {
+        setProfile(data);
+      }
+    } catch {
+      setProfile(null);
     }
-    setLoading(false);
   }, []);
 
-  const initAuth = useCallback(async (authUser: User) => {
-    setCurrentAuthUser(authUser.id);
-    setIsGuest(authUser.is_anonymous ?? false);
-    await fetchProfile(authUser.id);
+  const applySession = useCallback((s: Session | null) => {
+    setSession(s);
+    const authUser = s?.user ?? null;
+    setUser(authUser);
+
+    if (authUser && !authUser.is_anonymous) {
+      setCurrentAuthUser(authUser.id);
+      fetchProfile(authUser.id).finally(() => setLoading(false));
+    } else {
+      setCurrentAuthUser(null);
+      setProfile(null);
+      setLoading(false);
+    }
   }, [fetchProfile]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        (async () => {
-          await initAuth(s.user);
-        })().catch(console.error);
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentAuthUser(null);
-        setProfile(null);
-        setIsGuest(false);
-      }
-    });
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        initAuth(s.user);
-      } else {
-        supabase.auth.signInAnonymously().then(({ error }) => {
-          if (error) setLoading(false);
-        });
-      }
+      applySession(s);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      applySession(s);
     });
 
     return () => subscription.unsubscribe();
-  }, [initAuth]);
+  }, [applySession]);
 
   const signUp = useCallback(async (email: string, password: string) => {
-    if (user?.is_anonymous) {
-      const { error } = await supabase.auth.updateUser({ email, password });
-      if (error) return { error: error.message };
-      setIsGuest(false);
-      return { error: null };
-    }
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message };
     return { error: null };
-  }, [user]);
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -125,6 +120,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleSignOut = useCallback(async () => {
     setCurrentAuthUser(null);
+    setProfile(null);
+    setUser(null);
+    setSession(null);
     await supabase.auth.signOut();
   }, []);
 
@@ -159,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     profile,
     loading,
+    isAuthenticated,
     isGuest,
     signUp,
     signIn,
@@ -166,7 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshProfile,
     updateProfile,
     deductCredits,
-  }), [user, session, profile, loading, isGuest, signUp, signIn, handleSignOut, refreshProfile, updateProfile, deductCredits]);
+  }), [user, session, profile, loading, isAuthenticated, isGuest, signUp, signIn, handleSignOut, refreshProfile, updateProfile, deductCredits]);
 
   return (
     <AuthContext.Provider value={value}>
@@ -182,6 +181,8 @@ export function useAuth() {
 }
 
 export function getUserId(): string {
-  if (_currentAuthUserId) return _currentAuthUserId;
-  return '';
+  if (!_currentAuthUserId) {
+    throw new Error('Not authenticated');
+  }
+  return _currentAuthUserId;
 }
