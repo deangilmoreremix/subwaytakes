@@ -13,17 +13,31 @@ interface SelectionSummaryProps {
   clip?: ClipCreationHook;
 }
 
+function countActiveEffects(effects: Record<string, unknown>): number {
+  let count = 0;
+  for (const val of Object.values(effects)) {
+    if (val && typeof val === 'object' && 'enabled' in (val as Record<string, unknown>)) {
+      if ((val as Record<string, unknown>).enabled) count++;
+    }
+  }
+  return count;
+}
+
 function buildAdvancedItems(clip: ClipCreationHook): { label: string; value: string }[] {
   const items: { label: string; value: string }[] = [];
   if (clip.language !== 'en') items.push({ label: 'Language', value: clip.language });
   if (clip.niche !== 'motivation') items.push({ label: 'Niche', value: clip.niche.replace(/_/g, ' ') });
   if (clip.captionStyle !== 'standard') items.push({ label: 'Captions', value: clip.captionStyle });
   if (clip.interviewFormat !== 'solo') items.push({ label: 'Format', value: clip.interviewFormat });
+  if (clip.durationPreset !== 'hook') items.push({ label: 'Preset', value: clip.durationPreset.replace(/_/g, ' ') });
   if (clip.exportPlatforms.length > 0) {
     items.push({ label: 'Platforms', value: clip.exportPlatforms.join(', ') });
   }
   if (clip.modelTier !== 'standard') items.push({ label: 'Model', value: clip.modelTier });
   if (clip.targetAgeGroup !== 'all_ages') items.push({ label: 'Age', value: clip.targetAgeGroup.replace(/_/g, ' ') });
+  if (clip.productPlacement.enabled) items.push({ label: 'Product', value: clip.productPlacement.productName || 'Enabled' });
+  const activeEffects = countActiveEffects(clip.effects as unknown as Record<string, unknown>);
+  if (activeEffects > 0) items.push({ label: 'Effects', value: `${activeEffects} active` });
   return items;
 }
 

@@ -46,6 +46,13 @@ interface BuildPromptRequest {
     passerbyInteraction?: string;
     bodyLanguage?: string;
   };
+  subway_enhancements?: Record<string, unknown>;
+  street_enhancements?: Record<string, unknown>;
+  motivational_enhancements?: Record<string, unknown>;
+  language?: string;
+  niche?: string;
+  interview_format?: string;
+  caption_style?: string;
 }
 
 interface BuildPromptResponse {
@@ -204,6 +211,132 @@ function buildSocialDynamicsContext(req: BuildPromptRequest): string {
   return `\n\nSOCIAL DYNAMICS: ${parts.join(", ")}.`;
 }
 
+function buildSubwayEnhancementsContext(req: BuildPromptRequest): string {
+  const enh = req.subway_enhancements;
+  if (!enh) return "";
+  const parts: string[] = [];
+  if (enh.multiStopJourney && (enh.multiStopJourney as Record<string, unknown>).enabled) {
+    const stops = (enh.multiStopJourney as Record<string, unknown>).stops as { station: string; question: string }[] | undefined;
+    if (stops?.length) {
+      parts.push(`Multi-stop journey through: ${stops.map(s => s.station).join(" -> ")}`);
+    }
+  }
+  if (enh.crowdReactions && (enh.crowdReactions as Record<string, unknown>).enabled) {
+    const rt = (enh.crowdReactions as Record<string, unknown>).reactionType;
+    if (rt) parts.push(`crowd reactions: ${rt}`);
+  }
+  if (enh.soundscape && (enh.soundscape as Record<string, unknown>).enabled) {
+    const amb = (enh.soundscape as Record<string, unknown>).ambiance;
+    if (amb) parts.push(`soundscape: ${amb}`);
+  }
+  if (enh.plotTwist) parts.push(`plot twist: ${enh.plotTwist}`);
+  if (enh.platformPoll && (enh.platformPoll as Record<string, unknown>).enabled) {
+    const q = (enh.platformPoll as Record<string, unknown>).question;
+    if (q) parts.push(`platform poll: "${q}"`);
+  }
+  if (enh.trainArrival && (enh.trainArrival as Record<string, unknown>).enabled) {
+    parts.push(`train arrival moment`);
+  }
+  if (enh.seasonalContext && (enh.seasonalContext as Record<string, unknown>).enabled) {
+    const season = (enh.seasonalContext as Record<string, unknown>).season;
+    if (season) parts.push(`seasonal: ${season}`);
+  }
+  if (parts.length === 0) return "";
+  return `\n\nSUBWAY ENHANCEMENTS: ${parts.join(". ")}.`;
+}
+
+function buildStreetEnhancementsContext(req: BuildPromptRequest): string {
+  const enh = req.street_enhancements;
+  if (!enh) return "";
+  const parts: string[] = [];
+  if (enh.multiLocationJourney && (enh.multiLocationJourney as Record<string, unknown>).enabled) {
+    const locs = (enh.multiLocationJourney as Record<string, unknown>).locations as { name: string; activity: string }[] | undefined;
+    if (locs?.length) {
+      parts.push(`multi-location journey: ${locs.map(l => l.name).join(" -> ")}`);
+    }
+  }
+  if (enh.crowdConfig && (enh.crowdConfig as Record<string, unknown>).enabled) {
+    const density = (enh.crowdConfig as Record<string, unknown>).density;
+    const reaction = (enh.crowdConfig as Record<string, unknown>).reaction;
+    if (density) parts.push(`crowd density: ${density}`);
+    if (reaction) parts.push(`crowd reaction: ${reaction}`);
+  }
+  if (enh.urbanSoundscape && (enh.urbanSoundscape as Record<string, unknown>).enabled) {
+    const amb = (enh.urbanSoundscape as Record<string, unknown>).ambiance;
+    if (amb) parts.push(`urban soundscape: ${amb}`);
+  }
+  if (enh.plotTwist) parts.push(`plot twist: ${enh.plotTwist}`);
+  if (enh.streetPoll && (enh.streetPoll as Record<string, unknown>).enabled) {
+    const q = (enh.streetPoll as Record<string, unknown>).question;
+    if (q) parts.push(`street poll: "${q}"`);
+  }
+  if (enh.dramaticMoment && (enh.dramaticMoment as Record<string, unknown>).enabled) {
+    const t = (enh.dramaticMoment as Record<string, unknown>).type;
+    if (t) parts.push(`dramatic moment: ${t}`);
+  }
+  if (enh.seasonalContext && (enh.seasonalContext as Record<string, unknown>).enabled) {
+    const season = (enh.seasonalContext as Record<string, unknown>).season;
+    if (season) parts.push(`seasonal: ${season}`);
+  }
+  if (enh.crossStreetPivot && (enh.crossStreetPivot as Record<string, unknown>).enabled) {
+    const pt = (enh.crossStreetPivot as Record<string, unknown>).pivotType;
+    if (pt) parts.push(`cross-street pivot: ${pt}`);
+  }
+  if (parts.length === 0) return "";
+  return `\n\nSTREET ENHANCEMENTS: ${parts.join(". ")}.`;
+}
+
+function buildMotivationalEnhancementsContext(req: BuildPromptRequest): string {
+  const enh = req.motivational_enhancements;
+  if (!enh) return "";
+  const parts: string[] = [];
+  if (enh.transformationArc && (enh.transformationArc as Record<string, unknown>).enabled) {
+    const from = (enh.transformationArc as Record<string, unknown>).fromState;
+    const to = (enh.transformationArc as Record<string, unknown>).toState;
+    if (from && to) parts.push(`transformation arc: ${from} -> ${to}`);
+  }
+  if (enh.audienceEnergy && (enh.audienceEnergy as Record<string, unknown>).enabled) {
+    const level = (enh.audienceEnergy as Record<string, unknown>).level;
+    if (level) parts.push(`audience energy: ${level}`);
+  }
+  if (enh.soundscape && (enh.soundscape as Record<string, unknown>).enabled) {
+    const t = (enh.soundscape as Record<string, unknown>).type;
+    if (t) parts.push(`soundscape: ${t}`);
+  }
+  if (enh.breakthroughMoment && (enh.breakthroughMoment as Record<string, unknown>).enabled) {
+    const t = (enh.breakthroughMoment as Record<string, unknown>).type;
+    if (t) parts.push(`breakthrough moment: ${t}`);
+  }
+  if (enh.speakerArchetype && (enh.speakerArchetype as Record<string, unknown>).enabled) {
+    const a = (enh.speakerArchetype as Record<string, unknown>).archetype;
+    if (a) parts.push(`speaker archetype: ${a}`);
+  }
+  if (enh.pauseForEffect && (enh.pauseForEffect as Record<string, unknown>).enabled) {
+    parts.push(`dramatic pause for effect`);
+  }
+  if (enh.ctaPivot && (enh.ctaPivot as Record<string, unknown>).enabled) {
+    const ctaText = (enh.ctaPivot as Record<string, unknown>).ctaText;
+    if (ctaText) parts.push(`CTA: "${ctaText}"`);
+  }
+  if (parts.length === 0) return "";
+  return `\n\nMOTIVATIONAL ENHANCEMENTS: ${parts.join(". ")}.`;
+}
+
+function buildAdvancedContext(req: BuildPromptRequest): string {
+  const parts: string[] = [];
+  if (req.language && req.language !== "en") {
+    parts.push(`Language: deliver dialogue in ${req.language}`);
+  }
+  if (req.niche) {
+    parts.push(`Content niche: ${req.niche.replace(/_/g, " ")}`);
+  }
+  if (req.interview_format && req.interview_format !== "solo") {
+    parts.push(`Interview format: ${req.interview_format.replace(/_/g, " ")}`);
+  }
+  if (parts.length === 0) return "";
+  return `\n\nADVANCED SETTINGS: ${parts.join(". ")}.`;
+}
+
 function assembleSubwayPrompt(
   template: PromptTemplate,
   fragments: PromptFragment[],
@@ -240,8 +373,18 @@ function assembleSubwayPrompt(
     .replace("{{question_context}}", questionContext)
     .replace("{{energy_description}}", energyContent);
 
+  if (req.subway_line) {
+    prompt += `\n\nSUBWAY LINE: Set on the ${req.subway_line} line. Include visual cues specific to this line (signage, color coding, familiar station architecture).`;
+  }
+
+  if (req.interview_mode) {
+    prompt += `\n\nINTERVIEW MODE: ${req.interview_mode.replace(/_/g, " ")} format.`;
+  }
+
+  prompt += buildSubwayEnhancementsContext(req);
   prompt += buildScenarioContext(req);
   prompt += buildSocialDynamicsContext(req);
+  prompt += buildAdvancedContext(req);
 
   if (req.angle_prompt) {
     prompt += `\n\nSpecific creative direction: ${req.angle_prompt}`;
@@ -289,8 +432,10 @@ function assembleStreetPrompt(
     .replace("{{topic}}", req.topic.toLowerCase())
     .replace("{{energy_description}}", energyContent);
 
+  prompt += buildStreetEnhancementsContext(req);
   prompt += buildScenarioContext(req);
   prompt += buildSocialDynamicsContext(req);
+  prompt += buildAdvancedContext(req);
 
   if (req.angle_prompt) {
     prompt += `\n\nSpecific creative direction: ${req.angle_prompt}`;
@@ -332,6 +477,9 @@ function assembleMotivationalPrompt(
     .replace("{{setting}}", settingContent)
     .replace("{{camera_style}}", cameraContent)
     .replace("{{lighting}}", lightingContent);
+
+  prompt += buildMotivationalEnhancementsContext(req);
+  prompt += buildAdvancedContext(req);
 
   if (req.angle_prompt) {
     prompt += `\n\nSpecific creative direction: ${req.angle_prompt}`;
@@ -385,6 +533,8 @@ function assembleStudioPrompt(
     .replace("{{topic}}", req.topic)
     .replace("{{question_line}}", questionLine);
 
+  prompt += buildAdvancedContext(req);
+
   if (req.angle_prompt) {
     prompt += `\n\nCREATIVE DIRECTION: ${req.angle_prompt}`;
   }
@@ -425,6 +575,8 @@ function assembleWisdomPrompt(
     .replace("{{wisdom_setting}}", settingContent)
     .replace("{{wisdom_demographic}}", demoContent)
     .replace("{{topic}}", req.topic);
+
+  prompt += buildAdvancedContext(req);
 
   if (req.angle_prompt) {
     prompt += `\n\nSPECIFIC CREATIVE DIRECTION: ${req.angle_prompt}`;

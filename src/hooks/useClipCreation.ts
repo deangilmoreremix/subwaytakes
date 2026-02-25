@@ -180,6 +180,8 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
         caption_style: captionStyle,
         export_platforms: exportPlatforms,
         product_placement: productPlacement.enabled ? productPlacement : undefined,
+        targetAgeGroup: targetAgeGroup !== 'all_ages' ? targetAgeGroup : undefined,
+        effects,
         ...modeSpecificOptions,
       };
 

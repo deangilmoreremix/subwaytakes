@@ -289,7 +289,8 @@ async function getMiniMaxVideoUrl(fileId: string): Promise<string> {
 async function generateWithVeo(
   prompt: string,
   durationSeconds: number,
-  speechScript?: string
+  speechScript?: string,
+  negativePrompt?: string
 ): Promise<string> {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY not configured");
@@ -300,6 +301,17 @@ async function generateWithVeo(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 150000);
+
+  const parameters: Record<string, unknown> = {
+    aspectRatio: "9:16",
+    durationSeconds: Math.min(durationSeconds, 8),
+    personGeneration: "allow_adult",
+    generateAudio: true,
+  };
+
+  if (negativePrompt) {
+    parameters.negativePrompt = negativePrompt;
+  }
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning`,
@@ -315,12 +327,7 @@ async function generateWithVeo(
             prompt: enhancedPrompt,
           },
         ],
-        parameters: {
-          aspectRatio: "9:16",
-          durationSeconds: Math.min(durationSeconds, 8),
-          personGeneration: "allow_adult",
-          generateAudio: true,
-        },
+        parameters,
       }),
       signal: controller.signal,
     }
@@ -417,6 +424,7 @@ Deno.serve(async (req: Request) => {
       clip_id,
       video_type,
       prompt,
+      negative_prompt,
       duration_seconds,
       model_tier = 'standard',
       speech_script,
@@ -519,6 +527,7 @@ Deno.serve(async (req: Request) => {
     const hasGoogleKey = !!Deno.env.get("GOOGLE_AI_API_KEY");
 
     let isDemoFallback = false;
+    let durationWarning: string | null = null;
 
     if (modelConfig.provider === 'minimax' && hasMinimaxKey) {
       try {
@@ -539,10 +548,11 @@ Deno.serve(async (req: Request) => {
       }
     } else if (modelConfig.provider === 'google' && hasGoogleKey) {
       if (duration_seconds > 8) {
+        durationWarning = `Duration was capped from ${duration_seconds}s to 8s (Veo maximum)`;
         console.warn(`Veo duration capped: requested ${duration_seconds}s, using 8s max`);
         await supabase
           .from(is_episode_shot ? "episode_shots" : "clips")
-          .update({ error: `Note: Duration was capped from ${duration_seconds}s to 8s (Veo maximum)` })
+          .update({ error: durationWarning })
           .eq("id", clip_id);
       }
       try {
@@ -636,6 +646,7 @@ Deno.serve(async (req: Request) => {
           model_used: selectedModel,
           is_episode_shot: false,
           is_demo: isDemoFallback,
+          ...(durationWarning ? { duration_warning: durationWarning } : {}),
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -652,6 +663,7 @@ Deno.serve(async (req: Request) => {
         model_used: selectedModel,
         is_episode_shot,
         is_demo: isDemoFallback,
+        ...(durationWarning ? { duration_warning: durationWarning } : {}),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

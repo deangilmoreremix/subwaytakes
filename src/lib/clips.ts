@@ -105,6 +105,14 @@ async function buildPromptFromBackend(
         custom_location: options.customLocation || undefined,
         scenario_description: options.scenarioDescription || undefined,
         social_dynamics: options.socialDynamics || undefined,
+        subway_enhancements: options.subwayEnhancements || undefined,
+        street_enhancements: options.streetEnhancements || undefined,
+        motivational_enhancements: options.motivationalEnhancements || undefined,
+        interview_mode: options.interview_format || undefined,
+        language: options.language || undefined,
+        niche: options.niche || undefined,
+        interview_format: options.interview_format || undefined,
+        caption_style: options.caption_style || undefined,
       }),
       signal: controller.signal,
     });
@@ -161,6 +169,7 @@ async function triggerGeneration(clip: Clip, modelTier?: ModelTier, speechScript
         studio_setup: clip.studio_setup,
         studio_lighting: clip.studio_lighting,
         time_of_day: clip.time_of_day,
+        effects: clip.effects || undefined,
       }),
       signal: controller.signal,
     });
@@ -283,6 +292,7 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     motivationalEnhancements,
     speakerArchetype,
     targetAgeGroup,
+    effects,
   } = options;
 
   // Validate inputs
@@ -413,6 +423,7 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
       motivational_enhancements: motivationalEnhancements || null,
       speaker_archetype: speakerArchetype || null,
       target_age_group: targetAgeGroup || null,
+      effects: effects || null,
     })
     .select()
     .single();
