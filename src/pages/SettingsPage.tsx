@@ -30,19 +30,29 @@ export function SettingsPage() {
     }
   }, [profile]);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   async function handleSave() {
     setSaving(true);
     setSaved(false);
-    const { error } = await updateProfile({
-      display_name: displayName || null,
-      default_city_style: defaultCity,
-      default_duration: defaultDuration,
-    } as any);
-    setSaving(false);
-    if (!error) {
-      setSaved(true);
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = setTimeout(() => setSaved(false), 3000);
+    setSaveError(null);
+    try {
+      const { error } = await updateProfile({
+        display_name: displayName || null,
+        default_city_style: defaultCity,
+        default_duration: defaultDuration,
+      } as Partial<import('../lib/auth').UserProfile>);
+      if (error) {
+        setSaveError(error);
+      } else {
+        setSaved(true);
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => setSaved(false), 3000);
+      }
+    } catch {
+      setSaveError('Failed to save settings. Please try again.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -161,6 +171,11 @@ export function SettingsPage() {
           </div>
         </section>
 
+        {saveError && (
+          <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+            {saveError}
+          </div>
+        )}
         <div className="flex justify-end gap-3">
           {saved && (
             <div className="flex items-center gap-2 text-sm text-emerald-400">

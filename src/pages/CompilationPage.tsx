@@ -70,25 +70,40 @@ export default function CompilationPage() {
     }
   }
 
+  const [actionError, setActionError] = useState<string | null>(null);
+
   async function handleRetry() {
     if (!id) return;
-    await retryCompilation(id);
-    loadCompilation();
+    setActionError(null);
+    try {
+      await retryCompilation(id);
+      loadCompilation();
+    } catch {
+      setActionError('Failed to retry. Please try again.');
+    }
   }
 
   async function handleDelete() {
     if (!id) return;
     if (!window.confirm('Delete this compilation?')) return;
-    await deleteCompilation(id);
-    navigate('/library');
+    setActionError(null);
+    try {
+      await deleteCompilation(id);
+      navigate('/library');
+    } catch {
+      setActionError('Failed to delete. Please try again.');
+    }
   }
 
   async function handleCompose() {
     if (!id) return;
     setComposing(true);
+    setActionError(null);
     try {
       await triggerCompilationCompose(id);
       setTimeout(() => loadCompilation(), 3000);
+    } catch {
+      setActionError('Failed to start composition. Please try again.');
     } finally {
       setComposing(false);
     }
@@ -120,6 +135,12 @@ export default function CompilationPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {actionError && (
+          <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+            {actionError}
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">

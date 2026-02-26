@@ -25,18 +25,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log the error to an error reporting service
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
-    
-    // In a real application, you would send this to an error reporting service
-    // like Sentry, Bugsnag, etc.
+    console.error('ErrorBoundary caught an error:', error.message, errorInfo.componentStack);
   }
 
   render() {
     if (this.state.hasError) {
       // Render fallback UI
       return (
-        <div className="rounded-2xl border border-red-900/50 bg-red-900/20 p-6">
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+        <div className="max-w-lg w-full rounded-2xl border border-red-900/50 bg-red-900/20 p-6">
           <div className="flex items-start gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500/10">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
@@ -48,12 +45,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               <p className="mt-2 text-sm text-red-300">
                 We've encountered an unexpected error. Please try refreshing the page.
               </p>
-              {this.state.error && (
-                <details className="mt-3 max-w-2xl text-xs text-red-500/80">
-                  <summary className="cursor-pointer">Error details</summary>
-                  <pre className="mt-2 whitespace-pre-wrap">{this.state.error.toString()}</pre>
-                </details>
-              )}
               <div className="mt-4 flex gap-3">
                 <button
                   type="button"
@@ -72,6 +63,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               </div>
             </div>
           </div>
+        </div>
         </div>
       );
     }

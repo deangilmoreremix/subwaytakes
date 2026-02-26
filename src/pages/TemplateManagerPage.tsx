@@ -24,11 +24,18 @@ export function TemplateManagerPage() {
   const [editingTemplate, setEditingTemplate] = useState<VideoTemplate | null>(null);
   const [creating, setCreating] = useState(false);
 
+  const [actionBusy, setActionBusy] = useState(false);
+
   const loadTemplates = useCallback(async () => {
     setLoading(true);
-    const data = await fetchTemplates();
-    setTemplates(data);
-    setLoading(false);
+    try {
+      const data = await fetchTemplates();
+      setTemplates(data);
+    } catch {
+      setTemplates([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -38,20 +45,34 @@ export function TemplateManagerPage() {
   async function handleDelete(id: string) {
     const confirmed = window.confirm('Delete this template?');
     if (!confirmed) return;
-    const success = await deleteTemplate(id);
-    if (success) {
-      setTemplates(prev => prev.filter((t) => t.id !== id));
+    setActionBusy(true);
+    try {
+      const success = await deleteTemplate(id);
+      if (success) {
+        setTemplates(prev => prev.filter((t) => t.id !== id));
+      }
+    } catch {
+      // silent - deleteTemplate handles its own error
+    } finally {
+      setActionBusy(false);
     }
   }
 
   async function handleDuplicate(template: VideoTemplate) {
-    const result = await duplicateTemplate(
-      template.id,
-      `${template.name} (Copy)`,
-      template.user_id
-    );
-    if (result) {
-      setTemplates(prev => [result, ...prev]);
+    setActionBusy(true);
+    try {
+      const result = await duplicateTemplate(
+        template.id,
+        `${template.name} (Copy)`,
+        template.user_id
+      );
+      if (result) {
+        setTemplates(prev => [result, ...prev]);
+      }
+    } catch {
+      // silent - duplicateTemplate handles its own error
+    } finally {
+      setActionBusy(false);
     }
   }
 
@@ -165,7 +186,8 @@ export function TemplateManagerPage() {
                   </button>
                   <button
                     onClick={() => handleDuplicate(template)}
-                    className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                    disabled={actionBusy}
+                    className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:pointer-events-none"
                     title="Duplicate"
                   >
                     <Copy className="w-4 h-4" />
@@ -173,7 +195,8 @@ export function TemplateManagerPage() {
                   {!template.is_system && (
                     <button
                       onClick={() => handleDelete(template.id)}
-                      className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+                      disabled={actionBusy}
+                      className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:pointer-events-none"
                       title="Delete"
                     >
                       <Trash2 className="w-4 h-4" />

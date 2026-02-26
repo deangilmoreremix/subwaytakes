@@ -35,6 +35,7 @@ export function QuestionBankPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [mutating, setMutating] = useState(false);
   const [newQuestion, setNewQuestion] = useState({
     question: '',
     category: 'hottakes',
@@ -84,7 +85,8 @@ export function QuestionBankPage() {
   }
 
   async function handleAddQuestion() {
-    if (!newQuestion.question.trim()) return;
+    if (!newQuestion.question.trim() || mutating) return;
+    setMutating(true);
 
     try {
       await createQuestion({
@@ -106,11 +108,14 @@ export function QuestionBankPage() {
       loadQuestions();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add question');
+    } finally {
+      setMutating(false);
     }
   }
 
   async function handleUpdateQuestion(id: string) {
-    if (!editValue.trim()) return;
+    if (!editValue.trim() || mutating) return;
+    setMutating(true);
 
     try {
       await updateQuestion(id, { question: editValue });
@@ -118,24 +123,34 @@ export function QuestionBankPage() {
       loadQuestions();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update question');
+    } finally {
+      setMutating(false);
     }
   }
 
   async function handleDeleteQuestion(id: string) {
+    if (mutating) return;
+    setMutating(true);
     try {
       await deleteQuestion(id);
       loadQuestions();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete question');
+    } finally {
+      setMutating(false);
     }
   }
 
   async function handleToggleTrending(id: string, currentValue: boolean) {
+    if (mutating) return;
+    setMutating(true);
     try {
       await toggleTrending(id, !currentValue);
       loadQuestions();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update trending status');
+    } finally {
+      setMutating(false);
     }
   }
 

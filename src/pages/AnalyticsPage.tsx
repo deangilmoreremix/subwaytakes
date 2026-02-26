@@ -92,10 +92,12 @@ export function AnalyticsPage() {
         statusBreakdown: (r.statusBreakdown as Record<string, number>) || {},
         typeBreakdown: (r.typeBreakdown as Record<string, number>) || {},
         platformBreakdown: (r.platformBreakdown as Record<string, number>) || {},
-        topClips: topClipsRaw.map((c) => ({
-          ...c,
-          viral_score: c.viral_score as ViralScore,
-        })) as Array<Clip & { viral_score: ViralScore }>,
+        topClips: topClipsRaw
+          .filter((c) => c.viral_score && typeof (c.viral_score as ViralScore).overall === 'number')
+          .map((c) => ({
+            ...c,
+            viral_score: c.viral_score as ViralScore,
+          })) as Array<Clip & { viral_score: ViralScore }>,
         dailyClips: dailyRaw.map((d) => ({ date: d.d, count: d.count })),
       });
     } catch (error) {
@@ -115,7 +117,22 @@ export function AnalyticsPage() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 text-center">
+          <BarChart3 className="mx-auto h-10 w-10 text-zinc-600 mb-3" />
+          <p className="text-sm text-zinc-400">Unable to load analytics data.</p>
+          <button
+            onClick={() => loadAnalytics()}
+            className="mt-4 rounded-xl bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-700 transition"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const clipsTrend = data.previousClipsInRange > 0
     ? Math.round(((data.clipsInRange - data.previousClipsInRange) / data.previousClipsInRange) * 100)
