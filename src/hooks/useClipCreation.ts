@@ -29,6 +29,7 @@ import {
   AGE_APPROPRIATE_TOPICS,
 } from '../lib/constants';
 import { createClip, createClipBatch, type CreateClipOptions } from '../lib/clips';
+import { safeMutate, mutationKey } from '../lib/safeMutation';
 import { filterModesByAge } from '../lib/contentFilter';
 import type { KeywordAnalysis } from '../lib/keywordEngine';
 
@@ -154,9 +155,14 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
     }
   }
 
+  const mutationKeyRef = useRef<string>('');
+
   async function generateClip(modeSpecificOptions: Partial<CreateClipOptions>) {
+    if (busy) return;
     setStatus('planning');
     setErrorMessage('');
+
+    mutationKeyRef.current = mutationKey('clip');
 
     try {
       const isInterview = ['subway_interview', 'street_interview', 'studio_interview', 'wisdom_interview'].includes(clipType);
@@ -186,11 +192,17 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
       };
 
       if (batchMode && clipType === 'subway_interview') {
-        const clips = await createClipBatch(options, batchSize);
+        const clips = await safeMutate({
+          key: mutationKeyRef.current,
+          fn: () => createClipBatch(options, batchSize),
+        });
         setStatus('generating');
         navTimerRef.current = setTimeout(() => navigate('/clips/' + clips[0].id), 500);
       } else {
-        const clip = await createClip(options);
+        const clip = await safeMutate({
+          key: mutationKeyRef.current,
+          fn: () => createClip(options),
+        });
         setStatus('generating');
         navTimerRef.current = setTimeout(() => navigate('/clips/' + clip.id), 500);
       }
