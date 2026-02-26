@@ -42,6 +42,20 @@ function serviceHeaders(serviceKey: string | undefined): Record<string, string> 
   return headers;
 }
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function isValidVideoUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -132,7 +146,15 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const body: ProcessVideoRequest = await req.json();
+    let body: ProcessVideoRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const { operation, videoUrls, videoUrl, options } = body;
 
     if (!operation) {
@@ -217,7 +239,7 @@ async function generateThumbnail(
   const { serviceUrl, serviceKey } = getServiceConfig();
 
   if (serviceUrl) {
-    const response = await fetch(`${serviceUrl}/generate-thumbnail`, {
+    const response = await fetchWithTimeout(`${serviceUrl}/generate-thumbnail`, {
       method: 'POST',
       headers: serviceHeaders(serviceKey),
       body: JSON.stringify({
@@ -228,7 +250,7 @@ async function generateThumbnail(
           timestamp: options?.timestamp || '00:00:01',
         },
       }),
-    });
+    }, 60000);
 
     if (!response.ok) {
       throw new Error(`Thumbnail generation failed: ${response.status}`);
@@ -259,11 +281,11 @@ async function stitchVideos(
   const { serviceUrl, serviceKey } = getServiceConfig();
 
   if (serviceUrl) {
-    const response = await fetch(`${serviceUrl}/stitch-videos`, {
+    const response = await fetchWithTimeout(`${serviceUrl}/stitch-videos`, {
       method: 'POST',
       headers: serviceHeaders(serviceKey),
       body: JSON.stringify({ videoUrls, options }),
-    });
+    }, 120000);
 
     if (!response.ok) {
       throw new Error(`Video stitching failed: ${response.status}`);

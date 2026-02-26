@@ -35,6 +35,20 @@ const DEMO_VIDEOS: Record<string, string[]> = {
   ],
 };
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 type VideoModel = 'hailuo-2.3-fast' | 'hailuo-2.3' | 'veo-3.1-fast' | 'veo-3.1';
 type ModelTier = 'standard' | 'premium';
 
@@ -111,7 +125,7 @@ async function generateThumbnailWithFFmpeg(
 
   if (ffmpegServiceUrl && ffmpegServiceKey) {
     try {
-      const response = await fetch(`${ffmpegServiceUrl}/generate-thumbnail`, {
+      const response = await fetchWithTimeout(`${ffmpegServiceUrl}/generate-thumbnail`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${ffmpegServiceKey}`,
@@ -133,7 +147,7 @@ async function generateThumbnailWithFFmpeg(
             quality: 2,
           },
         }),
-      });
+      }, 60000);
 
       if (response.ok) {
         const data = await response.json();
@@ -201,7 +215,7 @@ async function generateWithMiniMax(
     ? `${prompt}\n\nThe person speaks the following dialogue naturally: "${speechScript}"`
     : prompt;
 
-  const response = await fetch("https://api.minimax.chat/v1/video_generation", {
+  const response = await fetchWithTimeout("https://api.minimax.chat/v1/video_generation", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -212,7 +226,7 @@ async function generateWithMiniMax(
       prompt: enhancedPrompt,
       prompt_optimizer: true,
     }),
-  });
+  }, 30000);
 
   if (!response.ok) {
     const error = await response.text();
@@ -237,13 +251,14 @@ async function pollMiniMaxStatus(jobId: string): Promise<string> {
   while (attempts < maxAttempts) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://api.minimax.chat/v1/query/video_generation?task_id=${jobId}`,
       {
         headers: {
           "Authorization": `Bearer ${apiKey}`,
         },
-      }
+      },
+      15000
     );
 
     if (!response.ok) {
@@ -269,13 +284,14 @@ async function getMiniMaxVideoUrl(fileId: string): Promise<string> {
   const apiKey = Deno.env.get("MINIMAX_API_KEY");
   if (!apiKey) throw new Error("MINIMAX_API_KEY not configured");
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://api.minimax.chat/v1/files/retrieve?file_id=${fileId}`,
     {
       headers: {
         "Authorization": `Bearer ${apiKey}`,
       },
-    }
+    },
+    15000
   );
 
   if (!response.ok) {
@@ -418,7 +434,15 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const body: GenerateRequest = await req.json();
+    let body: GenerateRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     parsedBody = body as unknown as Record<string, unknown>;
     const {
       clip_id,

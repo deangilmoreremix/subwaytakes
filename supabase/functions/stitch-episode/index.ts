@@ -26,6 +26,20 @@ function getServiceConfig() {
   return { serviceUrl, serviceKey };
 }
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function stitchWithFFmpegService(
   videoUrls: string[],
   serviceUrl: string,
@@ -37,11 +51,11 @@ async function stitchWithFFmpegService(
       headers["Authorization"] = `Bearer ${serviceKey}`;
     }
 
-    const response = await fetch(`${serviceUrl}/stitch-videos`, {
+    const response = await fetchWithTimeout(`${serviceUrl}/stitch-videos`, {
       method: "POST",
       headers,
       body: JSON.stringify({ videoUrls }),
-    });
+    }, 120000);
 
     if (!response.ok) {
       console.error("FFmpeg stitch error:", response.status);
@@ -132,7 +146,15 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const body: StitchRequest = await req.json();
+    let body: StitchRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     parsedBody = body as unknown as Record<string, unknown>;
     const { episode_id } = body;
 
@@ -192,7 +214,7 @@ Deno.serve(async (req: Request) => {
     const shotgunApiKey = Deno.env.get("SHOTGUN_API_KEY");
     if (shotgunApiKey) {
       try {
-        const stitchResponse = await fetch("https://api.shotgun.video/v1/stitch", {
+        const stitchResponse = await fetchWithTimeout("https://api.shotgun.video/v1/stitch", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${shotgunApiKey}`,
@@ -210,7 +232,7 @@ Deno.serve(async (req: Request) => {
               duration: 0.3,
             },
           }),
-        });
+        }, 30000);
 
         if (stitchResponse.ok) {
           const stitchResult = await stitchResponse.json();
@@ -220,13 +242,14 @@ Deno.serve(async (req: Request) => {
           while (attempts < maxAttempts) {
             await new Promise((resolve) => setTimeout(resolve, 5000));
 
-            const statusResponse = await fetch(
+            const statusResponse = await fetchWithTimeout(
               `https://api.shotgun.video/v1/jobs/${stitchResult.job_id}`,
               {
                 headers: {
                   "Authorization": `Bearer ${shotgunApiKey}`,
                 },
-              }
+              },
+              15000
             );
 
             if (statusResponse.ok) {
