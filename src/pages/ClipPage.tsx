@@ -25,14 +25,17 @@ import {
 } from '../lib/constants';
 
 function StatusBadge({ status }: { status: Clip['status'] }) {
-  const config = {
+  const config: Record<string, { text: string; className: string; Icon: typeof Clock }> = {
     queued: { text: 'Queued', className: 'border-zinc-700 bg-zinc-900 text-zinc-300', Icon: Clock },
     running: { text: 'Generating', className: 'border-amber-500/40 bg-amber-500/10 text-amber-300', Icon: Clock },
+    generating: { text: 'Generating', className: 'border-amber-500/40 bg-amber-500/10 text-amber-300', Icon: Clock },
+    stitching: { text: 'Stitching', className: 'border-sky-500/40 bg-sky-500/10 text-sky-300', Icon: Layers },
     done: { text: 'Done', className: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300', Icon: CheckCircle2 },
     error: { text: 'Error', className: 'border-rose-500/40 bg-rose-500/10 text-rose-300', Icon: AlertCircle },
   };
 
-  const { text, className, Icon } = config[status];
+  const fallback = { text: status, className: 'border-zinc-700 bg-zinc-900 text-zinc-300', Icon: Clock };
+  const { text, className, Icon } = config[status] || fallback;
 
   return (
     <span className={clsx('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium', className)}>
@@ -59,6 +62,7 @@ export function ClipPage() {
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [retrying, setRetrying] = useState(false);
   const [rerolling, setRerolling] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchClip = useCallback(async () => {
     try {
@@ -93,13 +97,14 @@ export function ClipPage() {
   async function handleRegenerate(mode: 'regenerate' | 'variation') {
     if (!clip) return;
     setActionBusy(true);
+    setActionError(null);
 
     try {
       const newClip = await regenerateClip(clip.id, mode);
       await updateClipStatus(newClip.id, 'running');
       navigate('/clips/' + newClip.id);
     } catch (error) {
-      console.error('Failed to regenerate:', error);
+      setActionError(error instanceof Error ? error.message : 'Failed to regenerate clip');
     } finally {
       setActionBusy(false);
     }
@@ -108,11 +113,12 @@ export function ClipPage() {
   async function handleRetry() {
     if (!clip) return;
     setRetrying(true);
+    setActionError(null);
     try {
       const updated = await retryClip(clip.id);
       setClip(updated);
     } catch (error) {
-      console.error('Retry failed:', error);
+      setActionError(error instanceof Error ? error.message : 'Retry failed');
     } finally {
       setRetrying(false);
     }
@@ -128,12 +134,13 @@ export function ClipPage() {
   async function handleReroll(_options: RerollOptions) {
     if (!clip) return;
     setRerolling(true);
+    setActionError(null);
     try {
       const newClip = await regenerateClip(clip.id, 'variation');
       await updateClipStatus(newClip.id, 'running');
       navigate('/clips/' + newClip.id);
     } catch (error) {
-      console.error('Reroll failed:', error);
+      setActionError(error instanceof Error ? error.message : 'Reroll failed');
     } finally {
       setRerolling(false);
     }
@@ -180,6 +187,15 @@ export function ClipPage() {
         <ArrowLeft className="h-4 w-4" />
         Back to Create
       </button>
+
+      {actionError && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400 flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 ml-4 shrink-0">
+            <AlertCircle className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>

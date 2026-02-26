@@ -746,10 +746,12 @@ export async function retryClip(clipId: string): Promise<Clip> {
   const clip = await getClipById(clipId);
   if (!clip) throw new Error('Clip not found');
 
+  const userId = getUserId();
   const { data, error } = await supabase
     .from('clips')
     .update({ status: 'queued', error: null })
     .eq('id', clipId)
+    .eq('user_id', userId)
     .select()
     .single();
 

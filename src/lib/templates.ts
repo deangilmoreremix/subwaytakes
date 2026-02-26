@@ -123,16 +123,19 @@ export async function deleteTemplate(id: string): Promise<boolean> {
 export async function duplicateTemplate(
   id: string,
   newName: string,
-  userId: string
+  _userId?: string
 ): Promise<VideoTemplate | null> {
   const source = await fetchTemplateById(id);
   if (!source) return null;
+
+  const { getUserId } = await import('./auth');
+  const currentUserId = getUserId();
 
   const { id: _id, created_at: _ca, updated_at: _ua, is_system: _is, is_default: _id2, ...rest } = source;
   return createTemplate({
     ...rest,
     name: newName,
-    user_id: userId,
+    user_id: currentUserId,
     is_default: false,
   });
 }
