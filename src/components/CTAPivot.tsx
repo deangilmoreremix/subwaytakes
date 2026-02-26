@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Edit3, Target, Users, Share2, Zap } from 'lucide-react';
+import { ArrowRight, Edit3, Target, Users, Share2 } from 'lucide-react';
 import type { CTAPivotConfig, CTAPivotType } from '../lib/types';
 import { CTA_PIVOT_TYPES } from '../lib/constants';
 

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { TrainFront, Clock, Zap, Pause, ArrowRight } from 'lucide-react';
 import type { TrainArrivalMoment, SubwayLine } from '../lib/types';
 import { SUBWAY_LINES } from '../lib/constants';
 

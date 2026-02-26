@@ -12,18 +12,12 @@ import type {
   CameraStyle,
   LightingMood,
   StreetScene,
-  InterviewStyle,
   InterviewFormat,
   DurationPreset,
-  DurationConfig,
-  ProductPlacementConfig,
   SupportedLanguage,
   CaptionStyleConfig,
   ExportPlatform,
-  ExportConfig,
   NicheCategory,
-  KeywordConfig,
-  GeneratedInterview,
   TimeOfDay,
   InterviewerType,
   InterviewerPosition,
@@ -42,7 +36,6 @@ import type {
   DebateLoopConfig,
   CaptionConfig,
   SubwayLine,
-  LinePersonality,
   PlotTwistType,
   CrowdReactionType,
   AmbientSound,
@@ -965,39 +958,39 @@ export const INTERVIEW_MODES_CONFIG: { value: InterviewMode; label: string; desc
   { value: 'none', label: 'Standard', description: 'Classic format', defaultDuration: 4 },
 ];
 
-export const SEASONS: { value: Season; label: string }[] = [
-  { value: 'spring', label: 'Spring' },
-  { value: 'summer', label: 'Summer' },
-  { value: 'fall', label: 'Fall' },
-  { value: 'winter', label: 'Winter' },
+export const SEASONS: { value: Season; label: string; emoji: string }[] = [
+  { value: 'spring', label: 'Spring', emoji: '🌸' },
+  { value: 'summer', label: 'Summer', emoji: '☀️' },
+  { value: 'fall', label: 'Fall', emoji: '🍂' },
+  { value: 'winter', label: 'Winter', emoji: '❄️' },
 ];
 
-export const WEATHER_CONDITIONS: { value: WeatherCondition; label: string }[] = [
-  { value: 'clear', label: 'Clear' },
-  { value: 'rainy', label: 'Rainy' },
-  { value: 'snowy', label: 'Snowy' },
-  { value: 'humid', label: 'Humid' },
-  { value: 'windy', label: 'Windy' },
+export const WEATHER_CONDITIONS: { value: WeatherCondition; label: string; emoji: string }[] = [
+  { value: 'clear', label: 'Clear', emoji: '☀️' },
+  { value: 'rainy', label: 'Rainy', emoji: '🌧️' },
+  { value: 'snowy', label: 'Snowy', emoji: '❄️' },
+  { value: 'humid', label: 'Humid', emoji: '🌡️' },
+  { value: 'windy', label: 'Windy', emoji: '💨' },
 ];
 
-export const HOLIDAY_THEMES: { value: HolidayTheme; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'christmas', label: 'Christmas' },
-  { value: 'new_years', label: "New Year's" },
-  { value: 'halloween', label: 'Halloween' },
-  { value: 'thanksgiving', label: 'Thanksgiving' },
-  { value: 'pride', label: 'Pride' },
-  { value: 'summer_break', label: 'Summer Break' },
+export const HOLIDAY_THEMES: { value: HolidayTheme; label: string; emoji: string; description: string }[] = [
+  { value: 'none', label: 'None', emoji: '🚫', description: 'No holiday theme' },
+  { value: 'christmas', label: 'Christmas', emoji: '🎄', description: 'Winter holiday decorations and cheer' },
+  { value: 'new_years', label: "New Year's", emoji: '🎆', description: 'Countdown celebrations and confetti' },
+  { value: 'halloween', label: 'Halloween', emoji: '🎃', description: 'Spooky costumes and decorations' },
+  { value: 'thanksgiving', label: 'Thanksgiving', emoji: '🦃', description: 'Harvest and gratitude atmosphere' },
+  { value: 'pride', label: 'Pride', emoji: '🏳️‍🌈', description: 'Rainbow flags and celebration' },
+  { value: 'summer_break', label: 'Summer Break', emoji: '🏖️', description: 'Relaxed summer vacation vibes' },
 ];
 
-export const CITY_EVENTS: { value: CityEvent; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'marathon', label: 'Marathon' },
-  { value: 'fashion_week', label: 'Fashion Week' },
-  { value: 'sports_playoffs', label: 'Sports Playoffs' },
-  { value: 'concert', label: 'Concert' },
-  { value: 'protest', label: 'Protest' },
-  { value: 'election', label: 'Election' },
+export const CITY_EVENTS: { value: CityEvent; label: string; emoji: string; description: string }[] = [
+  { value: 'none', label: 'None', emoji: '🚫', description: 'No special event' },
+  { value: 'marathon', label: 'Marathon', emoji: '🏃', description: 'NYC Marathon with runners and crowds' },
+  { value: 'fashion_week', label: 'Fashion Week', emoji: '👗', description: 'Fashion-forward crowds and events' },
+  { value: 'sports_playoffs', label: 'Sports Playoffs', emoji: '🏆', description: 'Championship energy and team spirit' },
+  { value: 'concert', label: 'Concert', emoji: '🎵', description: 'Live music event atmosphere' },
+  { value: 'protest', label: 'Protest', emoji: '📢', description: 'March or demonstration energy' },
+  { value: 'election', label: 'Election', emoji: '🗳️', description: 'Election day political buzz' },
 ];
 
 // Age Group configurations
@@ -1216,146 +1209,170 @@ export const SUBWAY_LINES: { value: SubwayLine; label: string; color: string; de
   { value: 'any', label: 'Any Line', color: '#808183', description: 'Random selection', personality: 'Surprise me with variety' },
 ];
 
-export const LINE_PERSONALITIES: Record<SubwayLine, { vibe: string; typicalRiders: string[]; energy: 'fast' | 'moderate' | 'slow'; atmosphere: string }> = {
+export const LINE_PERSONALITIES: Record<SubwayLine, { line: SubwayLine; vibe: string; typicalRiders: string[]; energy: 'fast' | 'moderate' | 'slow'; atmosphere: string }> = {
   '1': {
+    line: '1',
     vibe: 'The reliable workhorse',
     typicalRiders: ['Business professionals', 'Students', 'Local commuters'],
     energy: 'fast',
     atmosphere: 'Direct, no-nonsense, efficient',
   },
   '2': {
+    line: '2',
     vibe: 'The express explorer',
     typicalRiders: ['Bronx residents', 'Brooklynites', 'Express seekers'],
     energy: 'fast',
     atmosphere: 'Fast-moving, diverse crowd',
   },
   '3': {
+    line: '3',
     vibe: 'The cultural connector',
     typicalRiders: ['Harlem residents', 'Culture seekers', 'South Brooklyn locals'],
     energy: 'moderate',
     atmosphere: 'Energetic, diverse, cultural',
   },
   '4': {
+    line: '4',
     vibe: 'The power commuter',
     typicalRiders: ['Wall Street professionals', 'Doctors', 'Lawyers'],
     energy: 'fast',
     atmosphere: 'Crowded, ambitious, driven',
   },
   '5': {
+    line: '5',
     vibe: 'The working class hero',
     typicalRiders: ['Working class', ' Bronx residents', 'Budget commuters'],
     energy: 'moderate',
     atmosphere: 'Lively, diverse, practical',
   },
   '6': {
+    line: '6',
     vibe: 'The neighborhood local',
     typicalRiders: ['Upper East Siders', 'Local shoppers', 'Casual travelers'],
     energy: 'slow',
     atmosphere: 'Intimate, local feel, relaxed',
   },
   '7': {
+    line: '7',
     vibe: 'The international express',
     typicalRiders: ['Queens residents', 'Foodies', 'Airport travelers'],
     energy: 'moderate',
     atmosphere: 'Diverse, international, vibrant',
   },
   'A': {
+    line: 'A',
     vibe: 'The legendary downtown',
     typicalRiders: ['Downtown creatives', 'Artists', 'Nightlife crowd'],
     energy: 'fast',
     atmosphere: 'Cool, artsy, jazz-infused',
   },
   'C': {
+    line: 'C',
     vibe: 'The local arts line',
     typicalRiders: ['Brooklyn locals', 'Artists', 'Chill commuters'],
     energy: 'slow',
     atmosphere: 'Relaxed, artistic, neighborhood-focused',
   },
   'E': {
+    line: 'E',
     vibe: 'The connector',
     typicalRiders: ['Queens workers', 'Midtown commuters', 'Airport travelers'],
     energy: 'moderate',
     atmosphere: 'Diverse, practical, reliable',
   },
   'B': {
+    line: 'B',
     vibe: 'The express professional',
     typicalRiders: ['Midtown workers', 'Express seekers', 'Busy commuters'],
     energy: 'fast',
     atmosphere: 'Fast-paced, business-focused',
   },
   'D': {
+    line: 'D',
     vibe: 'The gritty authentic',
     typicalRiders: ['Bronx to Brooklyn', 'Authentic NYC fans', 'Gritty vibe lovers'],
     energy: 'moderate',
     atmosphere: 'Gritty, real, unapologetic',
   },
   'F': {
+    line: 'F',
     vibe: 'The creative connector',
     typicalRiders: ['Park Slope families', 'Artists', 'Creative professionals'],
     energy: 'moderate',
     atmosphere: 'Hip, family-friendly, creative',
   },
   'M': {
+    line: 'M',
     vibe: 'The underdog',
     typicalRiders: ['Midtown to Brooklyn', 'Practical commuters', 'Efficient travelers'],
     energy: 'moderate',
     atmosphere: 'Underrated, reliable, practical',
   },
   'N': {
+    line: 'N',
     vibe: 'The bright express',
     typicalRiders: ['Theater district regulars', 'Tourists', 'Bright personalities'],
     energy: 'moderate',
     atmosphere: 'Bright, fun, tourist-friendly',
   },
   'W': {
+    line: 'W',
     vibe: 'The reliable local',
     typicalRiders: ['Astoria residents', 'Queens commuters', 'Dependable riders'],
     energy: 'moderate',
     atmosphere: 'Reliable, local, steady',
   },
   'Q': {
+    line: 'Q',
     vibe: 'The modern luxury',
     typicalRiders: ['Upper East Siders', 'Modern professionals', 'Second Avenue riders'],
     energy: 'moderate',
     atmosphere: 'Modern, upscale, smooth',
   },
   'R': {
+    line: 'R',
     vibe: 'The workhorse',
     typicalRiders: ['All boroughs', 'Reliable commuters', 'Students'],
     energy: 'moderate',
     atmosphere: 'Reliable, all-purpose, dependable',
   },
   'J': {
+    line: 'J',
     vibe: 'The historic line',
     typicalRiders: ['Jamaica residents', 'Historic NYC fans', 'Authentic borough riders'],
     energy: 'moderate',
     atmosphere: 'Historic, gritty, old-school NYC',
   },
   'Z': {
+    line: 'Z',
     vibe: 'The phantom express',
     typicalRiders: ['Express seekers', 'Rare sight', 'NYC transit enthusiasts'],
     energy: 'fast',
     atmosphere: 'Mysterious, rare, elusive',
   },
   'G': {
+    line: 'G',
     vibe: 'The local hero',
     typicalRiders: ['Brooklyn crossers', 'Hipsters', 'Local Brooklyn riders'],
     energy: 'slow',
     atmosphere: 'Chill, local, Brooklyn pride',
   },
   'L': {
+    line: 'L',
     vibe: 'The trendsetter',
     typicalRiders: ['Williamsburg residents', 'Trendsetters', 'Young professionals'],
     energy: 'moderate',
     atmosphere: 'Cool, trendy, young energy',
   },
   'S': {
+    line: 'S',
     vibe: 'The short hopper',
     typicalRiders: ['Times Square shoppers', 'Tourists', 'Short-distance travelers'],
     energy: 'slow',
     atmosphere: 'Quick, simple, transitional',
   },
   'any': {
+    line: 'any',
     vibe: 'The wildcard',
     typicalRiders: ['Adventurous riders', 'Transit enthusiasts', 'Surprise seekers'],
     energy: 'moderate',
@@ -1415,21 +1432,21 @@ export const NEIGHBORHOOD_PERSONALITIES: Record<Neighborhood, NeighborhoodPerson
   },
 };
 
-export const STREET_LOCATIONS: { value: StreetLocation; label: string; description: string }[] = [
-  { value: 'coffee_shop', label: 'Coffee Shop', description: 'Classic street interview location' },
-  { value: 'park', label: 'Park', description: 'Central Park or neighborhood park' },
-  { value: 'landmark', label: 'Landmark', description: 'Iconic NYC location' },
-  { value: 'street_corner', label: 'Street Corner', description: 'Classic intersection' },
-  { value: 'shopping_area', label: 'Shopping Area', description: 'Commercial district' },
+export const STREET_LOCATIONS: { value: StreetLocation; label: string; description: string; emoji: string }[] = [
+  { value: 'coffee_shop', label: 'Coffee Shop', description: 'Classic street interview location', emoji: '☕' },
+  { value: 'park', label: 'Park', description: 'Central Park or neighborhood park', emoji: '🌳' },
+  { value: 'landmark', label: 'Landmark', description: 'Iconic NYC location', emoji: '🏛️' },
+  { value: 'street_corner', label: 'Street Corner', description: 'Classic intersection', emoji: '🚦' },
+  { value: 'shopping_area', label: 'Shopping Area', description: 'Commercial district', emoji: '🛍️' },
 ];
 
-export const STREET_FESTIVALS: { value: StreetFestival; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'street_fair', label: 'Street Fair' },
-  { value: 'farmers_market', label: 'Farmers Market' },
-  { value: 'art_walk', label: 'Art Walk' },
-  { value: 'food_festival', label: 'Food Festival' },
-  { value: 'parade', label: 'Parade' },
+export const STREET_FESTIVALS: { value: StreetFestival; label: string; emoji: string; description: string }[] = [
+  { value: 'none', label: 'None', emoji: '🚫', description: 'No festival' },
+  { value: 'street_fair', label: 'Street Fair', emoji: '🎪', description: 'Vendors, food stalls, and live entertainment' },
+  { value: 'farmers_market', label: 'Farmers Market', emoji: '🥬', description: 'Fresh produce and artisan goods' },
+  { value: 'art_walk', label: 'Art Walk', emoji: '🎨', description: 'Gallery openings and street art displays' },
+  { value: 'food_festival', label: 'Food Festival', emoji: '🍔', description: 'Diverse cuisines and food trucks' },
+  { value: 'parade', label: 'Parade', emoji: '🎉', description: 'Marching bands and festive floats' },
 ];
 
 // Motivational enhancement constants
@@ -1597,15 +1614,15 @@ export const URBAN_AMBIENT_SOUNDS: { value: UrbanAmbientSound; label: string }[]
   { value: 'weather_audio', label: 'Weather' },
 ];
 
-export const STREET_PLOT_TWIST_TYPES: { value: StreetPlotTwistType; label: string }[] = [
-  { value: 'car_horn_interruption', label: 'Car Horn' },
-  { value: 'dog_approaches', label: 'Dog Approaches' },
-  { value: 'vendor_interruption', label: 'Vendor Interruption' },
-  { value: 'friend_recognition', label: 'Friend Recognition' },
-  { value: 'phone_call', label: 'Phone Call' },
-  { value: 'someone_joins', label: 'Someone Joins' },
-  { value: 'unexpected_weather', label: 'Weather Change' },
-  { value: 'none', label: 'None' },
+export const STREET_PLOT_TWIST_TYPES: { value: StreetPlotTwistType; label: string; description: string }[] = [
+  { value: 'car_horn_interruption', label: 'Car Horn', description: 'Sudden car horn interrupts the conversation' },
+  { value: 'dog_approaches', label: 'Dog Approaches', description: 'A friendly dog wanders into frame' },
+  { value: 'vendor_interruption', label: 'Vendor Interruption', description: 'Street vendor offers something mid-interview' },
+  { value: 'friend_recognition', label: 'Friend Recognition', description: 'Someone recognizes the interviewee' },
+  { value: 'phone_call', label: 'Phone Call', description: 'Phone rings at the perfect moment' },
+  { value: 'someone_joins', label: 'Someone Joins', description: 'A stranger jumps into the conversation' },
+  { value: 'unexpected_weather', label: 'Weather Change', description: 'Sudden weather shift changes the scene' },
+  { value: 'none', label: 'None', description: 'No interruption' },
 ];
 
 export const BYSTANDER_REACTION_TYPES: { value: BystanderReactionType; label: string; emoji: string }[] = [
@@ -1660,16 +1677,32 @@ export const INTERVIEWER_POSITIONS: { value: InterviewerPosition; label: string;
 ];
 
 // Subway Stations (common NYC stations)
-export const SUBWAY_STATIONS: { value: string; label: string; line: string }[] = [
-  { value: 'times_square', label: 'Times Square', line: '1/2/3/7/N/Q/R/W/S' },
-  { value: 'grand_central', label: 'Grand Central', line: '4/5/6/7/S' },
-  { value: 'union_square', label: 'Union Square', line: '4/5/6/N/Q/R/W/L/M' },
-  { value: 'port_authority', label: 'Port Authority', line: 'A/C/E/1/2/3/7' },
-  { value: 'central_park', label: 'Central Park', line: '1/A/B/C' },
-  { value: 'brooklyn_bridge', label: 'Brooklyn Bridge', line: '4/5/6/J/Z' },
-  { value: 'fulton_street', label: 'Fulton Street', line: '2/3/4/5/A/C/J/Z' },
-  { value: 'columbus_circle', label: 'Columbus Circle', line: '1/A/B/C/D' },
-];
+export const SUBWAY_STATIONS: Record<string, string[]> = {
+  '1': ['Times Square', 'Columbus Circle', 'Central Park', '14th Street', '34th Street-Penn Station'],
+  '2': ['Times Square', 'Fulton Street', 'Brooklyn Bridge', '14th Street', '34th Street-Penn Station'],
+  '3': ['Times Square', 'Fulton Street', '14th Street', '34th Street-Penn Station', 'Harlem-148th St'],
+  '4': ['Grand Central', 'Union Square', 'Brooklyn Bridge', 'Fulton Street', '14th Street'],
+  '5': ['Grand Central', 'Union Square', 'Brooklyn Bridge', 'Fulton Street', '14th Street'],
+  '6': ['Grand Central', 'Union Square', 'Brooklyn Bridge', '14th Street', '33rd Street'],
+  '7': ['Times Square', 'Grand Central', 'Flushing-Main St', 'Mets-Willets Point', 'Court Square'],
+  'A': ['Columbus Circle', 'Port Authority', 'Fulton Street', 'Canal Street', 'High Street'],
+  'C': ['Columbus Circle', 'Port Authority', 'Canal Street', 'Spring Street', 'Hoyt-Schermerhorn'],
+  'E': ['Port Authority', 'Canal Street', 'World Trade Center', '23rd Street', '50th Street'],
+  'B': ['Columbus Circle', '34th Street-Herald Square', 'West 4th Street', 'Grand Street', 'Atlantic Ave'],
+  'D': ['Columbus Circle', '34th Street-Herald Square', 'West 4th Street', 'Grand Street', 'Atlantic Ave'],
+  'F': ['34th Street-Herald Square', 'West 4th Street', '14th Street', 'Delancey Street', 'Jay Street'],
+  'M': ['34th Street-Herald Square', 'Essex Street', 'Myrtle Ave', 'Knickerbocker Ave', 'Court Square'],
+  'N': ['Times Square', 'Union Square', 'Canal Street', '34th Street-Herald Square', 'Atlantic Ave'],
+  'Q': ['Times Square', 'Union Square', 'Canal Street', '34th Street-Herald Square', '72nd Street'],
+  'R': ['Times Square', 'Union Square', 'Canal Street', '34th Street-Herald Square', 'Court Street'],
+  'W': ['Times Square', 'Union Square', '34th Street-Herald Square', 'Cortlandt Street', 'Astoria Blvd'],
+  'J': ['Brooklyn Bridge', 'Fulton Street', 'Marcy Ave', 'Myrtle Ave', 'Jamaica Center'],
+  'Z': ['Brooklyn Bridge', 'Fulton Street', 'Marcy Ave', 'Jamaica Center', 'Sutphin Blvd'],
+  'G': ['Court Square', 'Hoyt-Schermerhorn', 'Atlantic Ave', 'Church Ave', 'Bedford-Nostrand'],
+  'L': ['Union Square', '14th Street', '1st Avenue', 'Bedford Ave', 'Lorimer Street'],
+  'S': ['Times Square', 'Grand Central'],
+  'any': ['Times Square', 'Grand Central', 'Union Square', 'Columbus Circle', 'Port Authority', 'Brooklyn Bridge', 'Fulton Street', 'Canal Street'],
+};
 
 // Motivational Music Types
 export const MOTIVATIONAL_MUSIC_TYPES: { value: MotivationalMusicType; label: string; description: string; emoji: string }[] = [
@@ -1681,25 +1714,25 @@ export const MOTIVATIONAL_MUSIC_TYPES: { value: MotivationalMusicType; label: st
 ];
 
 // Neighborhoods
-export const NEIGHBORHOODS: { value: Neighborhood; label: string; description: string }[] = [
-  { value: 'soho', label: 'SoHo', description: 'Trendy shopping and cast-iron architecture' },
-  { value: 'harlem', label: 'Harlem', description: 'Cultural hub with rich jazz history' },
-  { value: 'williamsburg', label: 'Williamsburg', description: 'Hipster paradise with street art' },
-  { value: 'fidi', label: 'FiDi', description: 'Financial district, modern skyscrapers' },
-  { value: 'times_square', label: 'Times Square', description: 'The crossroads of the world' },
-  { value: 'chelsea', label: 'Chelsea', description: 'Art galleries and the High Line' },
-  { value: 'east_village', label: 'East Village', description: 'Bohemian vibe with diverse bars' },
+export const NEIGHBORHOODS: { value: Neighborhood; label: string; description: string; color: string }[] = [
+  { value: 'soho', label: 'SoHo', description: 'Trendy shopping and cast-iron architecture', color: '#8B5CF6' },
+  { value: 'harlem', label: 'Harlem', description: 'Cultural hub with rich jazz history', color: '#F59E0B' },
+  { value: 'williamsburg', label: 'Williamsburg', description: 'Hipster paradise with street art', color: '#10B981' },
+  { value: 'fidi', label: 'FiDi', description: 'Financial district, modern skyscrapers', color: '#3B82F6' },
+  { value: 'times_square', label: 'Times Square', description: 'The crossroads of the world', color: '#EF4444' },
+  { value: 'chelsea', label: 'Chelsea', description: 'Art galleries and the High Line', color: '#EC4899' },
+  { value: 'east_village', label: 'East Village', description: 'Bohemian vibe with diverse bars', color: '#F97316' },
 ];
 
 // Speaker Archetypes
-export const SPEAKER_ARCHETYPES: { value: SpeakerArchetype; label: string; description: string; emoji: string }[] = [
-  { value: 'drill_sergeant', label: 'Drill Sergeant', description: 'Tough love, intense motivation', emoji: '🫡' },
-  { value: 'tony_robbins', label: 'Tony Robbins', description: 'High-energy life coach style', emoji: '🔥' },
-  { value: 'brene_brown', label: 'Brené Brown', description: 'Vulnerability and courage expert', emoji: '💛' },
-  { value: 'gary_vee', label: 'Gary Vee', description: 'Hustle culture entrepreneur', emoji: '💎' },
-  { value: 'oprah', label: 'Oprah', description: 'Empathetic, story-driven wisdom', emoji: '✨' },
-  { value: 'eric_thomas', label: 'Eric Thomas', description: 'Former athlete turned motivator', emoji: '🏆' },
-  { value: 'simon_sinek', label: 'Simon Sinek', description: 'Purpose-driven leadership expert', emoji: '🎯' },
+export const SPEAKER_ARCHETYPES: { value: SpeakerArchetype; label: string; description: string; emoji: string; style: string }[] = [
+  { value: 'drill_sergeant', label: 'Drill Sergeant', description: 'Tough love, intense motivation', emoji: '🫡', style: 'Commanding, direct, in-your-face delivery with sharp cadence' },
+  { value: 'tony_robbins', label: 'Tony Robbins', description: 'High-energy life coach style', emoji: '🔥', style: 'High-energy, dynamic gestures, rapid-fire inspiration' },
+  { value: 'brene_brown', label: 'Brené Brown', description: 'Vulnerability and courage expert', emoji: '💛', style: 'Warm, conversational, storytelling with emotional depth' },
+  { value: 'gary_vee', label: 'Gary Vee', description: 'Hustle culture entrepreneur', emoji: '💎', style: 'Raw, unfiltered, fast-paced entrepreneurial hustle talk' },
+  { value: 'oprah', label: 'Oprah', description: 'Empathetic, story-driven wisdom', emoji: '✨', style: 'Empathetic, soulful, audience-connecting storytelling' },
+  { value: 'eric_thomas', label: 'Eric Thomas', description: 'Former athlete turned motivator', emoji: '🏆', style: 'Passionate, rhythmic, preacher-like intensity and conviction' },
+  { value: 'simon_sinek', label: 'Simon Sinek', description: 'Purpose-driven leadership expert', emoji: '🎯', style: 'Thoughtful, measured, purpose-driven intellectual delivery' },
 ];
 
 // Topic Age Group Mapping

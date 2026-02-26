@@ -31,6 +31,10 @@ import type {
   ProductPlacementConfig,
   ExportPlatform,
   SocialDynamicsConfig,
+  SubwayEnhancementConfig,
+  StreetEnhancementConfig,
+  MotivationalEnhancementConfig,
+  RemotionEffectsConfig,
 } from './types';
 import { getUserId } from './auth';
 import { createClipPlan, createVariationPrompt, createBatchVariationPrompt } from './promptEngine';
@@ -222,13 +226,13 @@ export interface CreateClipOptions {
   wisdomDemographic?: WisdomDemographic;
   wisdomSetting?: WisdomSetting;
   subwayLine?: string;
-  subwayEnhancements?: Record<string, unknown>;
+  subwayEnhancements?: SubwayEnhancementConfig;
   neighborhood?: string;
-  streetEnhancements?: Record<string, unknown>;
-  motivationalEnhancements?: Record<string, unknown>;
+  streetEnhancements?: StreetEnhancementConfig;
+  motivationalEnhancements?: MotivationalEnhancementConfig;
   speakerArchetype?: string;
   targetAgeGroup?: string;
-  effects?: Record<string, unknown>;
+  effects?: RemotionEffectsConfig;
   // New feature fields
   language?: SupportedLanguage;
   niche?: NicheCategory;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Film, Plus, Trash2, Clock, Moon, Sun, Sparkles } from 'lucide-react';
+import { Film, Clock, Moon, Sun, Sparkles } from 'lucide-react';
 import type { TransformationArc, TransformationScene, TransformationSceneConfig } from '../lib/types';
 import { TRANSFORMATION_SCENES } from '../lib/constants';
 

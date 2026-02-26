@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Share2, ChevronDown, ChevronUp, Smartphone, Monitor, Download } from 'lucide-react';
+import { Share2, ChevronDown, ChevronUp, Smartphone, Monitor } from 'lucide-react';
 import { PLATFORM_SPECS } from '../lib/constants';
 import { clsx } from '../lib/format';
 import type { ExportPlatform } from '../lib/types';

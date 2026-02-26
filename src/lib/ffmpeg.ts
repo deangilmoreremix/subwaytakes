@@ -308,21 +308,23 @@ export async function processAndUploadVideo(
 ): Promise<string> {
   let processedVideoUrl: string;
 
+  const opts = (options ?? {}) as Record<string, unknown>;
+
   switch (operation) {
     case 'thumbnail':
-      processedVideoUrl = await generateThumbnail(videoUrl, options);
+      processedVideoUrl = await generateThumbnail(videoUrl, opts);
       break;
     case 'stitch':
-      processedVideoUrl = await stitchVideos(options.videoUrls, options);
+      processedVideoUrl = await stitchVideos(opts.videoUrls as string[], opts);
       break;
     case 'add_captions':
-      processedVideoUrl = await addCaptions(videoUrl, options.captionText, options.captionStyle);
+      processedVideoUrl = await addCaptions(videoUrl, opts.captionText as string, opts.captionStyle as CaptionStyle);
       break;
     case 'convert':
-      processedVideoUrl = await convertVideo(videoUrl, options.format, options.quality);
+      processedVideoUrl = await convertVideo(videoUrl, opts.format as 'mp4' | 'webm' | 'mov', opts.quality as 'low' | 'medium' | 'high' | undefined);
       break;
     case 'trim':
-      processedVideoUrl = await trimVideo(videoUrl, options.startTime, options.endTime);
+      processedVideoUrl = await trimVideo(videoUrl, opts.startTime as string, opts.endTime as string);
       break;
     default:
       throw new Error(`Unknown operation: ${operation}`);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Cloud, Sun, Snowflake, CloudRain, Wind, Umbrella, Thermometer } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import type { SeasonalContext, Season, WeatherCondition, HolidayTheme, CityEvent } from '../lib/types';
 import { SEASONS, WEATHER_CONDITIONS, HOLIDAY_THEMES, CITY_EVENTS } from '../lib/constants';
 
@@ -9,13 +9,6 @@ interface SeasonalContextSelectorProps {
   disabled?: boolean;
 }
 
-const WEATHER_ICONS: Record<WeatherCondition, typeof Sun> = {
-  clear: Sun,
-  rainy: CloudRain,
-  snowy: Snowflake,
-  humid: Thermometer,
-  windy: Wind,
-};
 
 export function SeasonalContextSelector({ value, onChange, disabled }: SeasonalContextSelectorProps) {
   const [isEnabled, setIsEnabled] = useState(value?.enabled ?? false);
@@ -85,8 +78,6 @@ export function SeasonalContextSelector({ value, onChange, disabled }: SeasonalC
     onChange({ enabled: true, season, weather, holiday, cityEvent, decorations, crowdAttire: newAttire });
   }
 
-  const WeatherIcon = WEATHER_ICONS[weather];
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -143,7 +134,6 @@ export function SeasonalContextSelector({ value, onChange, disabled }: SeasonalC
             <label className="text-xs font-medium text-zinc-400">Weather</label>
             <div className="flex gap-2">
               {WEATHER_CONDITIONS.map((w) => {
-                const Icon = WEATHER_ICONS[w.value];
                 return (
                   <button
                     key={w.value}

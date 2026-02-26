@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Drama, Clock, Zap, MessageCircle, Dog, Store, Phone, Users, CloudRain, Ban } from 'lucide-react';
+import { Drama, Zap, MessageCircle, Dog, Store, Phone, Users, CloudRain, Ban } from 'lucide-react';
 import type { StreetPlotTwist, StreetPlotTwistType } from '../lib/types';
 import { STREET_PLOT_TWIST_TYPES } from '../lib/constants';
 

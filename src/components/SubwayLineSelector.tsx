@@ -1,4 +1,4 @@
-import { TrainFront, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import type { SubwayLine } from '../lib/types';
 import { SUBWAY_LINES, LINE_PERSONALITIES } from '../lib/constants';
 

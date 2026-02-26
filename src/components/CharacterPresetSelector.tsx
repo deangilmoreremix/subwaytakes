@@ -13,6 +13,10 @@ const PRESET_COLORS: Record<CharacterPreset, { bg: string; border: string; text:
   street_vox: { bg: 'bg-green-500/15', border: 'border-green-500/50', text: 'text-green-400' },
   documentary: { bg: 'bg-orange-500/15', border: 'border-orange-500/50', text: 'text-orange-400' },
   random_encounter: { bg: 'bg-rose-500/15', border: 'border-rose-500/50', text: 'text-rose-400' },
+  wisdom_seeker: { bg: 'bg-amber-500/15', border: 'border-amber-500/50', text: 'text-amber-400' },
+  wisdom_mentor: { bg: 'bg-teal-500/15', border: 'border-teal-500/50', text: 'text-teal-400' },
+  life_lessons: { bg: 'bg-cyan-500/15', border: 'border-cyan-500/50', text: 'text-cyan-400' },
+  grandparent_wisdom: { bg: 'bg-yellow-500/15', border: 'border-yellow-500/50', text: 'text-yellow-400' },
   custom: { bg: 'bg-zinc-500/15', border: 'border-zinc-500/50', text: 'text-zinc-400' },
 };
 

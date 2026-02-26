@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, Plus, Trash2, TrainFront, Clock, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, Clock, ArrowRight } from 'lucide-react';
 import type { MultiStopJourney, JourneyStop, SubwaySceneType, SubwayLine } from '../lib/types';
 import { SUBWAY_LINES, SUBWAY_STATIONS, SUBWAY_SCENES } from '../lib/constants';
 

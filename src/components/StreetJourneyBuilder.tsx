@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, Plus, Trash2, Coffee, Trees, Landmark, Clock, ArrowRight, Store } from 'lucide-react';
+import { Plus, Trash2, Clock, ArrowRight } from 'lucide-react';
 import type { StreetMultiLocationJourney, StreetJourneyStop, StreetLocation } from '../lib/types';
 import { STREET_LOCATIONS } from '../lib/constants';
 
@@ -16,13 +16,6 @@ const NARRATIVE_ARCS = [
   { value: 'cultural_exploration', label: 'Cultural', description: 'Exploring neighborhood culture', emoji: '🌍' },
 ] as const;
 
-const LOCATION_ICONS: Record<StreetLocation, typeof Coffee> = {
-  coffee_shop: Coffee,
-  park: Trees,
-  landmark: Landmark,
-  street_corner: MapPin,
-  shopping_area: Store,
-};
 
 const PURPOSE_COLORS: Record<StreetJourneyStop['narrativePurpose'], { bg: string; border: string; text: string }> = {
   hook: { bg: 'bg-emerald-500/15', border: 'border-emerald-500/50', text: 'text-emerald-400' },
@@ -195,7 +188,6 @@ export function StreetJourneyBuilder({ value, onChange, disabled }: StreetJourne
             <label className="text-xs font-medium text-zinc-400">Journey Stops</label>
             {stops.map((stop, index) => {
               const colors = PURPOSE_COLORS[stop.narrativePurpose];
-              const Icon = LOCATION_ICONS[stop.location];
               const locations = LOCATION_NAMES[stop.location];
 
               return (

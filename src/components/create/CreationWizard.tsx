@@ -29,7 +29,6 @@ export function CreationWizard({ clip, steps, children, accentColor = 'amber', o
           {steps.map((step, i) => {
             const isCompleted = i < clip.currentStep;
             const isActive = i === clip.currentStep;
-            const isUpcoming = i > clip.currentStep;
 
             return (
               <div key={i} className="flex items-center flex-1 last:flex-none">

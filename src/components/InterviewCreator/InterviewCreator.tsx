@@ -580,7 +580,7 @@ interface Step2DetailsProps {
   onSave: (updates: Partial<Clip>) => void;
 }
 
-function Step2Details({ clip, topics, state, onChange, onSave }: Step2DetailsProps) {
+function Step2Details({ topics, state, onChange, onSave }: Step2DetailsProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -716,7 +716,7 @@ interface Step3ConnectProps {
 function Step3Connect({
   clips,
   currentClipId,
-  transitions,
+  transitions: _transitions,
   onSelectClip,
   onRemoveClip,
   onMoveClip,

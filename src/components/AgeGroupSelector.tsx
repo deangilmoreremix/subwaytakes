@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { Sparkles, Zap, Users, Briefcase, Crown } from 'lucide-react';
 import type { AgeGroup } from '../lib/types';
-import { AGE_GROUP_CONFIGS, AGE_APPROPRIATE_TOPICS } from '../lib/constants';
+import { AGE_GROUP_CONFIGS } from '../lib/constants';
 import { getSuggestedTopics, filterModesByAge } from '../lib/contentFilter';
 
 interface AgeGroupSelectorProps {

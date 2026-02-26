@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Sparkles, ArrowRight, X, TrendingUp, Zap, Plus, RefreshCw, BookOpen, Zap as ZapIcon, Layers, Target, Lightbulb, CheckCircle } from 'lucide-react';
-import { 
-  analyzeKeyword, 
-  analyzeMultipleKeywords,
+import { Sparkles, ArrowRight, X, TrendingUp, Zap, Plus, BookOpen, Zap as ZapIcon, Layers, Target, CheckCircle } from 'lucide-react';
+import {
+  analyzeKeyword,
   expandKeyword,
   getSuggestedKeywords,
   getAllPopularKeywords,
@@ -14,7 +13,6 @@ import {
   generatePromptVariations,
   getPromptsByCategory,
   scoreAndOptimizePrompt,
-  getChainById,
   type KeywordAnalysis,
   type SentimentModifier,
   type PlatformTarget,

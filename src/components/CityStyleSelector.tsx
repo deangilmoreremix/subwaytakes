@@ -40,6 +40,12 @@ const CITY_THEMES: Record<CityStyle, { primary: string; secondary: string; accen
     accent: 'text-zinc-400',
     icon: 'bg-zinc-500/20',
   },
+  custom: {
+    primary: 'from-zinc-400/20 to-zinc-800/80',
+    secondary: 'border-zinc-400/40',
+    accent: 'text-zinc-300',
+    icon: 'bg-zinc-400/20',
+  },
 };
 
 export function CityStyleSelector({ value, onChange, compact = false, disabled }: CityStyleSelectorProps) {

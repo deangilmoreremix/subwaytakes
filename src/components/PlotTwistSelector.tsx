@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Drama, Clock, Zap, MessageCircle, Eye, DoorOpen, Phone, Users, Ban } from 'lucide-react';
+import { Drama, Zap, MessageCircle, Eye, DoorOpen, Phone, Users, Ban } from 'lucide-react';
 import type { PlotTwist, PlotTwistType } from '../lib/types';
 import { PLOT_TWIST_TYPES } from '../lib/constants';
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Plus, Trash2, Volume2, Trophy, Heart, Zap, Brain } from 'lucide-react';
+import { Users, Plus, Trash2, Volume2, Trophy, Heart } from 'lucide-react';
 import type { AudienceEnergyConfig, AudienceMoment, AudienceReactionType } from '../lib/types';
 
 interface AudienceEnergyPanelProps {
@@ -16,13 +16,6 @@ const REACTION_TYPES: { value: AudienceReactionType; label: string; emoji: strin
   { value: 'contemplative', label: 'Contemplative', emoji: '🤔', description: 'Thoughtful, deep in reflection' },
 ];
 
-const REACTION_ICONS: Record<AudienceReactionType, typeof Heart> = {
-  cheering: Trophy,
-  inspired: Zap,
-  moved: Heart,
-  energized: Zap,
-  contemplative: Brain,
-};
 
 export function AudienceEnergyPanel({ value, onChange, disabled }: AudienceEnergyPanelProps) {
   const [isEnabled, setIsEnabled] = useState(value?.enabled ?? false);
@@ -191,8 +184,6 @@ export function AudienceEnergyPanel({ value, onChange, disabled }: AudienceEnerg
           <div className="space-y-2">
             <label className="text-xs font-medium text-zinc-400">Reaction Moments</label>
             {moments.map((moment, index) => {
-              const Icon = REACTION_ICONS[moment.type];
-              
               return (
                 <div
                   key={moment.id}

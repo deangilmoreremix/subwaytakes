@@ -32,7 +32,7 @@ function getSeriesStatus(clips: Clip[]): { done: number; total: number; hasError
   return { done, total: clips.length, hasErrors };
 }
 
-export function SeriesGroup({ batchId, clips, onSelectClip }: SeriesGroupProps) {
+export function SeriesGroup({ clips, onSelectClip }: SeriesGroupProps) {
   const [expanded, setExpanded] = useState(true);
 
   if (clips.length === 0) return null;
@@ -51,7 +51,7 @@ export function SeriesGroup({ batchId, clips, onSelectClip }: SeriesGroupProps) 
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="grid grid-cols-2 gap-0.5 w-16 h-16 rounded-lg overflow-hidden bg-zinc-800">
-              {previewClips.map((clip, i) => (
+              {previewClips.map((clip, _i) => (
                 <div key={clip.id} className="relative bg-zinc-900">
                   {clip.result_url ? (
                     <video

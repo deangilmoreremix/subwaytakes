@@ -23,6 +23,7 @@ const CITY_VISUAL_CUES: Record<CityStyle, string> = {
   tokyo: 'Tokyo Metro aesthetic, ultra-clean platforms, organized queuing lines on floor, digital screens, bright white lighting, orderly commuters',
   paris: 'Paris Metro aesthetic, Art Nouveau entrance style, dark green railings, vintage tilework, Metropolitain signage, narrow platforms',
   generic: 'Generic modern urban subway station, concrete pillars, fluorescent lighting, standard transit infrastructure',
+  custom: 'Custom urban transit station, unique architectural details, local transit signage, distinct cultural elements',
 };
 
 const CAMERA_DESCRIPTIONS: Record<CameraDirection, string> = {

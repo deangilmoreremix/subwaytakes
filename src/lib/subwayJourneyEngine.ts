@@ -33,7 +33,6 @@ export interface StopNarrative {
 export function generateJourneyNarrative(
   journey: MultiStopJourney,
   topic: string,
-  enhancements?: SubwayEnhancementConfig
 ): JourneyNarrative {
   const { stops, narrativeArc } = journey;
   
@@ -146,8 +145,8 @@ function generateStopNarrative(
 function generateDialogueSuggestion(
   stop: JourneyStop,
   topic: string,
-  arc: MultiStopJourney['narrativeArc'],
-  personality?: LinePersonality
+  _arc: MultiStopJourney['narrativeArc'],
+  _personality?: LinePersonality
 ): string {
   if (stop.question) return stop.question;
   
@@ -179,7 +178,7 @@ function generateDialogueSuggestion(
 }
 
 function generateCameraDirection(
-  stop: JourneyStop,
+  _stop: JourneyStop,
   index: number,
   totalStops: number
 ): string {

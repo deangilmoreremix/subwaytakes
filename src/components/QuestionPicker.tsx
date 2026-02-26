@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Flame, X, ChevronDown, BarChart3 } from 'lucide-react';
+import { Search, Flame, ChevronDown, BarChart3 } from 'lucide-react';
 import { listQuestions, getQuestionCategories, type QuestionBankItem } from '../lib/questionBank';
 
 interface QuestionPickerProps {

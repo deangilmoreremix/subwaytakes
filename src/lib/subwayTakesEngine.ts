@@ -1,5 +1,5 @@
-import type { DebateLoopConfig, DebateStance, DebateDepth, DebateResolution, SubwayTakeScript, CaptionConfig, CameraDirection } from './types';
-import { DEFAULT_DEBATE_LOOP, DEFAULT_CAPTION_CONFIG } from './constants';
+import type { DebateLoopConfig, DebateStance, DebateDepth, DebateResolution, SubwayTakeScript, CameraDirection } from './types';
+import { DEFAULT_DEBATE_LOOP } from './constants';
 
 interface GenerateSubwayTakeScriptParams {
   topic: string;
@@ -16,7 +16,7 @@ interface GenerateSubwayTakeScriptParams {
 export function generateSubwayTakeScript(
   params: GenerateSubwayTakeScriptParams
 ): SubwayTakeScript {
-  const { topic, angle, cityVibe = 'NYC subway, fast, candid', debateLoop = DEFAULT_DEBATE_LOOP, duration = 30 } = params;
+  const { topic, angle, debateLoop = DEFAULT_DEBATE_LOOP } = params;
 
   // Determine stance based on config
   const stance = determineStance(debateLoop.stance, topic);
@@ -83,7 +83,7 @@ function buildHook(topic: string, angle?: string): string {
   return hooks[Math.floor(Math.random() * hooks.length)];
 }
 
-function buildTakeBeat(topic: string, angle?: string) {
+function buildTakeBeat(topic: string, _angle?: string) {
   const takes: Record<string, string[]> = {
     'Hydration Myths': [
       "We're drinking too much water",
@@ -158,7 +158,7 @@ function buildTakeBeat(topic: string, angle?: string) {
   };
 }
 
-function buildReactionBeat(stance: 'agree' | 'disagree', topic: string) {
+function buildReactionBeat(stance: 'agree' | 'disagree', _topic: string) {
   const agreeReactions = [
     "100% agree with that",
     "Finally someone said it",
@@ -190,7 +190,7 @@ function buildReactionBeat(stance: 'agree' | 'disagree', topic: string) {
 }
 
 function buildDiscussionBeats(
-  topic: string,
+  _topic: string,
   stance: 'agree' | 'disagree',
   depth: DebateDepth,
   replyCount: number,

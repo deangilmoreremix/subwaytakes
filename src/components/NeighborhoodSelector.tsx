@@ -1,4 +1,4 @@
-import { MapPin, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import type { Neighborhood } from '../lib/types';
 import { NEIGHBORHOODS, NEIGHBORHOOD_PERSONALITIES } from '../lib/constants';
 

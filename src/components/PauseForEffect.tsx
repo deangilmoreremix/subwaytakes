@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Camera, Volume2, Zap } from 'lucide-react';
+import { Camera, Volume2, Zap } from 'lucide-react';
 import type { PauseForEffectConfig } from '../lib/types';
 
 interface PauseForEffectProps {

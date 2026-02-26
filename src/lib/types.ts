@@ -1471,6 +1471,7 @@ export interface Clip {
   caption_file_url: string | null;
   thumbnail_url: string | null;
   template_id: string | null;
+  effects: RemotionEffectsConfig | null;
 }
 
 export interface Question {

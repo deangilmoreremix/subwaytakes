@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Plus, Trash2, Volume2 } from 'lucide-react';
+import { Plus, Trash2, Volume2 } from 'lucide-react';
 import type { CrowdReactionConfig, CrowdReaction } from '../lib/types';
 import { CROWD_REACTION_TYPES } from '../lib/constants';
 

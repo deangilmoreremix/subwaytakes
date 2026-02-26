@@ -337,7 +337,7 @@ export async function createVideoExport(
 
 export async function getExportsForContent(
   parentId: string,
-  parentType: 'clip' | 'episode'
+  parentType: 'clip' | 'episode' | 'compilation'
 ): Promise<Array<{
   id: string;
   platform: string;

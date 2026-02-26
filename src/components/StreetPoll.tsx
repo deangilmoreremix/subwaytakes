@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BarChart3, Plus, Trash2, Users, Check, X } from 'lucide-react';
+import { BarChart3, Plus, Trash2, Users } from 'lucide-react';
 import type { StreetPoll, PollQuestionType } from '../lib/types';
 
 interface StreetPollProps {

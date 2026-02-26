@@ -472,7 +472,7 @@ export function analyzeKeyword(
 function buildStreetInterviewAnalysis(
   keyword: string, 
   normalized: string,
-  options?: { sentiment?: SentimentModifier }
+  _options?: { sentiment?: SentimentModifier }
 ): KeywordAnalysis {
   let interviewMode: InterviewMode = 'hot_take_challenge';
   let interviewStyle: InterviewStyle = 'man_on_street';
@@ -551,8 +551,8 @@ function buildStreetInterviewAnalysis(
 }
 
 function buildSubwayInterviewAnalysis(
-  keyword: string, 
-  normalized: string,
+  keyword: string,
+  _normalized: string,
   options?: { platform?: PlatformTarget }
 ): KeywordAnalysis {
   const subwayLines: SubwayLine[] = ['1', 'A', 'Q', '7', 'L', 'G'];
@@ -590,8 +590,8 @@ function buildSubwayInterviewAnalysis(
 }
 
 function buildStudioInterviewAnalysis(
-  keyword: string, 
-  normalized: string,
+  keyword: string,
+  _normalized: string,
   options?: { sentiment?: SentimentModifier }
 ): KeywordAnalysis {
   let energyLevel: EnergyLevel = 'conversational';
@@ -908,7 +908,6 @@ export function parseNaturalLanguagePrompt(input: string): NaturalLanguageParseR
     parsedComponents: [],
   };
 
-  let remaining = input;
   const usedPatterns: number[] = [];
 
   NATURAL_LANGUAGE_PATTERNS.forEach((rule, index) => {
@@ -1364,7 +1363,6 @@ export function scoreAndOptimizePrompt(prompt: string, context?: { topic?: strin
   
   // Specificity (0-20 points)
   const wordCount = prompt.split(/\s+/).length;
-  const hasSpecificTopic = context?.topic && prompt.toLowerCase().includes(context.topic.toLowerCase());
   if (wordCount > 10 && wordCount < 50) {
     score += 15;
     breakdown.push({ criterion: 'Prompt length', points: 15, maxPoints: 15, feedback: 'Good length for viral content' });
@@ -1443,7 +1441,7 @@ export function scoreAndOptimizePrompt(prompt: string, context?: { topic?: strin
     maxScore,
     grade,
     breakdown,
-    suggestions: suggestions.sort((a, b) => (a.priority === 'high' ? -1 : 1)),
+    suggestions: suggestions.sort((a, _b) => (a.priority === 'high' ? -1 : 1)),
   };
 }
 

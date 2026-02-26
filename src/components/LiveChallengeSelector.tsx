@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Hand, Hash, Calendar, Target, Plus, Trash2 } from 'lucide-react';
+import { Users, Hand, Hash, Calendar, Target } from 'lucide-react';
 import type { LiveChallenge, LiveChallengeType } from '../lib/types';
 import { LIVE_CHALLENGE_TYPES } from '../lib/constants';
 

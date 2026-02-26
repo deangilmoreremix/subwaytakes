@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { FolderOpen, Film, Clock, ArrowRight, Plus, X, Save, Play, Scissors } from 'lucide-react';
+import { FolderOpen, Film, Clock, ArrowRight, Plus, X, Save, Scissors } from 'lucide-react';
 import { clsx } from '../lib/format';
 import type { Clip } from '../lib/types';
 
@@ -20,8 +20,6 @@ interface VideoStitcherProps {
 export function VideoStitcher({ clips, onSave, onCancel }: VideoStitcherProps) {
   const [selectedClips, setSelectedClips] = useState<StitchClip[]>([]);
   const [availableClips, setAvailableClips] = useState<Clip[]>(clips);
-  const [isDragging, setIsDragging] = useState(false);
-
   const addClip = useCallback((clip: Clip) => {
     const newStitchClip: StitchClip = {
       clipId: clip.id,

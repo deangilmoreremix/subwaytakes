@@ -72,7 +72,7 @@ export function SubwayEnhancementsStep({
           icon={Route}
           title="Multi-Stop Journey"
           enabled={!!multiStopJourney?.enabled}
-          onToggle={(on) => setMultiStopJourney(on ? { enabled: true, stops: [] } as MultiStopJourney : undefined)}
+          onToggle={(on) => setMultiStopJourney(on ? { enabled: true, stops: [], totalDuration: 0, narrativeArc: 'discovery' } as MultiStopJourney : undefined)}
           disabled={clip.busy}
           accentColor="amber"
           isOpen={accordion.isOpen('journey')}
@@ -85,7 +85,7 @@ export function SubwayEnhancementsStep({
           icon={Users2}
           title="Crowd Reactions"
           enabled={!!crowdReactions?.enabled}
-          onToggle={(on) => setCrowdReactions(on ? { enabled: true, reactions: [] } as CrowdReactionConfig : undefined)}
+          onToggle={(on) => setCrowdReactions(on ? { enabled: true, reactions: [], density: 'moderate', engagement: 'reactive' } as CrowdReactionConfig : undefined)}
           disabled={clip.busy}
           accentColor="amber"
           isOpen={accordion.isOpen('crowd')}
@@ -98,7 +98,7 @@ export function SubwayEnhancementsStep({
           icon={Volume2}
           title="Soundscape"
           enabled={!!soundscape?.enabled}
-          onToggle={(on) => setSoundscape(on ? { enabled: true, sounds: [] } as SoundscapeConfig : undefined)}
+          onToggle={(on) => setSoundscape(on ? { enabled: true, layers: [] } as SoundscapeConfig : undefined)}
           disabled={clip.busy}
           accentColor="amber"
           isOpen={accordion.isOpen('sound')}
@@ -111,7 +111,7 @@ export function SubwayEnhancementsStep({
           icon={Shuffle}
           title="Plot Twist"
           enabled={!!plotTwist}
-          onToggle={(on) => setPlotTwist(on ? { type: 'train_arrival', timing: 50 } as PlotTwist : undefined)}
+          onToggle={(on) => setPlotTwist(on ? { type: 'train_arrival_cut', timing: 50, description: '', impact: 'dramatic' } as PlotTwist : undefined)}
           disabled={clip.busy}
           accentColor="amber"
           isOpen={accordion.isOpen('twist')}
@@ -124,7 +124,7 @@ export function SubwayEnhancementsStep({
           icon={BarChart3}
           title="Platform Poll"
           enabled={!!platformPoll?.enabled}
-          onToggle={(on) => setPlatformPoll(on ? { enabled: true, question: '', options: [] } as PlatformPoll : undefined)}
+          onToggle={(on) => setPlatformPoll(on ? { enabled: true, question: '', options: [], pollType: 'agree_disagree', responses: [], showResults: false } as PlatformPoll : undefined)}
           disabled={clip.busy}
           accentColor="amber"
           isOpen={accordion.isOpen('poll')}

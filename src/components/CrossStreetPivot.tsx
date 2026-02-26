@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowRightLeft, MapPin, ArrowRight, CornerDownRight, MessageSquare, Brain, Heart, Smile } from 'lucide-react';
 import type { CrossStreetPivot, CrossStreetPivotType } from '../lib/types';
-import { CROSS_STREET_PIVOT_TYPES, STREET_LOCATIONS } from '../lib/constants';
+import { CROSS_STREET_PIVOT_TYPES } from '../lib/constants';
 
 interface CrossStreetPivotProps {
   value: CrossStreetPivot | undefined;

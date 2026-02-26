@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Cloud, Sun, Snowflake, CloudRain, Wind, Umbrella, Thermometer, Trophy } from 'lucide-react';
+import { Calendar, Trophy } from 'lucide-react';
 import type { StreetSeasonalContext, Season, WeatherCondition, StreetFestival, HolidayTheme } from '../lib/types';
 import { SEASONS, WEATHER_CONDITIONS, HOLIDAY_THEMES, STREET_FESTIVALS } from '../lib/constants';
 
@@ -9,13 +9,6 @@ interface StreetSeasonalSelectorProps {
   disabled?: boolean;
 }
 
-const WEATHER_ICONS: Record<WeatherCondition, typeof Sun> = {
-  clear: Sun,
-  rainy: CloudRain,
-  snowy: Snowflake,
-  humid: Thermometer,
-  windy: Wind,
-};
 
 export function StreetSeasonalSelector({ value, onChange, disabled }: StreetSeasonalSelectorProps) {
   const [isEnabled, setIsEnabled] = useState(value?.enabled ?? false);
@@ -83,8 +76,6 @@ export function StreetSeasonalSelector({ value, onChange, disabled }: StreetSeas
     onChange({ enabled: true, season, weather, festival, holidayDecorations, sportingEvent, crowdAttire: newAttire });
   }
 
-  const WeatherIcon = WEATHER_ICONS[weather];
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -141,7 +132,6 @@ export function StreetSeasonalSelector({ value, onChange, disabled }: StreetSeas
             <label className="text-xs font-medium text-zinc-400">Weather</label>
             <div className="flex gap-2">
               {WEATHER_CONDITIONS.map((w) => {
-                const Icon = WEATHER_ICONS[w.value];
                 return (
                   <button
                     key={w.value}

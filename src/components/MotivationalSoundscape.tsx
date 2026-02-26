@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Volume2, Music, VolumeX, Users, Plus, Trash2 } from 'lucide-react';
+import { Music, VolumeX, Users, Plus, Trash2 } from 'lucide-react';
 import type { MotivationalSoundscapeConfig, MotivationalMusicType } from '../lib/types';
 import { MOTIVATIONAL_MUSIC_TYPES } from '../lib/constants';
 
@@ -8,14 +8,6 @@ interface MotivationalSoundscapeProps {
   onChange: (config: MotivationalSoundscapeConfig | undefined) => void;
   disabled?: boolean;
 }
-
-const MUSIC_ICONS: Record<MotivationalMusicType, string> = {
-  epic_orchestral: '🎻',
-  ambient_electronic: '🎹',
-  piano_inspirational: '🎼',
-  rock_anthem: '🎸',
-  minimal: '🔇',
-};
 
 export function MotivationalSoundscape({ value, onChange, disabled }: MotivationalSoundscapeProps) {
   const [isEnabled, setIsEnabled] = useState(value?.enabled ?? false);

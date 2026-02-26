@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { ShoppingBag, Link, Tag, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { ShoppingBag, Link, Tag } from 'lucide-react';
 import { clsx } from '../lib/format';
 import type { ProductPlacementConfig } from '../lib/types';
 
@@ -10,8 +9,6 @@ interface ProductPlacementConfigProps {
 }
 
 export function ProductPlacementPanel({ config, onChange, disabled }: ProductPlacementConfigProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   const handleToggle = () => {
     onChange({ ...config, enabled: !config.enabled });
   };

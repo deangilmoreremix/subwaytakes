@@ -1,4 +1,4 @@
-import { MapPin, Route, Users2, Volume2, Shuffle, BarChart3, Flame, Snowflake, ArrowRightLeft } from 'lucide-react';
+import { Route, Users2, Volume2, Shuffle, BarChart3, Flame, Snowflake, ArrowRightLeft } from 'lucide-react';
 import type { ClipCreationHook } from '../../../hooks/useClipCreation';
 import { EnhancementToggleCard, useAccordion } from '../EnhancementToggleCard';
 import { CharacterSection } from '../CommonCreateSections';
@@ -79,7 +79,7 @@ export function StreetEnhancementsStep({
           icon={Route}
           title="Multi-Location Journey"
           enabled={!!streetMultiLocationJourney?.enabled}
-          onToggle={(on) => setStreetMultiLocationJourney(on ? { enabled: true, locations: [] } as StreetMultiLocationJourney : undefined)}
+          onToggle={(on) => setStreetMultiLocationJourney(on ? { enabled: true, locations: [], stops: [], totalDuration: 0, narrativeArc: 'discovery' } as StreetMultiLocationJourney : undefined)}
           disabled={clip.busy}
           accentColor="emerald"
           isOpen={accordion.isOpen('journey')}
@@ -92,7 +92,7 @@ export function StreetEnhancementsStep({
           icon={Users2}
           title="Crowd Dynamics"
           enabled={!!streetCrowdConfig?.enabled}
-          onToggle={(on) => setStreetCrowdConfig(on ? { enabled: true, reactions: [] } as StreetCrowdConfig : undefined)}
+          onToggle={(on) => setStreetCrowdConfig(on ? { enabled: true, reactions: [], density: 'moderate', engagement: 'reactive' } as StreetCrowdConfig : undefined)}
           disabled={clip.busy}
           accentColor="emerald"
           isOpen={accordion.isOpen('crowd')}
@@ -105,7 +105,7 @@ export function StreetEnhancementsStep({
           icon={Volume2}
           title="Urban Soundscape"
           enabled={!!urbanSoundscape?.enabled}
-          onToggle={(on) => setUrbanSoundscape(on ? { enabled: true, sounds: [] } as UrbanSoundscapeConfig : undefined)}
+          onToggle={(on) => setUrbanSoundscape(on ? { enabled: true, layers: [] } as UrbanSoundscapeConfig : undefined)}
           disabled={clip.busy}
           accentColor="emerald"
           isOpen={accordion.isOpen('sound')}
@@ -118,7 +118,7 @@ export function StreetEnhancementsStep({
           icon={Shuffle}
           title="Plot Twist"
           enabled={!!streetPlotTwist}
-          onToggle={(on) => setStreetPlotTwist(on ? { type: 'celebrity_encounter', timing: 50 } as StreetPlotTwist : undefined)}
+          onToggle={(on) => setStreetPlotTwist(on ? { type: 'friend_recognition', timing: 50, description: '', impact: 'dramatic' } as StreetPlotTwist : undefined)}
           disabled={clip.busy}
           accentColor="emerald"
           isOpen={accordion.isOpen('twist')}
@@ -131,7 +131,7 @@ export function StreetEnhancementsStep({
           icon={BarChart3}
           title="Street Poll"
           enabled={!!streetPoll?.enabled}
-          onToggle={(on) => setStreetPoll(on ? { enabled: true, question: '', options: [] } as StreetPollType : undefined)}
+          onToggle={(on) => setStreetPoll(on ? { enabled: true, question: '', options: [], pollType: 'agree_disagree', responses: [], showResults: false, visualStyle: 'bar_chart' } as StreetPollType : undefined)}
           disabled={clip.busy}
           accentColor="emerald"
           isOpen={accordion.isOpen('poll')}

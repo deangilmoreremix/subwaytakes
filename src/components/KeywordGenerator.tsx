@@ -28,7 +28,6 @@ export function KeywordGenerator({
   const currentNiche = NICHE_CONFIGS.find(n => n.value === niche);
 
   const generateSuggestions = () => {
-    const nicheKeywords = currentNiche?.defaultKeywords || [];
     // Generate variations
     const variations = [
       `Best ${keyword} for 2024`,

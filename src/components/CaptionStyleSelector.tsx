@@ -20,18 +20,15 @@ const PREVIEW_COLORS: Record<string, { bg: string; text: string }> = {
   minimalist: { bg: '', text: 'text-white' },
 };
 
-export function CaptionStyleSelector({ 
-  value, 
+export function CaptionStyleSelector({
+  value,
   onChange,
-  customConfig,
-  onCustomConfigChange,
-  disabled 
+  disabled
 }: CaptionStyleSelectorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const presetKeys = Object.keys(CAPTION_PRESETS);
 
   const currentPreset = CAPTION_PRESETS[value] || CAPTION_PRESETS.standard;
-  const previewColors = PREVIEW_COLORS[value] || PREVIEW_COLORS.standard;
 
   return (
     <div className="space-y-3">

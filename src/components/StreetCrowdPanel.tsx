@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Plus, Trash2, Volume2, Shield } from 'lucide-react';
+import { Plus, Trash2, Volume2, Shield } from 'lucide-react';
 import type { StreetCrowdConfig, BystanderReaction } from '../lib/types';
 import { BYSTANDER_REACTION_TYPES } from '../lib/constants';
 

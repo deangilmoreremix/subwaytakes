@@ -194,7 +194,6 @@ export function getQuestionCategories(): string[] {
 // === AGE-APPROPRIATE QUESTION BANK ===
 
 import type { AgeGroup } from './types';
-import { TOPIC_AGE_MAP, AGE_GROUP_CONFIGS } from './constants';
 
 // Age-appropriate question sets by category
 const AGE_APPROPRIATE_QUESTIONS: Record<AgeGroup, Record<string, string[]>> = {
@@ -471,8 +470,8 @@ export function filterQuestionsByAge(
  * Get trending questions for an age group
  */
 export function getTrendingQuestionsForAge(
-  ageGroup: AgeGroup,
-  limit: number = 10
+  _ageGroup: AgeGroup,
+  _limit: number = 10
 ): QuestionBankItem[] {
   // This would normally fetch from database with age filtering
   // For now, return empty array - actual implementation would query the database

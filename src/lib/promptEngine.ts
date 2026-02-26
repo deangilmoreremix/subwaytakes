@@ -29,7 +29,7 @@ import { generateStreetEnhancementPrompt } from './streetJourneyEngine';
 import { generateMotivationalEnhancementPrompt } from './motivationalEngine';
 import { buildWisdomPrompt } from './wisdomPromptEngine';
 import { buildStudioInterviewPrompt } from './studioPromptEngine';
-import { LINE_PERSONALITIES, NEIGHBORHOOD_PERSONALITIES, CARD_VISUAL_ANCHORS } from './constants';
+import { LINE_PERSONALITIES, NEIGHBORHOOD_PERSONALITIES } from './constants';
 import { hardenPrompt, mergeNegativePrompt, shouldApplyWisdomRules } from './promptHardening';
 import { buildInterviewStyleHardening } from './interviewStyleHardening';
 
@@ -931,8 +931,6 @@ export function validateContentForAgeGroup(
   ageGroup: AgeGroup
 ): { valid: boolean; warnings: string[] } {
   const warnings: string[] = [];
-  
-  const modifiers = AGE_GROUP_MODIFIERS[ageGroup];
   
   // Check for potential issues in topic
   if (ageGroup === 'kids') {

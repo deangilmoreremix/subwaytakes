@@ -259,7 +259,6 @@ export function getAgeAppropriatenessWarning(
  * Get suggested topics for an age group
  */
 export function getSuggestedTopics(ageGroup: AgeGroup): string[] {
-  const config = AGE_GROUP_CONFIGS[ageGroup];
   const allowedTopics = Object.entries(TOPIC_AGE_MAP)
     .filter(([, groups]) => groups.includes(ageGroup) || ageGroup === 'all_ages')
     .map(([topic]) => topic);

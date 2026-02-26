@@ -7,7 +7,7 @@ interface VideoPreviewProps {
   onVideoLoaded?: (duration: number) => void;
 }
 
-export function VideoPreview({ effects, clipType, onVideoLoaded }: VideoPreviewProps) {
+export function VideoPreview({ effects, onVideoLoaded }: VideoPreviewProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);

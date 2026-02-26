@@ -9,7 +9,6 @@ import {
   BarChart3,
   Upload,
   X,
-  Image,
 } from 'lucide-react';
 import { clsx } from '../lib/format';
 import type { VideoTemplate } from '../lib/templates';
