@@ -44,8 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
 
-  const isAuthenticated = !!user && !user.is_anonymous;
-  const isGuest = !isAuthenticated;
+  const isAuthenticated = !!user;
+  const isGuest = !!user?.is_anonymous;
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const authUser = s?.user ?? null;
     setUser(authUser);
 
-    if (authUser && !authUser.is_anonymous) {
+    if (authUser) {
       setCurrentAuthUser(authUser.id);
       fetchProfile(authUser.id).finally(() => setLoading(false));
     } else {
@@ -96,7 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializedRef.current = true;
 
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      applySession(s);
+      if (s) {
+        applySession(s);
+      } else {
+        supabase.auth.signInAnonymously().then(({ error }) => {
+          if (error) applySession(null);
+        });
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {

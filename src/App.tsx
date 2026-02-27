@@ -42,18 +42,9 @@ function FullScreenLoader() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
-  const location = useLocation();
+  const { loading } = useAuth();
 
   if (loading) return <FullScreenLoader />;
-
-  if (!isAuthenticated) {
-    const returnTo = location.pathname + location.search;
-    const loginPath = returnTo && returnTo !== '/' && returnTo !== '/login'
-      ? `/login?returnTo=${encodeURIComponent(returnTo)}`
-      : '/login';
-    return <Navigate to={loginPath} replace />;
-  }
 
   return <>{children}</>;
 }
