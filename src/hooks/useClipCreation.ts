@@ -32,6 +32,7 @@ import { createClip, createClipBatch, type CreateClipOptions } from '../lib/clip
 import { safeMutate, mutationKey } from '../lib/safeMutation';
 import { filterModesByAge } from '../lib/contentFilter';
 import type { KeywordAnalysis } from '../lib/keywordEngine';
+import { validatePreGeneration, type PreGenerationValidationResult } from '../lib/validation';
 
 export type GenerationStatus = 'idle' | 'planning' | 'generating' | 'done' | 'error';
 
@@ -121,6 +122,19 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
 
   const busy = status === 'planning' || status === 'generating';
 
+  const preGenerationValidation = useMemo<PreGenerationValidationResult>(() => {
+    return validatePreGeneration({
+      videoType: clipType,
+      topic,
+      durationSeconds: duration,
+      modelTier,
+      anglePrompt: angle || undefined,
+      speechScript: speechScript || undefined,
+      batchSize: batchMode ? batchSize : undefined,
+      exportPlatforms: exportPlatforms as string[],
+    });
+  }, [clipType, topic, duration, modelTier, angle, speechScript, batchMode, batchSize, exportPlatforms]);
+
   function handlePresetChange(preset: CharacterPreset) {
     setCharacterPreset(preset);
     const config = CHARACTER_PRESETS.find(p => p.value === preset);
@@ -159,6 +173,11 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
 
   async function generateClip(modeSpecificOptions: Partial<CreateClipOptions>) {
     if (busy) return;
+    if (!preGenerationValidation.valid) {
+      setStatus('error');
+      setErrorMessage(preGenerationValidation.issues.map(i => i.message).join(' — '));
+      return;
+    }
     setStatus('planning');
     setErrorMessage('');
 
@@ -249,6 +268,7 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
     batchSize, setBatchSize,
     topics, filteredModes, busy,
     clipType,
+    preGenerationValidation,
     generateClip,
     navigate,
     DURATION_OPTIONS,

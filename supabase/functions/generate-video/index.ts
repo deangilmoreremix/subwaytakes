@@ -7,6 +7,55 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const VALID_VIDEO_TYPES = ["subway_interview", "street_interview", "motivational", "studio_interview", "wisdom_interview"] as const;
+
+const PROVIDER_MAX_DURATION: Record<'minimax' | 'google', number> = {
+  minimax: 160,
+  google: 8,
+};
+
+interface OutputVerification {
+  valid: boolean;
+  issues: string[];
+  warnings: string[];
+  effectiveStatus: 'done' | 'demo' | 'error';
+}
+
+function verifyOutput(
+  url: string | undefined,
+  videoType: string,
+  requestedDuration: number,
+  provider: 'minimax' | 'google',
+  isDemo: boolean
+): OutputVerification {
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  if (!url || url.trim().length === 0) {
+    issues.push('No result URL returned from provider');
+  } else if (!url.startsWith('http') && !url.startsWith('data:')) {
+    issues.push(`Result URL has unexpected format`);
+  }
+
+  if (!VALID_VIDEO_TYPES.includes(videoType as typeof VALID_VIDEO_TYPES[number])) {
+    issues.push(`Unknown video type: "${videoType}"`);
+  }
+
+  const maxDuration = PROVIDER_MAX_DURATION[provider];
+  if (requestedDuration > maxDuration) {
+    warnings.push(`Duration capped from ${requestedDuration}s to ${maxDuration}s (${provider} limit)`);
+  }
+
+  if (isDemo) {
+    warnings.push('Demo video used — no API key configured or generation failed');
+  }
+
+  const effectiveStatus: OutputVerification['effectiveStatus'] =
+    issues.length > 0 ? 'error' : isDemo ? 'demo' : 'done';
+
+  return { valid: issues.length === 0, issues, warnings, effectiveStatus };
+}
+
 const DEMO_VIDEOS: Record<string, string[]> = {
   motivational: [
     "https://images.pexels.com/videos/3015510/free-video-3015510.mp4?auto=compress",
@@ -488,8 +537,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const VALID_VIDEO_TYPES = ["subway_interview", "street_interview", "motivational", "studio_interview", "wisdom_interview"];
-    if (video_type && !VALID_VIDEO_TYPES.includes(video_type)) {
+    if (video_type && !VALID_VIDEO_TYPES.includes(video_type as typeof VALID_VIDEO_TYPES[number])) {
       return new Response(
         JSON.stringify({ error: `Invalid video_type. Must be one of: ${VALID_VIDEO_TYPES.join(", ")}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -593,11 +641,35 @@ Deno.serve(async (req: Request) => {
       resultUrl = videos[Math.floor(Math.random() * videos.length)];
     }
 
+    const outputVerification = verifyOutput(
+      resultUrl,
+      video_type,
+      duration_seconds,
+      modelConfig.provider,
+      isDemoFallback
+    );
+
+    if (!outputVerification.valid) {
+      console.error("Output verification failed:", outputVerification.issues);
+      await supabase
+        .from(is_episode_shot ? "episode_shots" : "clips")
+        .update({ status: "error", error: outputVerification.issues.join("; ") })
+        .eq("id", clip_id);
+      return new Response(
+        JSON.stringify({ error: "Output verification failed", issues: outputVerification.issues }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (outputVerification.warnings.length > 0) {
+      console.warn("Output verification warnings:", outputVerification.warnings);
+    }
+
     if (is_episode_shot) {
       const { error: updateError } = await supabase
         .from("episode_shots")
         .update({
-          status: isDemoFallback ? "demo" : "done",
+          status: outputVerification.effectiveStatus,
           result_url: resultUrl,
           ...(isDemoFallback ? { error: "Used demo video - no API key configured or generation failed" } : {}),
         })
@@ -650,7 +722,7 @@ Deno.serve(async (req: Request) => {
       const { error: updateError } = await supabase
         .from("clips")
         .update({
-          status: isDemoFallback ? "demo" : "done",
+          status: outputVerification.effectiveStatus,
           result_url: resultUrl,
           thumbnail_url: thumbnailUrl,
           ...(isDemoFallback ? { error: "Used demo video - no API key configured or generation failed" } : {}),

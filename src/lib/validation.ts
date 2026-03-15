@@ -408,14 +408,320 @@ export function validateAgeAppropriateContent(options: AgeAppropriateValidationO
  */
 export function getAgeAppropriatenessWarning(topic: string, ageGroup: AgeGroup): string | null {
   const allowedGroups = TOPIC_AGE_MAP[topic];
-  
+
   if (!allowedGroups) {
     return null;
   }
-  
+
   if (!allowedGroups.includes(ageGroup) && ageGroup !== 'all_ages') {
     return `This topic may not be appropriate for ${ageGroup.replace('_', ' ')}. Consider a different topic or age group.`;
   }
-  
+
   return null;
+}
+
+// ============================================================
+// PRE-GENERATION VALIDATION
+// Validates the full set of creation options before any API
+// call is made. Returns a list of all issues found.
+// ============================================================
+
+import type { ClipType, ModelTier } from './types';
+import {
+  VIDEO_TYPE_SPECS,
+  getEffectiveDurationCap,
+  PLATFORM_EXPORT_SPECS,
+} from './videoTypeSpecs';
+
+export interface PreGenerationIssue {
+  field: string;
+  severity: 'error' | 'warning';
+  message: string;
+}
+
+export interface PreGenerationValidationResult {
+  valid: boolean;
+  issues: PreGenerationIssue[];
+  warnings: PreGenerationIssue[];
+  effectiveDurationSeconds: number;
+}
+
+export interface PreGenerationOptions {
+  videoType: ClipType;
+  topic: string;
+  durationSeconds: number;
+  modelTier?: ModelTier;
+  anglePrompt?: string;
+  interviewQuestion?: string;
+  speechScript?: string;
+  batchSize?: number;
+  exportPlatforms?: string[];
+  sceneType?: string;
+  cityStyle?: string;
+  energyLevel?: string;
+  interviewStyle?: string;
+}
+
+export function validatePreGeneration(opts: PreGenerationOptions): PreGenerationValidationResult {
+  const issues: PreGenerationIssue[] = [];
+  const warnings: PreGenerationIssue[] = [];
+
+  const spec = VIDEO_TYPE_SPECS[opts.videoType];
+
+  if (!spec) {
+    issues.push({
+      field: 'videoType',
+      severity: 'error',
+      message: `Unknown video type: "${opts.videoType}". Must be one of: subway_interview, street_interview, motivational, studio_interview, wisdom_interview`,
+    });
+    return { valid: false, issues, warnings, effectiveDurationSeconds: opts.durationSeconds };
+  }
+
+  // Topic validation
+  const topicResult = validateTopicInput(opts.topic);
+  if (!topicResult.valid) {
+    issues.push({ field: 'topic', severity: 'error', message: topicResult.error! });
+  }
+
+  // Duration validation against global limits
+  const durationResult = validateDuration(opts.durationSeconds);
+  if (!durationResult.valid) {
+    issues.push({ field: 'durationSeconds', severity: 'error', message: durationResult.error! });
+  }
+
+  // Duration validation against video type limits
+  if (opts.durationSeconds < spec.minDurationSeconds) {
+    issues.push({
+      field: 'durationSeconds',
+      severity: 'error',
+      message: `${spec.label} requires a minimum duration of ${spec.minDurationSeconds}s`,
+    });
+  }
+  if (opts.durationSeconds > spec.maxDurationSeconds) {
+    issues.push({
+      field: 'durationSeconds',
+      severity: 'error',
+      message: `${spec.label} supports a maximum duration of ${spec.maxDurationSeconds}s`,
+    });
+  }
+
+  // Provider / model tier duration cap warnings
+  const tier = opts.modelTier ?? 'standard';
+  const { wasCapped, capReason, effectiveDuration } = getEffectiveDurationCap(opts.durationSeconds, tier);
+  if (wasCapped) {
+    warnings.push({
+      field: 'durationSeconds',
+      severity: 'warning',
+      message: capReason!,
+    });
+  }
+
+  // Required scene / city / energy / interview style
+  if (spec.requiresScene && !opts.sceneType) {
+    warnings.push({
+      field: 'sceneType',
+      severity: 'warning',
+      message: `${spec.label} works best with a scene type selected`,
+    });
+  }
+  if (spec.requiresCityStyle && !opts.cityStyle) {
+    warnings.push({
+      field: 'cityStyle',
+      severity: 'warning',
+      message: `${spec.label} works best with a city style selected`,
+    });
+  }
+  if (spec.requiresEnergyLevel && !opts.energyLevel) {
+    warnings.push({
+      field: 'energyLevel',
+      severity: 'warning',
+      message: `${spec.label} works best with an energy level selected`,
+    });
+  }
+  if (spec.requiresInterviewStyle && !opts.interviewStyle) {
+    warnings.push({
+      field: 'interviewStyle',
+      severity: 'warning',
+      message: `${spec.label} requires an interview style for best results`,
+    });
+  }
+
+  // Batch support
+  if (opts.batchSize !== undefined && opts.batchSize > 1 && !spec.supportsBatch) {
+    issues.push({
+      field: 'batchSize',
+      severity: 'error',
+      message: `${spec.label} does not support batch generation`,
+    });
+  }
+
+  // Optional field length checks
+  const angleResult = validateAnglePrompt(opts.anglePrompt);
+  if (!angleResult.valid) {
+    issues.push({ field: 'anglePrompt', severity: 'error', message: angleResult.error! });
+  }
+
+  const questionResult = validateInterviewQuestion(opts.interviewQuestion);
+  if (!questionResult.valid) {
+    issues.push({ field: 'interviewQuestion', severity: 'error', message: questionResult.error! });
+  }
+
+  const scriptResult = validateSpeechScript(opts.speechScript);
+  if (!scriptResult.valid) {
+    issues.push({ field: 'speechScript', severity: 'error', message: scriptResult.error! });
+  }
+
+  // Prompt length against spec
+  if (opts.anglePrompt && opts.anglePrompt.length > spec.maxPromptLength) {
+    issues.push({
+      field: 'anglePrompt',
+      severity: 'error',
+      message: `Angle prompt exceeds the ${spec.maxPromptLength}-character maximum for ${spec.label}`,
+    });
+  }
+
+  if (opts.speechScript && opts.speechScript.length > spec.maxSpeechScriptLength) {
+    issues.push({
+      field: 'speechScript',
+      severity: 'error',
+      message: `Speech script exceeds the ${spec.maxSpeechScriptLength}-character maximum for ${spec.label}`,
+    });
+  }
+
+  // Export platform duration compatibility
+  if (opts.exportPlatforms && opts.exportPlatforms.length > 0) {
+    for (const platformId of opts.exportPlatforms) {
+      const platformSpec = PLATFORM_EXPORT_SPECS.find(p => p.platform === platformId);
+      if (platformSpec && effectiveDuration > platformSpec.maxDurationSeconds) {
+        warnings.push({
+          field: 'exportPlatforms',
+          severity: 'warning',
+          message: `Video duration (${effectiveDuration}s) exceeds ${platformSpec.label} limit of ${platformSpec.maxDurationSeconds}s`,
+        });
+      }
+    }
+  }
+
+  const errors = issues.filter(i => i.severity === 'error');
+  return {
+    valid: errors.length === 0,
+    issues: errors,
+    warnings,
+    effectiveDurationSeconds: effectiveDuration,
+  };
+}
+
+// ============================================================
+// OUTPUT VERIFICATION
+// Validates a completed video result against its spec before
+// marking the clip as done.
+// ============================================================
+
+export interface VideoOutputResult {
+  url: string;
+  videoType: ClipType;
+  requestedDurationSeconds: number;
+  modelTier: 'standard' | 'premium';
+  isDemo?: boolean;
+}
+
+export interface OutputVerificationResult {
+  valid: boolean;
+  issues: string[];
+  warnings: string[];
+  status: 'done' | 'demo' | 'error';
+}
+
+export function verifyVideoOutput(result: VideoOutputResult): OutputVerificationResult {
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  if (!result.url || result.url.trim().length === 0) {
+    issues.push('No result URL returned from the generation provider');
+  }
+
+  if (result.url && !result.url.startsWith('http') && !result.url.startsWith('data:')) {
+    issues.push(`Result URL has an unexpected format: "${result.url.slice(0, 60)}..."`);
+  }
+
+  const spec = VIDEO_TYPE_SPECS[result.videoType];
+  if (!spec) {
+    issues.push(`Cannot verify output: unknown video type "${result.videoType}"`);
+  }
+
+  const { wasCapped, capReason, effectiveDuration } = getEffectiveDurationCap(
+    result.requestedDurationSeconds,
+    result.modelTier
+  );
+
+  if (wasCapped) {
+    warnings.push(`Duration was capped: ${capReason}. Effective duration: ${effectiveDuration}s`);
+  }
+
+  if (result.isDemo) {
+    warnings.push('This clip used a demo video because no API key was configured or generation failed');
+  }
+
+  const status: OutputVerificationResult['status'] =
+    issues.length > 0 ? 'error' : result.isDemo ? 'demo' : 'done';
+
+  return {
+    valid: issues.length === 0,
+    issues,
+    warnings,
+    status,
+  };
+}
+
+// ============================================================
+// RUNTIME MONITORING
+// Tracks clip status transitions and detects anomalies.
+// ============================================================
+
+export type ClipLifecycleStatus = 'queued' | 'running' | 'done' | 'demo' | 'error';
+
+export interface ClipLifecycleEvent {
+  clipId: string;
+  fromStatus: ClipLifecycleStatus | null;
+  toStatus: ClipLifecycleStatus;
+  timestamp: number;
+}
+
+const VALID_STATUS_TRANSITIONS: Record<ClipLifecycleStatus, ClipLifecycleStatus[]> = {
+  queued: ['running', 'error'],
+  running: ['done', 'demo', 'error'],
+  done: [],
+  demo: [],
+  error: ['queued'],
+};
+
+export function validateStatusTransition(
+  from: ClipLifecycleStatus | null,
+  to: ClipLifecycleStatus
+): { valid: boolean; reason: string | null } {
+  if (from === null) {
+    return { valid: true, reason: null };
+  }
+  const allowed = VALID_STATUS_TRANSITIONS[from];
+  if (!allowed.includes(to)) {
+    return {
+      valid: false,
+      reason: `Invalid status transition: "${from}" -> "${to}". Allowed transitions from "${from}": [${allowed.join(', ') || 'none'}]`,
+    };
+  }
+  return { valid: true, reason: null };
+}
+
+export function buildValidationSummary(result: PreGenerationValidationResult): string {
+  if (result.valid && result.warnings.length === 0) {
+    return 'All checks passed';
+  }
+  const parts: string[] = [];
+  if (!result.valid) {
+    parts.push(`${result.issues.length} error${result.issues.length !== 1 ? 's' : ''}`);
+  }
+  if (result.warnings.length > 0) {
+    parts.push(`${result.warnings.length} warning${result.warnings.length !== 1 ? 's' : ''}`);
+  }
+  return parts.join(', ');
 }
