@@ -1545,6 +1545,48 @@ export interface MuapiPlan {
   realismPriority: 'standard' | 'cinematic_human';
 }
 
+// Cinematic Enhancement Types
+export interface CinematicCameraConfig {
+  movement: 'static' | 'dolly_in' | 'dolly_out' | 'tracking' | 'crane' | 'whip_pan' | 'steadicam' | 'push_in' | 'pull_back' | 'orbit' | 'reveal';
+  lens: '24mm_wide' | '35mm_standard' | '50mm_portrait' | '85mm_compression' | 'macro' | 'telephoto';
+  depthOfField: 'shallow' | 'medium' | 'deep' | 'rack_focus';
+  angle: 'low_angle' | 'eye_level' | 'high_angle' | 'dutch' | 'birds_eye' | 'over_shoulder' | 'two_shot';
+  framing: 'close_up' | 'medium_shot' | 'wide_shot' | 'extreme_wide' | 'establishing';
+}
+
+export interface CinematicLightingConfig {
+  type: 'motivated' | 'three_point' | 'rim' | 'chiaroscuro' | 'volumetric' | 'practical' | 'studio_key';
+  source: 'golden_hour' | 'blue_hour' | 'neon' | 'practical_lamp' | 'window_light' | 'studio_soft' | 'dramatic_harsh' | 'backlit_silhouette';
+  temperature: number; // Kelvin (2700-10000)
+  contrast: 'high' | 'medium' | 'low' | 'chiaroscuro';
+  atmosphere: 'clear' | 'haze' | 'godrays' | 'fog' | 'dust_motes' | 'volumetric_fog';
+  direction: 'front' | 'side' | 'back' | 'top' | 'bottom' | 'omnidirectional';
+}
+
+export interface CinematicCompositionConfig {
+  framing: 'rule_of_thirds' | 'centered' | 'leading_lines' | 'negative_space' | 'symmetrical' | 'golden_ratio';
+  aspectRatio: '9:16' | '16:9' | '2.39:1_anamorphic' | '1:1_square';
+  motion: 'static' | 'pan_left' | 'pan_right' | 'tilt_up' | 'tilt_down' | 'orbit' | 'reveal' | 'dolly_zoom';
+  perspective: 'normal' | 'forced' | 'distorted' | 'isometric' | 'birdseye';
+}
+
+export interface FilmStockEmulation {
+  type: 'arri_alexa' | 'red_dragon' | '35mm_film' | 'digital_clean' | 'vintage_film' | 'kodak_vision' | 'cinestyle';
+  grain: 'none' | 'subtle_digital' | 'film_grain' | 'heavy_grain' | 'anamorphic_flares';
+  colorGrade: 'neutral' | 'teal_orange' | 'vintage_warm' | 'high_contrast_bw' | 'desaturated' | 'hyper_saturated' | 'warm_golden';
+  sharpness: 'soft' | 'normal' | 'hyper_sharp' | 'diffusion';
+  dynamicRange: 'standard' | 'hdr' | 'log' | 'cinematic_log';
+}
+
+export interface CinematicEnhancementConfig {
+  camera: CinematicCameraConfig;
+  lighting: CinematicLightingConfig;
+  composition: CinematicCompositionConfig;
+  filmStock: FilmStockEmulation;
+  qualityBoost: boolean;
+  intensity: 'subtle' | 'standard' | 'cinematic' | 'maximum';
+}
+
 export interface GenerateRequest {
   videoType: ClipType;
   topic: string;
@@ -1603,6 +1645,8 @@ export interface GenerateRequest {
   // Muapi optional metadata
   muapiBrainstorm?: MuapiBrainstormInput;
   muapiPlan?: MuapiPlan;
+  // Cinematic enhancement system
+  cinematicEnhancement?: CinematicEnhancementConfig;
 }
 
 

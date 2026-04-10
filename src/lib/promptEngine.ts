@@ -23,6 +23,11 @@ import type {
   MotivationalEnhancementConfig,
   Neighborhood,
   AgeGroup,
+  CinematicEnhancementConfig,
+  CinematicCameraConfig,
+  CinematicLightingConfig,
+  CinematicCompositionConfig,
+  FilmStockEmulation,
 } from './types';
 import { generateEnhancedSubwayPrompt } from './subwayJourneyEngine';
 import { generateStreetEnhancementPrompt } from './streetJourneyEngine';
@@ -562,6 +567,283 @@ No text inside the video frame. Single continuous shot. Capture genuine human mo
   return finalPrompt;
 }
 
+// === CINEMATIC ENHANCEMENT SYSTEM ===
+
+// 5-Layer Framework Functions
+function buildCameraLanguage(camera?: CinematicCameraConfig): string {
+  if (!camera) return '';
+
+  const parts = [];
+
+  // Movement description
+  const movements = {
+    static: '',
+    dolly_in: 'slow dolly forward toward subject',
+    dolly_out: 'smooth dolly backward revealing environment',
+    tracking: 'sideways tracking shot following subject laterally',
+    crane: 'upward crane shot rising above the scene',
+    whip_pan: 'fast whip pan transition between subjects',
+    steadicam: 'handheld steadicam with subtle stabilization',
+    push_in: 'slow push-in toward subject for emotional emphasis',
+    pull_back: 'gradual pull-back revealing more of the environment',
+    orbit: 'slow circular orbit around the subject',
+    reveal: 'camera movement that reveals the subject dramatically'
+  };
+
+  if (camera.movement !== 'static') {
+    parts.push(movements[camera.movement]);
+  }
+
+  // Lens specification
+  const lenses = {
+    '24mm_wide': '24mm wide angle lens with environmental immersion and depth',
+    '35mm_standard': '35mm standard lens with natural perspective and pleasing compression',
+    '50mm_portrait': '50mm portrait lens with beautiful background blur and subject isolation',
+    '85mm_compression': '85mm telephoto lens with strong background compression and shallow depth',
+    macro: 'macro lens with extreme close-up capability and razor-thin focus',
+    telephoto: 'telephoto lens with compressed perspective and distant subject emphasis'
+  };
+
+  parts.push(lenses[camera.lens]);
+
+  // Depth of field
+  const dof = {
+    shallow: 'razor-thin depth of field with heavy bokeh circles',
+    medium: 'medium depth of field maintaining subject focus with environmental context',
+    deep: 'deep focus keeping both foreground and distant background elements sharp',
+    rack_focus: 'dramatic rack focus shifting attention between foreground and background'
+  };
+
+  parts.push(dof[camera.depthOfField]);
+
+  // Camera angle
+  const angles = {
+    low_angle: 'low-angle shot looking up heroically at the subject',
+    eye_level: 'eye-level perspective creating intimate connection',
+    high_angle: 'high-angle shot creating vulnerability or overview',
+    dutch: 'Dutch angle with tilted horizon creating tension',
+    birds_eye: 'bird\'s eye view showing grand scale and patterns',
+    over_shoulder: 'over-the-shoulder shot from interviewer perspective',
+    two_shot: 'two-shot framing both interviewer and subject together'
+  };
+
+  parts.push(angles[camera.angle]);
+
+  // Framing style
+  const framings = {
+    close_up: 'tight close-up focusing on facial expressions and emotions',
+    medium_shot: 'medium shot showing upper body and gestures',
+    wide_shot: 'wide shot capturing full environment and context',
+    extreme_wide: 'extreme wide establishing shot showing grand scale',
+    establishing: 'establishing shot that sets the scene and location'
+  };
+
+  parts.push(framings[camera.framing]);
+
+  return parts.filter(Boolean).join(', ');
+}
+
+function buildLightingAtmosphere(lighting?: CinematicLightingConfig): string {
+  if (!lighting) return '';
+
+  const parts = [];
+
+  // Lighting type and setup
+  const types = {
+    motivated: 'motivated lighting from natural environmental sources',
+    three_point: 'classic three-point lighting with key, fill, and rim lights',
+    rim: 'dramatic rim lighting separating subject from background',
+    chiaroscuro: 'high contrast chiaroscuro with deep shadows and bright highlights',
+    volumetric: 'volumetric lighting creating visible light rays and atmosphere',
+    practical: 'practical lighting from on-set lamps and environmental sources',
+    studio_key: 'professional studio key lighting with controlled shadows'
+  };
+
+  parts.push(types[lighting.type]);
+
+  // Light source specification
+  const sources = {
+    golden_hour: `golden hour sunlight at ${lighting.temperature}K from low angle`,
+    blue_hour: `blue hour twilight illumination at ${lighting.temperature}K`,
+    neon: `colored neon lighting casting dramatic shadows`,
+    practical_lamp: `warm practical lamp lighting creating intimate atmosphere`,
+    window_light: `soft window light creating natural fill and separation`,
+    studio_soft: `large soft studio lighting with even illumination`,
+    dramatic_harsh: `harsh dramatic lighting with strong shadows and contrast`,
+    backlit_silhouette: `backlit silhouette with rim lighting on subject edges`
+  };
+
+  parts.push(sources[lighting.source]);
+
+  // Atmospheric effects
+  const atmospheres = {
+    clear: 'clean, direct lighting with no atmospheric interference',
+    haze: 'gentle atmospheric haze softening light and creating depth',
+    godrays: 'volumetric god rays streaming through the environment',
+    fog: 'thick fog creating mystery and depth in the lighting',
+    dust_motes: 'floating dust motes visible in the light beams',
+    volumetric_fog: 'volumetric fog creating three-dimensional light effects'
+  };
+
+  if (lighting.atmosphere !== 'clear') {
+    parts.push(atmospheres[lighting.atmosphere]);
+  }
+
+  // Contrast level
+  const contrasts = {
+    high: 'high contrast lighting with strong shadows and bright highlights',
+    medium: 'balanced medium contrast maintaining detail in shadows',
+    low: 'low contrast soft lighting flattening shadows for gentle look',
+    chiaroscuro: 'extreme chiaroscuro with dramatic light-dark relationships'
+  };
+
+  parts.push(contrasts[lighting.contrast]);
+
+  return parts.filter(Boolean).join(', ');
+}
+
+function buildCompositionAndMotion(composition?: CinematicCompositionConfig): string {
+  if (!composition) return '';
+
+  const parts = [];
+
+  // Framing composition
+  const framings = {
+    rule_of_thirds: 'rule of thirds composition with subject placed off-center',
+    centered: 'centered symmetrical composition emphasizing subject',
+    leading_lines: 'leading lines composition using environmental elements to guide eye',
+    negative_space: 'negative space composition using empty areas for emphasis',
+    symmetrical: 'perfectly symmetrical composition creating balance',
+    golden_ratio: 'golden ratio composition following mathematical beauty principles'
+  };
+
+  parts.push(framings[composition.framing]);
+
+  // Motion within frame
+  const motions = {
+    static: '',
+    pan_left: 'slow leftward camera pan following subject movement',
+    pan_right: 'slow rightward camera pan following subject movement',
+    tilt_up: 'upward camera tilt revealing more of the scene',
+    tilt_down: 'downward camera tilt focusing attention',
+    orbit: 'circular camera orbit creating dynamic perspective',
+    reveal: 'camera movement that gradually reveals the subject',
+    dolly_zoom: 'dolly zoom effect combining movement and focal length change'
+  };
+
+  if (composition.motion !== 'static') {
+    parts.push(motions[composition.motion]);
+  }
+
+  // Perspective style
+  const perspectives = {
+    normal: '',
+    forced: 'forced perspective creating optical illusions',
+    distorted: 'dramatically distorted perspective for artistic effect',
+    isometric: 'isometric perspective showing multiple angles simultaneously',
+    birdseye: 'bird\'s eye perspective showing overhead patterns and layouts'
+  };
+
+  if (composition.perspective !== 'normal') {
+    parts.push(perspectives[composition.perspective]);
+  }
+
+  return parts.filter(Boolean).join(', ');
+}
+
+function buildFilmStockReference(filmStock?: FilmStockEmulation): string {
+  if (!filmStock) return '';
+
+  const parts = [];
+
+  // Film stock type
+  const stocks = {
+    arri_alexa: 'shot on ARRI Alexa with digital cinema precision and organic color science',
+    red_dragon: 'RED Dragon 8K with uncompressed color depth and cinematic latitude',
+    '35mm_film': '35mm film stock with organic grain and rich color reproduction',
+    digital_clean: 'clean digital capture with maximum detail retention and sharpness',
+    vintage_film: 'vintage film stock with characteristic color shifts and nostalgia',
+    kodak_vision: 'Kodak Vision film stock with warm color palette and natural contrast',
+    cinestyle: 'cinematic color science with log gamma and wide dynamic range'
+  };
+
+  parts.push(stocks[filmStock.type]);
+
+  // Grain texture
+  const grains = {
+    none: 'grain-free digital clarity',
+    subtle_digital: 'subtle digital grain adding texture without distraction',
+    film_grain: 'organic film grain structure adding character and depth',
+    heavy_grain: 'heavy film grain creating atmospheric texture and vintage feel',
+    anamorphic_flares: 'anamorphic lens flares and optical artifacts for cinematic glow'
+  };
+
+  if (filmStock.grain !== 'none') {
+    parts.push(grains[filmStock.grain]);
+  }
+
+  // Color grading
+  const grades = {
+    neutral: 'neutral color grading maintaining natural colors and contrast',
+    teal_orange: 'teal and orange color grading creating cinematic contrast and mood',
+    vintage_warm: 'vintage warm color grading with amber highlights and soft shadows',
+    high_contrast_bw: 'high contrast black and white cinematography with dramatic range',
+    desaturated: 'desaturated color palette emphasizing tones over saturation',
+    hyper_saturated: 'hyper-saturated colors for vibrant, stylized appearance',
+    warm_golden: 'warm golden color grading with honey highlights and rich shadows'
+  };
+
+  parts.push(grades[filmStock.colorGrade]);
+
+  // Sharpness and dynamic range
+  const sharpness = {
+    soft: 'soft focus with gentle diffusion for dreamy quality',
+    normal: 'normal sharpness maintaining detail without harshness',
+    hyper_sharp: 'hyper-sharp detail with maximum resolution',
+    diffusion: 'diffusion filter creating soft glow and reduced contrast'
+  };
+
+  parts.push(sharpness[filmStock.sharpness]);
+
+  const ranges = {
+    standard: 'standard dynamic range with natural contrast',
+    hdr: 'high dynamic range preserving detail in shadows and highlights',
+    log: 'logarithmic gamma for maximum post-production flexibility',
+    cinematic_log: 'cinematic log curve optimized for color grading and contrast'
+  };
+
+  parts.push(ranges[filmStock.dynamicRange]);
+
+  return parts.filter(Boolean).join(', ');
+}
+
+function buildCinematicPrompt(request: GenerateRequest): string {
+  const enhancement = request.cinematicEnhancement;
+  if (!enhancement?.qualityBoost) return '';
+
+  const layers: string[] = [];
+
+  // Layer 1: Camera Language
+  const cameraLayer = buildCameraLanguage(enhancement.camera);
+  if (cameraLayer) layers.push(`CAMERA: ${cameraLayer}`);
+
+  // Layer 2: Lighting & Atmosphere
+  const lightingLayer = buildLightingAtmosphere(enhancement.lighting);
+  if (lightingLayer) layers.push(`LIGHTING: ${lightingLayer}`);
+
+  // Layer 3: Action & Motion (handled by existing system)
+
+  // Layer 4: Composition & Motion
+  const compositionLayer = buildCompositionAndMotion(enhancement.composition);
+  if (compositionLayer) layers.push(`COMPOSITION: ${compositionLayer}`);
+
+  // Layer 5: Film Stock & Technical
+  const filmLayer = buildFilmStockReference(enhancement.filmStock);
+  if (filmLayer) layers.push(`CINEMATIC STYLE: ${filmLayer}`);
+
+  return layers.length > 0 ? `\n\n=== CINEMATIC ENHANCEMENT ===\n${layers.join('. ')}.` : '';
+}
+
 function buildProviderPrompt(request: GenerateRequest): string {
   const {
     videoType,
@@ -586,6 +868,13 @@ function buildProviderPrompt(request: GenerateRequest): string {
     subjectStyle,
   } = request;
 
+  // Apply cinematic enhancements to angle prompt
+  let enhancedAnglePrompt = anglePrompt;
+  const cinematicPrompt = buildCinematicPrompt(request);
+  if (cinematicPrompt) {
+    enhancedAnglePrompt = cinematicPrompt + (anglePrompt ? `. ${anglePrompt}` : '');
+  }
+
   switch (videoType) {
     case 'motivational':
       return buildEnhancedMotivationalPrompt(topic, durationSeconds, {
@@ -593,7 +882,7 @@ function buildProviderPrompt(request: GenerateRequest): string {
         setting: motivationalSetting,
         cameraStyle,
         lightingMood,
-        angle: anglePrompt,
+        angle: enhancedAnglePrompt,
         motivationalEnhancements: request.motivationalEnhancements,
       });
     case 'street_interview':
@@ -602,7 +891,7 @@ function buildProviderPrompt(request: GenerateRequest): string {
         interviewStyle,
         timeOfDay,
         energyLevel,
-        angle: anglePrompt,
+        angle: enhancedAnglePrompt,
         interviewerType,
         interviewerPosition,
         subjectDemographic,
@@ -618,7 +907,7 @@ function buildProviderPrompt(request: GenerateRequest): string {
         cityStyle,
         energyLevel,
         interviewStyle,
-        angle: anglePrompt,
+        angle: enhancedAnglePrompt,
         interviewerType,
         interviewerPosition,
         subjectDemographic,
@@ -630,7 +919,7 @@ function buildProviderPrompt(request: GenerateRequest): string {
     case 'studio_interview':
       return buildStudioInterviewPrompt(topic, durationSeconds, {
         question: interviewQuestion,
-        angle: anglePrompt,
+        angle: enhancedAnglePrompt,
         setup: request.studioSetup,
         lighting: request.studioLighting,
         interviewerType,
@@ -645,7 +934,7 @@ function buildProviderPrompt(request: GenerateRequest): string {
         format: request.wisdomFormat,
         demographic: request.wisdomDemographic,
         setting: request.wisdomSetting,
-        angle: anglePrompt,
+        angle: enhancedAnglePrompt,
       });
     case 'muapi':
       return buildEnhancedSubwayPrompt(topic, durationSeconds, {
@@ -654,7 +943,7 @@ function buildProviderPrompt(request: GenerateRequest): string {
         cityStyle,
         energyLevel,
         interviewStyle,
-        angle: anglePrompt,
+        angle: enhancedAnglePrompt,
         interviewerType,
         interviewerPosition,
         subjectDemographic,
@@ -670,7 +959,7 @@ function buildProviderPrompt(request: GenerateRequest): string {
         cityStyle,
         energyLevel,
         interviewStyle,
-        angle: anglePrompt,
+        angle: enhancedAnglePrompt,
       });
   }
 }
