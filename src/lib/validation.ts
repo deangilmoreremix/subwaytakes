@@ -472,7 +472,7 @@ export function validatePreGeneration(opts: PreGenerationOptions): PreGeneration
     issues.push({
       field: 'videoType',
       severity: 'error',
-      message: `Unknown video type: "${opts.videoType}". Must be one of: subway_interview, street_interview, motivational, studio_interview, wisdom_interview`,
+      message: `Unknown video type: "${opts.videoType}". Must be one of: subway_interview, street_interview, motivational, studio_interview, wisdom_interview, muapi`,
     });
     return { valid: false, issues, warnings, effectiveDurationSeconds: opts.durationSeconds };
   }

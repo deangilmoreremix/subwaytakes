@@ -1,4 +1,4 @@
-export type ClipType = 'motivational' | 'street_interview' | 'subway_interview' | 'studio_interview' | 'wisdom_interview';
+export type ClipType = 'motivational' | 'street_interview' | 'subway_interview' | 'studio_interview' | 'wisdom_interview' | 'muapi';
 
 // Interview Modes - 10 viral interview modes
 export type InterviewMode =
@@ -1312,6 +1312,33 @@ export function getDefaultEffects(clipType: string): RemotionEffectsConfig {
         includeHandle: true,
       },
     },
+    muapi: {
+      captions: {
+        enabled: true,
+        animation: 'word_by_word',
+        position: 'bottom',
+        fontSize: 34,
+        fontFamily: 'Inter',
+        textColor: '#FFFFFF',
+        backgroundColor: 'transparent',
+        emphasizeWords: [],
+      },
+      lowerThird: {
+        enabled: true,
+        style: 'modern',
+        showName: true,
+        showTitle: true,
+        showRole: false,
+      },
+      intro: { enabled: true, type: 'branding', durationFrames: 60 },
+      graphics: {
+        enabled: true,
+        progressBar: true,
+        chapterMarkers: false,
+        viralEmojis: false,
+        soundWave: false,
+      },
+    },
   };
   
   const preset = presets[clipType as ValidClipType] || presets.wisdom_interview;
@@ -1493,6 +1520,31 @@ export interface ClipPlan {
   variation_hint: string;
 }
 
+export interface MuapiBrainstormInput {
+  concept: string;
+  objective: string;
+  audience: string;
+  constraints?: string;
+  mustInclude?: string;
+  avoid?: string;
+}
+
+export interface MuapiStrategyOption {
+  id: string;
+  label: string;
+  hook: string;
+  visualDirection: string;
+  pacing: string;
+  rationale: string;
+}
+
+export interface MuapiPlan {
+  summary: string;
+  selectedStrategyId: string;
+  strategies: MuapiStrategyOption[];
+  realismPriority: 'standard' | 'cinematic_human';
+}
+
 export interface GenerateRequest {
   videoType: ClipType;
   topic: string;
@@ -1548,7 +1600,11 @@ export interface GenerateRequest {
   socialDynamics?: SocialDynamicsConfig;
   // Remotion effects
   effects?: RemotionEffectsConfig;
+  // Muapi optional metadata
+  muapiBrainstorm?: MuapiBrainstormInput;
+  muapiPlan?: MuapiPlan;
 }
+
 
 export interface ClipBatch {
   batchId: string;

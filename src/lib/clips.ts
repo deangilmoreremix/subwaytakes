@@ -35,6 +35,8 @@ import type {
   StreetEnhancementConfig,
   MotivationalEnhancementConfig,
   RemotionEffectsConfig,
+  MuapiBrainstormInput,
+  MuapiPlan,
 } from './types';
 import { getUserId } from './auth';
 import { createClipPlan, createVariationPrompt, createBatchVariationPrompt } from './promptEngine';
@@ -77,7 +79,7 @@ async function buildPromptFromBackend(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        video_type: options.videoType,
+        video_type: options.videoType === 'muapi' ? 'subway_interview' : options.videoType,
         topic: sanitizedTopic,
         duration_seconds: options.durationSeconds,
         angle_prompt: sanitizedAngle || undefined,
@@ -117,6 +119,8 @@ async function buildPromptFromBackend(
         niche: options.niche || undefined,
         interview_format: options.interview_format || undefined,
         caption_style: options.caption_style || undefined,
+        muapi_brainstorm: options.muapiBrainstorm || undefined,
+        muapi_plan: options.muapiPlan || undefined,
       }),
       signal: controller.signal,
     });
@@ -244,6 +248,8 @@ export interface CreateClipOptions {
   customLocation?: string;
   scenarioDescription?: string;
   socialDynamics?: SocialDynamicsConfig;
+  muapiBrainstorm?: MuapiBrainstormInput;
+  muapiPlan?: MuapiPlan;
 }
 
 export async function createClip(options: CreateClipOptions): Promise<Clip> {
@@ -286,6 +292,8 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     customLocation,
     scenarioDescription,
     socialDynamics,
+    muapiBrainstorm,
+    muapiPlan,
   } = options;
 
   const {
@@ -329,6 +337,7 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
   }
 
   const userId = getUserId();
+  const resolvedVideoType: ClipType = videoType === 'muapi' ? 'subway_interview' : videoType;
 
   const backendResult = await buildPromptFromBackend(
     options, sanitizedTopic, sanitizedAngle, sanitizedQuestion
@@ -341,34 +350,38 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     providerPrompt = backendResult.provider_prompt;
     negativePrompt = backendResult.negative_prompt;
   } else {
-    const plan = createClipPlan({
-      videoType,
-      topic: sanitizedTopic,
-      durationSeconds,
-      anglePrompt: sanitizedAngle,
-      interviewQuestion: sanitizedQuestion,
-      sceneType,
-      cityStyle,
-      energyLevel,
-      speakerStyle,
-      motivationalSetting,
-      cameraStyle,
-      lightingMood,
-      streetScene,
-      interviewStyle,
-      timeOfDay,
-      interviewerType,
-      interviewerPosition,
-      subjectDemographic,
-      subjectGender,
-      subjectStyle,
-      studioSetup,
-      studioLighting,
-      wisdomTone,
-      wisdomFormat,
-      wisdomDemographic,
-      wisdomSetting,
-    });
+      const plan = createClipPlan({
+        videoType: resolvedVideoType,
+        topic: sanitizedTopic,
+        durationSeconds,
+        anglePrompt: sanitizedAngle,
+        interviewQuestion: sanitizedQuestion,
+        sceneType,
+        cityStyle,
+        energyLevel,
+        speakerStyle,
+        motivationalSetting,
+        cameraStyle,
+        lightingMood,
+        streetScene,
+        interviewStyle,
+        timeOfDay,
+        interviewerType,
+        interviewerPosition,
+        subjectDemographic,
+        subjectGender,
+        subjectStyle,
+        studioSetup,
+        studioLighting,
+        wisdomTone,
+        wisdomFormat,
+        wisdomDemographic,
+        wisdomSetting,
+        subwayLine,
+        subwayEnhancements,
+        muapiBrainstorm,
+        muapiPlan,
+      });
     providerPrompt = plan.provider_prompt;
     negativePrompt = plan.negative_prompt;
   }
@@ -377,7 +390,7 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
     .from('clips')
     .insert({
       user_id: userId,
-      video_type: videoType,
+      video_type: resolvedVideoType,
       topic: sanitizedTopic,
       duration_seconds: durationSeconds,
       angle_prompt: sanitizedAngle || null,
@@ -515,7 +528,7 @@ export async function createClipBatch(
 
     return {
       user_id: userId,
-      video_type: options.videoType,
+      video_type: options.videoType === 'muapi' ? 'subway_interview' : options.videoType,
       topic: sanitizedTopic,
       duration_seconds: options.durationSeconds,
       angle_prompt: sanitizedAngle || null,

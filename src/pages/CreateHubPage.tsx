@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Users, Train, Video, Heart, ArrowRight } from 'lucide-react';
+import { Sparkles, Users, Train, Video, Heart, ArrowRight, BrainCircuit } from 'lucide-react';
 import type { ClipType } from '../lib/types';
 
 interface CreationMode {
@@ -75,6 +75,18 @@ const CREATION_MODES: CreationMode[] = [
     accentColor: 'text-sky-400',
     route: '/create/studio',
     tags: ['Professional', 'Podcast', 'Polished'],
+  },
+  {
+    type: 'muapi',
+    title: 'Muapi Planner',
+    subtitle: 'Brainstorm then generate',
+    description: 'Superpowers workflow: brainstorm, select strategy, lock cinematic realism, then generate a clip with strict quality checks.',
+    icon: <BrainCircuit className="h-7 w-7" />,
+    gradient: 'from-cyan-500/20 to-teal-500/10',
+    borderColor: 'border-cyan-500/30 hover:border-cyan-500/60',
+    accentColor: 'text-cyan-400',
+    route: '/create/muapi',
+    tags: ['Planning', 'Cinematic', 'Human Realism'],
   },
 ];
 

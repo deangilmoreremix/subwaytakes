@@ -12,6 +12,7 @@ const CreateStreetPage = lazy(() => import('./pages/create/CreateStreetPage').th
 const CreateMotivationalPage = lazy(() => import('./pages/create/CreateMotivationalPage').then(m => ({ default: m.CreateMotivationalPage })));
 const CreateWisdomPage = lazy(() => import('./pages/create/CreateWisdomPage').then(m => ({ default: m.CreateWisdomPage })));
 const CreateStudioPage = lazy(() => import('./pages/create/CreateStudioPage').then(m => ({ default: m.CreateStudioPage })));
+const CreateMuapiPage = lazy(() => import('./pages/create/CreateMuapiPage').then(m => ({ default: m.CreateMuapiPage })));
 const ClipPage = lazy(() => import('./pages/ClipPage').then(m => ({ default: m.ClipPage })));
 const LibraryPage = lazy(() => import('./pages/LibraryPage').then(m => ({ default: m.LibraryPage })));
 const EpisodeBuilderPage = lazy(() => import('./pages/EpisodeBuilderPage').then(m => ({ default: m.EpisodeBuilderPage })));
@@ -91,6 +92,7 @@ function AppContent() {
                     <Route path="/create/motivational" element={<CreateMotivationalPage />} />
                     <Route path="/create/wisdom" element={<CreateWisdomPage />} />
                     <Route path="/create/studio" element={<CreateStudioPage />} />
+                    <Route path="/create/muapi" element={<CreateMuapiPage />} />
                     <Route path="/library" element={<LibraryPage />} />
                     <Route path="/clips/:id" element={<ClipPage />} />
                     <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />

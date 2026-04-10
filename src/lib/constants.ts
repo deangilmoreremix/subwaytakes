@@ -411,6 +411,16 @@ export const TOPICS: Record<ClipType, string[]> = {
     'Listening',
     'Understanding',
   ],
+  muapi: [
+    'Cinematic Subway Realism',
+    'Street Debate with Natural Reactions',
+    'Human-Centered Documentary Interview',
+    'High-Trust Vox Pop Storytelling',
+    'Authentic Subway Confessional',
+    'Urban Social Experiment',
+    'Cold Open Hook with Punchline',
+    'Commuter Take Challenge',
+  ],
 };
 
 export const CLIP_TYPE_INFO: Record<ClipType, { title: string; subtitle: string }> = {
@@ -433,6 +443,10 @@ export const CLIP_TYPE_INFO: Record<ClipType, { title: string; subtitle: string 
   wisdom_interview: {
     title: 'Wisdom',
     subtitle: '55+ life experience & advice',
+  },
+  muapi: {
+    title: 'Muapi Planner',
+    subtitle: 'Brainstorm -> plan -> generate',
   },
 };
 
@@ -896,11 +910,16 @@ export function getPlaceholderText(type: ClipType): string {
       return 'Example: Professional discussion on career growth with expert insights';
     case 'wisdom_interview':
       return 'Example: Ask about life lessons, retirement wisdom, or family advice';
+    case 'muapi':
+      return 'Example: cinematic subway realism, spontaneous reactions, documentary handheld energy.';
   }
 }
 
 export function getDefaultDuration(type: ClipType): number {
-  return type === 'motivational' ? 5 : type === 'wisdom_interview' ? 6 : 4;
+  if (type === 'motivational') return 5;
+  if (type === 'wisdom_interview') return 6;
+  if (type === 'muapi') return 6;
+  return 4;
 }
 
 export const INTERVIEWER_TYPES: { value: InterviewerType; label: string; description: string }[] = [

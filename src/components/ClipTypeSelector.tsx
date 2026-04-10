@@ -1,4 +1,4 @@
-import { Sparkles, Users, Train, Video, Heart } from 'lucide-react';
+import { Sparkles, Users, Train, Video, Heart, BrainCircuit } from 'lucide-react';
 import type { ClipType } from '../lib/types';
 import { CLIP_TYPE_INFO } from '../lib/constants';
 import { clsx } from '../lib/format';
@@ -15,10 +15,11 @@ const ICONS: Record<ClipType, React.ReactNode> = {
   subway_interview: <Train className="h-5 w-5" />,
   studio_interview: <Video className="h-5 w-5" />,
   wisdom_interview: <Heart className="h-5 w-5" />,
+  muapi: <BrainCircuit className="h-5 w-5" />,
 };
 
 export function ClipTypeSelector({ value, onChange, disabled }: ClipTypeSelectorProps) {
-  const types: ClipType[] = ['motivational', 'street_interview', 'subway_interview', 'studio_interview', 'wisdom_interview'];
+  const types: ClipType[] = ['motivational', 'street_interview', 'subway_interview', 'studio_interview', 'wisdom_interview', 'muapi'];
 
   return (
     <div>

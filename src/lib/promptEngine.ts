@@ -67,7 +67,7 @@ MICROPHONE RULE (MANDATORY):
 - Camera framing must clearly show the card between interviewer and subject.
 `;
 
-const SUBWAY_NEGATIVE_PROMPT = 'no handheld microphone, no lavalier mic, no boom mic, no headset mic, no visible audio equipment, no phone used as microphone, no traditional podcast microphone, no studio lighting, no ring light, no color filters, no green screen, no interviewer without sunglasses';
+const SUBWAY_NEGATIVE_PROMPT = 'no handheld microphone, no lavalier mic, no boom mic, no headset mic, no visible audio equipment, no phone used as microphone, no traditional podcast microphone, no studio lighting, no ring light, no color filters, no green screen, no interviewer without sunglasses, no waxy skin, no CGI skin texture, no plastic face, no unnatural eye reflections, no floating hands, no warped fingers, no uncanny facial symmetry, no fake crowd clones';
 
 // Subway Card Mic visual anchors - reinforces the card mic in generated output
 const SUBWAY_CARD_MIC_ANCHORS = `
@@ -91,6 +91,25 @@ const INTERVIEW_VISUAL_ANCHORS = `
 - Hands visible when interviewer is interacting with subject.
 - Documentary framing: mid-shot to close-up.
 - Natural motion and authentic reactions.
+`.trim();
+
+const CINEMATIC_REALISM_RULES = `
+CINEMATIC HUMAN REALISM (MANDATORY):
+- Cinematic but believable camera language: intentional framing, subtle handheld or stabilized motion, realistic depth of field.
+- Human-first realism: natural skin texture, natural blink cadence, authentic micro-expressions, realistic breathing and posture shifts.
+- Physically plausible lighting and shadows; no over-processed glow or synthetic contrast.
+- Keep material realism: realistic clothing folds, fabric texture, hair strands, natural eye highlights.
+- Preserve environmental continuity and authentic ambient movement in background.
+`.trim();
+
+const REALISM_NEGATIVE_PROMPT = 'no uncanny valley faces, no waxy skin, no plastic skin texture, no warped hands, no extra fingers, no floating props, no cloned faces, no unnatural gaze locking, no rubbery motion';
+
+const SUBWAY_AUTHENTICITY_RULES = `
+SUBWAY AUTHENTICITY (MANDATORY):
+- Must look like a real commuter interview in a functioning subway environment.
+- Documentary handheld composition with practical motion and slight environmental vibration.
+- Visible transit details: signage, handrails, seating, platform textures, and moving commuters.
+- Subject and interviewer body language should feel unscripted and spontaneous.
 `.trim();
 
 // 55+ WISDOM DEFAULTS - Applied to ALL interview types by default
@@ -628,6 +647,22 @@ function buildProviderPrompt(request: GenerateRequest): string {
         setting: request.wisdomSetting,
         angle: anglePrompt,
       });
+    case 'muapi':
+      return buildEnhancedSubwayPrompt(topic, durationSeconds, {
+        question: interviewQuestion,
+        sceneType,
+        cityStyle,
+        energyLevel,
+        interviewStyle,
+        angle: anglePrompt,
+        interviewerType,
+        interviewerPosition,
+        subjectDemographic,
+        subjectGender,
+        subjectStyle,
+        subwayLine: request.subwayLine,
+        subwayEnhancements: request.subwayEnhancements,
+      });
     default:
       return buildEnhancedSubwayPrompt(topic, durationSeconds, {
         question: interviewQuestion,
@@ -638,6 +673,53 @@ function buildProviderPrompt(request: GenerateRequest): string {
         angle: anglePrompt,
       });
   }
+}
+
+interface PromptQualityCheck {
+  typeMatchScore: number;
+  cinematicScore: number;
+  humanRealismScore: number;
+  subwayAuthenticityScore: number;
+  modeMismatch: boolean;
+}
+
+function scorePromptQuality(prompt: string, videoType: ClipType): PromptQualityCheck {
+  const normalized = prompt.toLowerCase();
+  const hasCinematic = /cinematic|framing|depth of field|lighting/.test(normalized);
+  const hasHuman = /micro-expressions|natural skin|breathing|authentic/.test(normalized);
+  const hasSubway = /subway|platform|commuter|transit|metrocard|card/.test(normalized);
+  const modeMismatch = videoType === 'subway_interview' && !hasSubway;
+
+  return {
+    typeMatchScore: modeMismatch ? 35 : 90,
+    cinematicScore: hasCinematic ? 90 : 65,
+    humanRealismScore: hasHuman ? 92 : 68,
+    subwayAuthenticityScore: videoType === 'subway_interview' ? (hasSubway ? 93 : 40) : 100,
+    modeMismatch,
+  };
+}
+
+function applyMuapiPlanToRequest(request: GenerateRequest): GenerateRequest {
+  if (request.videoType !== 'muapi' || !request.muapiPlan) return request;
+
+  const strategy = request.muapiPlan.strategies.find(s => s.id === request.muapiPlan?.selectedStrategyId);
+  const nextAngle = [
+    request.anglePrompt,
+    request.muapiPlan.summary,
+    strategy?.hook,
+    strategy?.visualDirection,
+    strategy?.pacing,
+  ].filter(Boolean).join(' | ');
+
+  return {
+    ...request,
+    videoType: 'subway_interview',
+    cityStyle: request.cityStyle || 'nyc',
+    sceneType: request.sceneType || 'inside_train',
+    energyLevel: request.energyLevel || 'conversational',
+    interviewStyle: request.interviewStyle || 'man_on_street',
+    anglePrompt: nextAngle,
+  };
 }
 
 function generateVariationHint(type: ClipType): string {
@@ -682,6 +764,14 @@ function generateVariationHint(type: ClipType): string {
       'different pacing of advice',
       'vary storytelling approach',
     ],
+    muapi: [
+      'alternate opening hook while preserving realism constraints',
+      'slight camera reposition while keeping documentary cadence',
+      'vary emotional beat timing with same mode lock',
+      'adjust crowd texture while preserving human realism',
+      'change reaction pace without breaking authenticity',
+      'refine cinematic lighting continuity',
+    ],
   };
 
   const options = hints[type];
@@ -690,10 +780,11 @@ function generateVariationHint(type: ClipType): string {
 }
 
 export function createClipPlan(request: GenerateRequest): ClipPlan {
-  const { videoType, topic, durationSeconds } = request;
+  const normalizedRequest = applyMuapiPlanToRequest(request);
+  const { videoType, topic, durationSeconds } = normalizedRequest;
 
   // 1) Build the base prompt (your existing builder)
-  let base = buildProviderPrompt(request);
+  let base = buildProviderPrompt(normalizedRequest);
 
   // 2) Apply wisdom rules only when appropriate
   if (shouldApplyWisdomRules(request)) {
@@ -704,24 +795,46 @@ export function createClipPlan(request: GenerateRequest): ClipPlan {
   let provider_prompt = base;
 
   if (videoType === 'subway_interview') {
-    provider_prompt = hardenPrompt(provider_prompt, request, {
-      systemRules: SUBWAY_CARD_MIC_RULE.trim(),
+    provider_prompt = hardenPrompt(provider_prompt, normalizedRequest, {
+      systemRules: `${SUBWAY_CARD_MIC_RULE.trim()}\n${SUBWAY_AUTHENTICITY_RULES}\n${CINEMATIC_REALISM_RULES}`,
       visualAnchors: `${SUBWAY_CARD_MIC_ANCHORS}\n${INTERVIEW_VISUAL_ANCHORS}`,
       forbidden: SUBWAY_FORBIDDEN,
     });
   } else if (videoType === 'street_interview' || videoType === 'studio_interview') {
-    provider_prompt = hardenPrompt(provider_prompt, request, {
+    provider_prompt = hardenPrompt(provider_prompt, normalizedRequest, {
+      systemRules: CINEMATIC_REALISM_RULES,
       visualAnchors: INTERVIEW_VISUAL_ANCHORS,
     });
   } else {
-    provider_prompt = hardenPrompt(provider_prompt, request);
+    provider_prompt = hardenPrompt(provider_prompt, normalizedRequest, {
+      systemRules: CINEMATIC_REALISM_RULES,
+    });
   }
 
   // 4) Negative prompts - make subway stricter
-  const negative_prompt =
-    videoType === 'subway_interview'
-      ? mergeNegativePrompt(NEGATIVE_PROMPT, SUBWAY_NEGATIVE_PROMPT)
-      : NEGATIVE_PROMPT;
+  let negative_prompt = mergeNegativePrompt(NEGATIVE_PROMPT, REALISM_NEGATIVE_PROMPT);
+  if (videoType === 'subway_interview') {
+    negative_prompt = mergeNegativePrompt(negative_prompt, SUBWAY_NEGATIVE_PROMPT);
+  }
+
+  // 5) Strict quality gate with one rewrite pass
+  let quality = scorePromptQuality(provider_prompt, videoType);
+  if (
+    quality.modeMismatch ||
+    quality.cinematicScore < 80 ||
+    quality.humanRealismScore < 80 ||
+    (videoType === 'subway_interview' && quality.subwayAuthenticityScore < 85)
+  ) {
+    provider_prompt = `${provider_prompt}\n\nSTRICT QUALITY REWRITE (MANDATORY):
+- Reinforce exact video type intent and visual grammar for ${videoType}.
+- Maximize cinematic realism and human naturalism.
+- Preserve spontaneous documentary behavior and physical plausibility.
+- For subway: keep card-mic visible and transit authenticity in every shot.`;
+    quality = scorePromptQuality(provider_prompt, videoType);
+    if (quality.modeMismatch) {
+      throw new Error('Muapi strict quality gate failed: prompt mode mismatch detected.');
+    }
+  }
 
   return {
     provider_prompt,
