@@ -133,6 +133,29 @@ export const VIDEO_TYPE_SPECS: Record<ClipType, VideoTypeSpec> = {
       'Avoid high-energy interview modes',
     ],
   },
+  muapi: {
+    type: 'muapi',
+    label: 'Muapi Planner',
+    aspectRatio: '9:16',
+    minDurationSeconds: 3,
+    maxDurationSeconds: 160,
+    recommendedDurationSeconds: [6, 8, 15, 30],
+    allowedProviders: ['minimax', 'google'],
+    requiresScene: true,
+    requiresCityStyle: false,
+    requiresEnergyLevel: true,
+    requiresInterviewStyle: true,
+    maxPromptLength: 10000,
+    maxSpeechScriptLength: 5000,
+    supportsBatch: false,
+    outputFormat: 'mp4',
+    outputResolution: { width: 1080, height: 1920 },
+    businessRules: [
+      'Must include explicit mode lock and cinematic realism constraints',
+      'Must include human realism and artifact suppression directives',
+      'Subway strategies must preserve card-mic identity and documentary framing',
+    ],
+  },
 };
 
 export interface PlatformExportSpec {

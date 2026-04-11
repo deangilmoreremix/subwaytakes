@@ -52,6 +52,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/create/motivational': 'Motivational',
   '/create/wisdom': 'Wisdom Interview',
   '/create/studio': 'Studio Interview',
+  '/create/muapi': 'Muapi Planner',
   '/library': 'Library',
   '/templates': 'Templates',
   '/questions': 'Question Bank',

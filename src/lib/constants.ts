@@ -411,6 +411,16 @@ export const TOPICS: Record<ClipType, string[]> = {
     'Listening',
     'Understanding',
   ],
+  muapi: [
+    'Cinematic Subway Realism',
+    'Street Debate with Natural Reactions',
+    'Human-Centered Documentary Interview',
+    'High-Trust Vox Pop Storytelling',
+    'Authentic Subway Confessional',
+    'Urban Social Experiment',
+    'Cold Open Hook with Punchline',
+    'Commuter Take Challenge',
+  ],
 };
 
 export const CLIP_TYPE_INFO: Record<ClipType, { title: string; subtitle: string }> = {
@@ -433,6 +443,10 @@ export const CLIP_TYPE_INFO: Record<ClipType, { title: string; subtitle: string 
   wisdom_interview: {
     title: 'Wisdom',
     subtitle: '55+ life experience & advice',
+  },
+  muapi: {
+    title: 'Muapi Planner',
+    subtitle: 'Brainstorm -> plan -> generate',
   },
 };
 
@@ -896,11 +910,16 @@ export function getPlaceholderText(type: ClipType): string {
       return 'Example: Professional discussion on career growth with expert insights';
     case 'wisdom_interview':
       return 'Example: Ask about life lessons, retirement wisdom, or family advice';
+    case 'muapi':
+      return 'Example: cinematic subway realism, spontaneous reactions, documentary handheld energy.';
   }
 }
 
 export function getDefaultDuration(type: ClipType): number {
-  return type === 'motivational' ? 5 : type === 'wisdom_interview' ? 6 : 4;
+  if (type === 'motivational') return 5;
+  if (type === 'wisdom_interview') return 6;
+  if (type === 'muapi') return 6;
+  return 4;
 }
 
 export const INTERVIEWER_TYPES: { value: InterviewerType; label: string; description: string }[] = [
@@ -1961,4 +1980,188 @@ export function getCardDescriptionForCity(cityStyle: CityStyle): string {
 // Helper to get card type for a city
 export function getTransitCardForCity(cityStyle: CityStyle): TransitCardType {
   return CITY_TRANSIT_CARDS[cityStyle];
+}
+
+// === CINEMATIC ENHANCEMENT PRESETS ===
+
+// Pre-configured cinematic enhancement templates
+export const CINEMATIC_PRESETS = {
+  documentary_realism: {
+    name: 'Documentary Realism',
+    description: 'Authentic handheld documentary style with natural lighting',
+    camera: {
+      movement: 'steadicam' as const,
+      lens: '35mm_standard' as const,
+      depthOfField: 'medium' as const,
+      angle: 'eye_level' as const,
+      framing: 'medium_shot' as const,
+    },
+    lighting: {
+      type: 'motivated' as const,
+      source: 'golden_hour' as const,
+      temperature: 5500,
+      contrast: 'medium' as const,
+      atmosphere: 'clear' as const,
+      direction: 'front' as const,
+    },
+    composition: {
+      framing: 'rule_of_thirds' as const,
+      aspectRatio: '9:16' as const,
+      motion: 'static' as const,
+      perspective: 'normal' as const,
+    },
+    filmStock: {
+      type: 'arri_alexa' as const,
+      grain: 'subtle_digital' as const,
+      colorGrade: 'neutral' as const,
+      sharpness: 'normal' as const,
+      dynamicRange: 'standard' as const,
+    },
+  },
+  cinematic_drama: {
+    name: 'Cinematic Drama',
+    description: 'Hollywood-style dramatic lighting and camera work',
+    camera: {
+      movement: 'dolly_in' as const,
+      lens: '85mm_compression' as const,
+      depthOfField: 'shallow' as const,
+      angle: 'low_angle' as const,
+      framing: 'close_up' as const,
+    },
+    lighting: {
+      type: 'chiaroscuro' as const,
+      source: 'dramatic_harsh' as const,
+      temperature: 3200,
+      contrast: 'high' as const,
+      atmosphere: 'godrays' as const,
+      direction: 'side' as const,
+    },
+    composition: {
+      framing: 'centered' as const,
+      aspectRatio: '2.39:1_anamorphic' as const,
+      motion: 'static' as const,
+      perspective: 'normal' as const,
+    },
+    filmStock: {
+      type: 'kodak_vision' as const,
+      grain: 'film_grain' as const,
+      colorGrade: 'teal_orange' as const,
+      sharpness: 'normal' as const,
+      dynamicRange: 'cinematic_log' as const,
+    },
+  },
+  viral_energy: {
+    name: 'Viral Energy',
+    description: 'High-energy dynamic camera work for maximum engagement',
+    camera: {
+      movement: 'tracking' as const,
+      lens: '24mm_wide' as const,
+      depthOfField: 'medium' as const,
+      angle: 'dutch' as const,
+      framing: 'wide_shot' as const,
+    },
+    lighting: {
+      type: 'practical' as const,
+      source: 'neon' as const,
+      temperature: 6500,
+      contrast: 'medium' as const,
+      atmosphere: 'haze' as const,
+      direction: 'omnidirectional' as const,
+    },
+    composition: {
+      framing: 'rule_of_thirds' as const,
+      aspectRatio: '9:16' as const,
+      motion: 'pan_right' as const,
+      perspective: 'normal' as const,
+    },
+    filmStock: {
+      type: 'digital_clean' as const,
+      grain: 'none' as const,
+      colorGrade: 'hyper_saturated' as const,
+      sharpness: 'hyper_sharp' as const,
+      dynamicRange: 'hdr' as const,
+    },
+  },
+  moody_atmospheric: {
+    name: 'Moody Atmospheric',
+    description: 'Dark, atmospheric lighting with volumetric effects',
+    camera: {
+      movement: 'crane' as const,
+      lens: '50mm_portrait' as const,
+      depthOfField: 'shallow' as const,
+      angle: 'high_angle' as const,
+      framing: 'medium_shot' as const,
+    },
+    lighting: {
+      type: 'volumetric' as const,
+      source: 'blue_hour' as const,
+      temperature: 8000,
+      contrast: 'high' as const,
+      atmosphere: 'volumetric_fog' as const,
+      direction: 'back' as const,
+    },
+    composition: {
+      framing: 'negative_space' as const,
+      aspectRatio: '9:16' as const,
+      motion: 'tilt_down' as const,
+      perspective: 'normal' as const,
+    },
+    filmStock: {
+      type: 'vintage_film' as const,
+      grain: 'heavy_grain' as const,
+      colorGrade: 'desaturated' as const,
+      sharpness: 'soft' as const,
+      dynamicRange: 'log' as const,
+    },
+  },
+  professional_broadcast: {
+    name: 'Professional Broadcast',
+    description: 'Clean, professional lighting and composition for corporate content',
+    camera: {
+      movement: 'static' as const,
+      lens: '35mm_standard' as const,
+      depthOfField: 'deep' as const,
+      angle: 'eye_level' as const,
+      framing: 'medium_shot' as const,
+    },
+    lighting: {
+      type: 'three_point' as const,
+      source: 'studio_soft' as const,
+      temperature: 5600,
+      contrast: 'low' as const,
+      atmosphere: 'clear' as const,
+      direction: 'front' as const,
+    },
+    composition: {
+      framing: 'centered' as const,
+      aspectRatio: '16:9' as const,
+      motion: 'static' as const,
+      perspective: 'normal' as const,
+    },
+    filmStock: {
+      type: 'arri_alexa' as const,
+      grain: 'none' as const,
+      colorGrade: 'neutral' as const,
+      sharpness: 'hyper_sharp' as const,
+      dynamicRange: 'hdr' as const,
+    },
+  },
+};
+
+// Helper function to get a cinematic preset by name
+export function getCinematicPreset(presetName: keyof typeof CINEMATIC_PRESETS) {
+  return CINEMATIC_PRESETS[presetName];
+}
+
+// Helper function to create a cinematic enhancement from a preset
+export function createCinematicEnhancement(presetName: keyof typeof CINEMATIC_PRESETS, intensity: 'subtle' | 'standard' | 'cinematic' | 'maximum' = 'standard') {
+  const preset = CINEMATIC_PRESETS[presetName];
+  return {
+    camera: preset.camera,
+    lighting: preset.lighting,
+    composition: preset.composition,
+    filmStock: preset.filmStock,
+    qualityBoost: true,
+    intensity,
+  };
 }

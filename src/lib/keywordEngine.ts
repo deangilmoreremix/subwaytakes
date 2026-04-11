@@ -1862,6 +1862,7 @@ export function generateRefinedPrompt(
     'studio_interview': 'Sit down for a deep interview and ask',
     'motivational': 'Deliver a powerful message about',
     'wisdom_interview': 'Sit down with someone wise and ask',
+    'muapi': 'Plan a cinematic human-realism interview and ask',
   };
   
   parts.push(actions[options.clipType || 'street_interview']);

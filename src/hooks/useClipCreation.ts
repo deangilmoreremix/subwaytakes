@@ -164,6 +164,7 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
         motivational: '/create/motivational',
         wisdom_interview: '/create/wisdom',
         studio_interview: '/create/studio',
+        muapi: '/create/muapi',
       };
       navigate(routeMap[analysis.clipType]);
     }
@@ -184,7 +185,7 @@ export function useClipCreation(clipType: ClipType, stepDefs?: WizardStepDef[]) 
     mutationKeyRef.current = mutationKey('clip');
 
     try {
-      const isInterview = ['subway_interview', 'street_interview', 'studio_interview', 'wisdom_interview'].includes(clipType);
+      const isInterview = ['subway_interview', 'street_interview', 'studio_interview', 'wisdom_interview', 'muapi'].includes(clipType);
 
       const options: CreateClipOptions = {
         videoType: clipType,
