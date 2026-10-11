@@ -1,24 +1,41 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import {
+  buildCorsHeaders,
+  errorResponse,
+  handleOptions,
+  HttpError,
+  jsonResponse,
+} from "../_shared/cors.ts";
+import { internalCall, requireUser, serviceClient } from "../_shared/auth.ts";
+import {
+  muapiPollResult,
+  muapiSubmit,
+  muapiVideoRequest,
+  type MuapiVideoModel,
+} from "../_shared/muapi.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
-const VALID_VIDEO_TYPES = ["subway_interview", "street_interview", "motivational", "studio_interview", "wisdom_interview"] as const;
+const VALID_VIDEO_TYPES = [
+  "subway_interview",
+  "street_interview",
+  "motivational",
+  "studio_interview",
+  "wisdom_interview",
+  "episode_shot",
+] as const;
 
 const PROVIDER_MAX_DURATION: Record<'minimax' | 'google', number> = {
   minimax: 160,
   google: 8,
 };
 
+const MUAPI_POLL_ATTEMPTS = 24;
+const MUAPI_POLL_INTERVAL_MS = 5000;
+
 interface OutputVerification {
   valid: boolean;
   issues: string[];
   warnings: string[];
-  effectiveStatus: 'done' | 'demo' | 'error';
+  effectiveStatus: 'done' | 'error';
 }
 
 function verifyOutput(
@@ -26,15 +43,14 @@ function verifyOutput(
   videoType: string,
   requestedDuration: number,
   provider: 'minimax' | 'google',
-  isDemo: boolean
 ): OutputVerification {
   const issues: string[] = [];
   const warnings: string[] = [];
 
   if (!url || url.trim().length === 0) {
     issues.push('No result URL returned from provider');
-  } else if (!url.startsWith('http') && !url.startsWith('data:')) {
-    issues.push(`Result URL has unexpected format`);
+  } else if (!url.startsWith('https://') && !url.startsWith('http://')) {
+    issues.push('Result URL has unexpected format');
   }
 
   if (!VALID_VIDEO_TYPES.includes(videoType as typeof VALID_VIDEO_TYPES[number])) {
@@ -46,43 +62,11 @@ function verifyOutput(
     warnings.push(`Duration capped from ${requestedDuration}s to ${maxDuration}s (${provider} limit)`);
   }
 
-  if (isDemo) {
-    warnings.push('Demo video used — no API key configured or generation failed');
-  }
-
   const effectiveStatus: OutputVerification['effectiveStatus'] =
-    issues.length > 0 ? 'error' : isDemo ? 'demo' : 'done';
+    issues.length > 0 ? 'error' : 'done';
 
   return { valid: issues.length === 0, issues, warnings, effectiveStatus };
 }
-
-const DEMO_VIDEOS: Record<string, string[]> = {
-  motivational: [
-    "https://images.pexels.com/videos/3015510/free-video-3015510.mp4?auto=compress",
-    "https://images.pexels.com/videos/4057411/free-video-4057411.mp4?auto=compress",
-    "https://images.pexels.com/videos/5377684/pexels-video-5377684.mp4?auto=compress",
-  ],
-  street_interview: [
-    "https://images.pexels.com/videos/3209828/free-video-3209828.mp4?auto=compress",
-    "https://images.pexels.com/videos/3015488/free-video-3015488.mp4?auto=compress",
-    "https://images.pexels.com/videos/1536358/free-video-1536358.mp4?auto=compress",
-  ],
-  subway_interview: [
-    "https://images.pexels.com/videos/2795750/free-video-2795750.mp4?auto=compress",
-    "https://images.pexels.com/videos/3015482/free-video-3015482.mp4?auto=compress",
-    "https://images.pexels.com/videos/5377612/pexels-video-5377612.mp4?auto=compress",
-  ],
-  studio_interview: [
-    "https://images.pexels.com/videos/7579554/pexels-video-7579554.mp4?auto=compress",
-    "https://images.pexels.com/videos/6774947/pexels-video-6774947.mp4?auto=compress",
-    "https://images.pexels.com/videos/5377684/pexels-video-5377684.mp4?auto=compress",
-  ],
-  wisdom_interview: [
-    "https://images.pexels.com/videos/3015510/free-video-3015510.mp4?auto=compress",
-    "https://images.pexels.com/videos/3209828/free-video-3209828.mp4?auto=compress",
-    "https://images.pexels.com/videos/4057411/free-video-4057411.mp4?auto=compress",
-  ],
-};
 
 async function fetchWithTimeout(
   url: string,
@@ -98,6 +82,10 @@ async function fetchWithTimeout(
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 type VideoModel = 'hailuo-2.3-fast' | 'hailuo-2.3' | 'veo-3.1-fast' | 'veo-3.1';
 type ModelTier = 'standard' | 'premium';
 
@@ -111,6 +99,12 @@ interface GenerateRequest {
   speech_script?: string;
   is_episode_shot?: boolean;
   episode_id?: string;
+  /** When 'muapi', generate through the MuAPI video endpoints. */
+  provider?: 'muapi';
+  /** Which MuAPI video model to use (default veo3). */
+  muapi_model?: MuapiVideoModel;
+  /** Direct MuAPI endpoint override (e.g. "veo3-text-to-video"). */
+  muapi_endpoint?: string;
   effects?: {
     thumbnail?: {
       enabled: boolean;
@@ -161,12 +155,48 @@ function getModelForTier(tier: ModelTier): VideoModel {
   return tier === 'premium' ? 'veo-3.1-fast' : 'hailuo-2.3-fast';
 }
 
+function placeholderThumbnail(config: ThumbnailConfig): string {
+  function escapeSvgText(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
+  }
+
+  const safeEmoji = escapeSvgText(config.emoji || '');
+  const safeOverlay = config.overlayText ? escapeSvgText(config.overlayText) : '';
+  const safeStyle = escapeSvgText(config.style || '');
+
+  return `data:image/svg+xml,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#1a1a2e"/>
+          <stop offset="100%" style="stop-color:#16213e"/>
+        </linearGradient>
+      </defs>
+      <rect fill="url(#bg)" width="1280" height="720"/>
+      <text x="50%" y="45%" text-anchor="middle" font-size="160" font-family="Arial">${safeEmoji}</text>
+      ${safeOverlay ? `<text x="50%" y="70%" text-anchor="middle" font-size="48" fill="white" font-family="Arial">${safeOverlay}</text>` : ''}
+      <text x="50%" y="92%" text-anchor="middle" font-size="24" fill="#888" font-family="Arial" text-transform="uppercase">${safeStyle}</text>
+    </svg>
+  `)}`;
+}
+
+/**
+ * Thumbnail generation. The SVG data URL is only used when thumbnail
+ * generation was NOT requested — it is a branded placeholder, never a stand-in
+ * for a real frame. When generation was requested and every generator fails,
+ * the url is null and the caller records a note instead of storing a fake.
+ */
 async function generateThumbnailWithFFmpeg(
   videoUrl: string,
   config: ThumbnailConfig
-): Promise<string | null> {
-  if (!config.enabled || !config.emoji) {
-    return null;
+): Promise<{ url: string | null; note?: string }> {
+  if (!config.enabled) {
+    return { url: placeholderThumbnail(config) };
   }
 
   const ffmpegServiceUrl = Deno.env.get("FFMPEG_SERVICE_URL") || Deno.env.get("THUMBNAIL_SERVICE_URL");
@@ -200,7 +230,9 @@ async function generateThumbnailWithFFmpeg(
 
       if (response.ok) {
         const data = await response.json();
-        return data.thumbnail;
+        if (typeof data.thumbnail === "string" && data.thumbnail.length > 0) {
+          return { url: data.thumbnail };
+        }
       } else {
         console.error("FFmpeg service error:", response.status);
       }
@@ -216,39 +248,16 @@ async function generateThumbnailWithFFmpeg(
   if (cloudinaryCloudName && cloudinaryApiKey && cloudinaryApiSecret) {
     try {
       const staticThumbnailUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/video/upload/so_2,w_1280,h_720,c_fill,l_text:Arial_72:${encodeURIComponent(config.emoji)},fl_layer_apply,g_center/${encodeURIComponent(videoUrl)}.jpg`;
-      return staticThumbnailUrl;
+      return { url: staticThumbnailUrl };
     } catch (error) {
       console.error("Cloudinary error:", error);
     }
   }
 
-  function escapeSvgText(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;');
-  }
-
-  const safeEmoji = escapeSvgText(config.emoji || '');
-  const safeOverlay = config.overlayText ? escapeSvgText(config.overlayText) : '';
-  const safeStyle = escapeSvgText(config.style || '');
-
-  return `data:image/svg+xml,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">
-      <defs>
-        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#1a1a2e"/>
-          <stop offset="100%" style="stop-color:#16213e"/>
-        </linearGradient>
-      </defs>
-      <rect fill="url(#bg)" width="1280" height="720"/>
-      <text x="50%" y="45%" text-anchor="middle" font-size="160" font-family="Arial">${safeEmoji}</text>
-      ${safeOverlay ? `<text x="50%" y="70%" text-anchor="middle" font-size="48" fill="white" font-family="Arial">${safeOverlay}</text>` : ''}
-      <text x="50%" y="92%" text-anchor="middle" font-size="24" fill="#888" font-family="Arial" text-transform="uppercase">${safeStyle}</text>
-    </svg>
-  `)}`;
+  return {
+    url: null,
+    note: "Thumbnail generation failed (FFmpeg service and Cloudinary unavailable)",
+  };
 }
 
 async function generateWithMiniMax(
@@ -354,6 +363,7 @@ async function getMiniMaxVideoUrl(fileId: string): Promise<string> {
 async function generateWithVeo(
   prompt: string,
   durationSeconds: number,
+  modelConfig: ModelConfig,
   speechScript?: string,
   negativePrompt?: string
 ): Promise<string> {
@@ -379,7 +389,7 @@ async function generateWithVeo(
   }
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig.apiModel}:predictLongRunning`,
     {
       method: "POST",
       headers: {
@@ -442,55 +452,89 @@ async function generateWithVeo(
   throw new Error("Veo generation timed out");
 }
 
+interface MuapiGenerationResult {
+  requestId: string;
+  url: string;
+}
+
+async function generateWithMuapi(
+  supabase: SupabaseClient,
+  table: "clips" | "episode_shots",
+  clipId: string,
+  prompt: string,
+  durationSeconds: number,
+  model: MuapiVideoModel | undefined,
+  endpointOverride: string | undefined,
+): Promise<MuapiGenerationResult> {
+  const muapiKey = Deno.env.get("MUAPI_API_KEY");
+  if (!muapiKey) {
+    throw new Error("provider 'muapi' requested but MUAPI_API_KEY is not configured");
+  }
+
+  const selectedModel: MuapiVideoModel = model ?? "veo3";
+  const { endpoint, payload } = muapiVideoRequest(selectedModel, prompt, {
+    aspectRatio: "9:16",
+    durationSec: Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : 5,
+  });
+  const finalEndpoint = endpointOverride ?? endpoint;
+  const finalPayload = endpointOverride ? { prompt, aspect_ratio: "9:16" } : payload;
+
+  const requestId = await muapiSubmit(finalEndpoint, finalPayload);
+
+  // The generated Database types don't cover these tables, so the union table
+  // name is narrowed to a single literal for the typed builder.
+  await supabase
+    .from(table as "clips")
+    .update({ provider_job_id: requestId })
+    .eq("id", clipId);
+
+  for (let attempt = 0; attempt < MUAPI_POLL_ATTEMPTS; attempt++) {
+    await sleep(MUAPI_POLL_INTERVAL_MS);
+
+    const result = await muapiPollResult(requestId);
+
+    if (result.status === "completed") {
+      const url = result.outputs[0];
+      if (!url || (!url.startsWith("https://") && !url.startsWith("http://"))) {
+        throw new Error("MuAPI generation completed without a valid video URL");
+      }
+      return { requestId, url };
+    }
+
+    if (result.status === "failed" || result.status === "cancelled") {
+      throw new Error(result.error || `MuAPI generation ${result.status}`);
+    }
+  }
+
+  throw new Error("MuAPI generation timed out");
+}
+
 Deno.serve(async (req: Request) => {
+  const cors = buildCorsHeaders(req.headers.get("Origin"));
+  const fail = (status: number, message: string) => jsonResponse({ error: message }, status, cors);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return handleOptions(req);
   }
 
   let parsedBody: Record<string, unknown> = {};
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header is required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
     let authenticatedUserId: string | null = null;
-
-    if (!isInternalCall) {
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const authClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
-      if (authError || !authUser) {
-        return new Response(
-          JSON.stringify({ error: "Invalid or expired token" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      authenticatedUserId = authUser.id;
+    if (internalCall(req)) {
+      authenticatedUserId = null;
+    } else {
+      const { userId } = await requireUser(req);
+      authenticatedUserId = userId;
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = serviceClient();
 
     let body: GenerateRequest;
     try {
       body = await req.json();
     } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return fail(400, "Invalid JSON body");
     }
     parsedBody = body as unknown as Record<string, unknown>;
     const {
@@ -503,6 +547,9 @@ Deno.serve(async (req: Request) => {
       speech_script,
       is_episode_shot = false,
       episode_id,
+      provider,
+      muapi_model,
+      muapi_endpoint,
       effects,
     } = body;
 
@@ -514,60 +561,59 @@ Deno.serve(async (req: Request) => {
     };
 
     if (!clip_id) {
-      return new Response(
-        JSON.stringify({ error: "clip_id is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return fail(400, "clip_id is required");
     }
 
     if (prompt && prompt.length > 10000) {
-      return new Response(
-        JSON.stringify({ error: "prompt exceeds maximum length of 10000 characters" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return fail(400, "prompt exceeds maximum length of 10000 characters");
     }
 
     if (speech_script && speech_script.length > 5000) {
-      return new Response(
-        JSON.stringify({ error: "speech_script exceeds maximum length of 5000 characters" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return fail(400, "speech_script exceeds maximum length of 5000 characters");
     }
 
     if (video_type && !VALID_VIDEO_TYPES.includes(video_type as typeof VALID_VIDEO_TYPES[number])) {
-      return new Response(
-        JSON.stringify({ error: `Invalid video_type. Must be one of: ${VALID_VIDEO_TYPES.join(", ")}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return fail(400, `Invalid video_type. Must be one of: ${VALID_VIDEO_TYPES.join(", ")}`);
     }
+
+    if (provider !== undefined && provider !== 'muapi') {
+      return fail(400, `Invalid provider. Must be one of: muapi`);
+    }
+
+    if (muapi_model !== undefined && !['veo3', 'seedance', 'kling'].includes(muapi_model)) {
+      return fail(400, `Invalid muapi_model. Must be one of: veo3, seedance, kling`);
+    }
+
+    if (muapi_endpoint !== undefined && (typeof muapi_endpoint !== 'string' || !/^[a-z0-9-]+$/i.test(muapi_endpoint))) {
+      return fail(400, "Invalid muapi_endpoint");
+    }
+
+    const table = is_episode_shot ? "episode_shots" : "clips";
 
     if (authenticatedUserId) {
       if (is_episode_shot && episode_id) {
-        const { data: epCheck } = await supabase
+        const { data: epCheck, error: epCheckError } = await supabase
           .from("episodes")
           .select("user_id")
           .eq("id", episode_id)
           .maybeSingle();
-        if (epCheck?.user_id && epCheck.user_id !== authenticatedUserId) {
-          return new Response(
-            JSON.stringify({ error: "Not found" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        if (epCheckError || !epCheck) {
+          return fail(404, "Not found");
+        }
+        if (epCheck.user_id !== authenticatedUserId) {
+          return fail(404, "Not found");
         }
       } else {
-        const { data: clipCheck } = await supabase
+        const { data: clipCheck, error: clipCheckError } = await supabase
           .from("clips")
           .select("user_id")
           .eq("id", clip_id)
           .maybeSingle();
-        if (clipCheck?.user_id && clipCheck.user_id !== authenticatedUserId) {
-          return new Response(
-            JSON.stringify({ error: "Not found" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        if (clipCheckError || !clipCheck) {
+          return fail(404, "Not found");
+        }
+        if (clipCheck.user_id !== authenticatedUserId) {
+          return fail(404, "Not found");
         }
       }
     }
@@ -593,77 +639,87 @@ Deno.serve(async (req: Request) => {
         .eq("id", clip_id);
     }
 
+    const failGeneration = async (message: string) => {
+      await supabase.from(table).update({ status: "error", error: message }).eq("id", clip_id);
+      if (is_episode_shot && episode_id) {
+        await supabase
+          .from("episodes")
+          .update({ status: "error", error: "One or more shots failed" })
+          .eq("id", episode_id);
+      }
+      return fail(500, message);
+    };
+
     let resultUrl: string;
-
-    const hasMinimaxKey = !!Deno.env.get("MINIMAX_API_KEY");
-    const hasGoogleKey = !!Deno.env.get("GOOGLE_AI_API_KEY");
-
-    let isDemoFallback = false;
+    let muapiRequestId: string | null = null;
     let durationWarning: string | null = null;
+    let usedProvider: 'muapi' | 'minimax' | 'google' = modelConfig.provider;
 
-    if (modelConfig.provider === 'minimax' && hasMinimaxKey) {
-      try {
+    try {
+      if (provider === 'muapi') {
+        const { requestId, url } = await generateWithMuapi(
+          supabase,
+          table,
+          clip_id,
+          prompt,
+          duration_seconds,
+          muapi_model,
+          muapi_endpoint,
+        );
+        muapiRequestId = requestId;
+        resultUrl = url;
+        usedProvider = 'muapi';
+      } else if (modelConfig.provider === 'minimax') {
+        const hasMinimaxKey = !!Deno.env.get("MINIMAX_API_KEY");
+        if (!hasMinimaxKey) {
+          throw new Error("MINIMAX_API_KEY not configured");
+        }
         const { jobId } = await generateWithMiniMax(prompt, duration_seconds, modelConfig, speech_script);
 
         await supabase
-          .from(is_episode_shot ? "episode_shots" : "clips")
+          .from(table)
           .update({ provider_job_id: jobId })
           .eq("id", clip_id);
 
         const fileId = await pollMiniMaxStatus(jobId);
         resultUrl = await getMiniMaxVideoUrl(fileId);
-      } catch (error) {
-        console.error("MiniMax error:", error);
-        isDemoFallback = true;
-        const videos = DEMO_VIDEOS[video_type] || DEMO_VIDEOS.motivational;
-        resultUrl = videos[Math.floor(Math.random() * videos.length)];
+      } else {
+        const hasGoogleKey = !!Deno.env.get("GOOGLE_AI_API_KEY");
+        if (!hasGoogleKey) {
+          throw new Error("GOOGLE_AI_API_KEY not configured");
+        }
+        if (duration_seconds > 8) {
+          durationWarning = `Duration was capped from ${duration_seconds}s to 8s (Veo maximum)`;
+          console.warn(`Veo duration capped: requested ${duration_seconds}s, using 8s max`);
+          await supabase
+            .from(table)
+            .update({ error: durationWarning })
+            .eq("id", clip_id);
+        }
+        resultUrl = await generateWithVeo(prompt, duration_seconds, modelConfig, speech_script, negative_prompt);
       }
-    } else if (modelConfig.provider === 'google' && hasGoogleKey) {
-      if (duration_seconds > 8) {
-        durationWarning = `Duration was capped from ${duration_seconds}s to 8s (Veo maximum)`;
-        console.warn(`Veo duration capped: requested ${duration_seconds}s, using 8s max`);
-        await supabase
-          .from(is_episode_shot ? "episode_shots" : "clips")
-          .update({ error: durationWarning })
-          .eq("id", clip_id);
-      }
-      try {
-        resultUrl = await generateWithVeo(prompt, duration_seconds, speech_script, negative_prompt);
-      } catch (error) {
-        console.error("Veo error:", error);
-        isDemoFallback = true;
-        const videos = DEMO_VIDEOS[video_type] || DEMO_VIDEOS.motivational;
-        resultUrl = videos[Math.floor(Math.random() * videos.length)];
-      }
-    } else {
-      isDemoFallback = true;
-      const videos = DEMO_VIDEOS[video_type] || DEMO_VIDEOS.motivational;
-      resultUrl = videos[Math.floor(Math.random() * videos.length)];
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : "Video generation failed";
+      console.error("Generation provider error:", error);
+      return await failGeneration(message);
     }
 
-    const outputVerification = verifyOutput(
-      resultUrl,
-      video_type,
-      duration_seconds,
-      modelConfig.provider,
-      isDemoFallback
-    );
+    const outputVerification = verifyOutput(resultUrl, video_type, duration_seconds, modelConfig.provider);
 
     if (!outputVerification.valid) {
       console.error("Output verification failed:", outputVerification.issues);
-      await supabase
-        .from(is_episode_shot ? "episode_shots" : "clips")
-        .update({ status: "error", error: outputVerification.issues.join("; ") })
-        .eq("id", clip_id);
-      return new Response(
-        JSON.stringify({ error: "Output verification failed", issues: outputVerification.issues }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return await failGeneration(outputVerification.issues.join("; "));
     }
 
     if (outputVerification.warnings.length > 0) {
       console.warn("Output verification warnings:", outputVerification.warnings);
     }
+
+    const providerLabel = usedProvider === 'muapi'
+      ? 'muapi'
+      : usedProvider === 'minimax'
+        ? 'minimax'
+        : 'google';
 
     if (is_episode_shot) {
       const { error: updateError } = await supabase
@@ -671,7 +727,7 @@ Deno.serve(async (req: Request) => {
         .update({
           status: outputVerification.effectiveStatus,
           result_url: resultUrl,
-          ...(isDemoFallback ? { error: "Used demo video - no API key configured or generation failed" } : {}),
+          ...(muapiRequestId ? { provider_job_id: muapiRequestId } : {}),
         })
         .eq("id", clip_id);
 
@@ -700,6 +756,8 @@ Deno.serve(async (req: Request) => {
             .eq("id", episode_id);
 
           try {
+            const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+            const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
             const stitchResp = await fetch(`${supabaseUrl}/functions/v1/stitch-episode`, {
               method: "POST",
               headers: {
@@ -717,7 +775,10 @@ Deno.serve(async (req: Request) => {
         }
       }
     } else {
-      const thumbnailUrl = await generateThumbnailWithFFmpeg(resultUrl, thumbnailConfig);
+      const { url: thumbnailUrl, note: thumbnailNote } = await generateThumbnailWithFFmpeg(
+        resultUrl,
+        thumbnailConfig,
+      );
 
       const { error: updateError } = await supabase
         .from("clips")
@@ -725,7 +786,8 @@ Deno.serve(async (req: Request) => {
           status: outputVerification.effectiveStatus,
           result_url: resultUrl,
           thumbnail_url: thumbnailUrl,
-          ...(isDemoFallback ? { error: "Used demo video - no API key configured or generation failed" } : {}),
+          ...(muapiRequestId ? { provider_job_id: muapiRequestId } : {}),
+          ...(durationWarning ? { error: durationWarning } : {}),
         })
         .eq("id", clip_id);
 
@@ -733,75 +795,70 @@ Deno.serve(async (req: Request) => {
         throw updateError;
       }
 
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(
+        {
           success: true,
           clip_id,
           result_url: resultUrl,
           thumbnail_url: thumbnailUrl,
           model_used: selectedModel,
+          provider: providerLabel,
           is_episode_shot: false,
-          is_demo: isDemoFallback,
+          ...(muapiRequestId ? { muapi_request_id: muapiRequestId } : {}),
           ...(durationWarning ? { duration_warning: durationWarning } : {}),
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+          ...(thumbnailNote ? { thumbnail_note: thumbnailNote } : {}),
+        },
+        200,
+        cors,
       );
     }
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: true,
         clip_id,
         result_url: resultUrl,
         thumbnail_url: null,
         model_used: selectedModel,
+        provider: providerLabel,
         is_episode_shot,
-        is_demo: isDemoFallback,
+        ...(muapiRequestId ? { muapi_request_id: muapiRequestId } : {}),
         ...(durationWarning ? { duration_warning: durationWarning } : {}),
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
+      200,
+      cors,
     );
   } catch (error) {
     console.error("Generation error:", error);
 
     try {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
+      const supabase = serviceClient();
       const body = parsedBody || {};
       if (body.clip_id) {
         if (body.is_episode_shot) {
           await supabase
             .from("episode_shots")
             .update({ status: "error", error: "Generation failed" })
-            .eq("id", body.clip_id);
+            .eq("id", body.clip_id as string);
 
           if (body.episode_id) {
             await supabase
               .from("episodes")
               .update({ status: "error", error: "Shot generation failed" })
-              .eq("id", body.episode_id);
+              .eq("id", body.episode_id as string);
           }
         } else {
           await supabase
             .from("clips")
             .update({ status: "error", error: "Generation failed" })
-            .eq("id", body.clip_id);
+            .eq("id", body.clip_id as string);
         }
       }
     } catch { /* best effort cleanup */ }
 
-    return new Response(
-      JSON.stringify({ error: "Video generation failed" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    if (error instanceof HttpError) {
+      return jsonResponse({ error: error.message }, error.status, cors);
+    }
+    return errorResponse(error, cors);
   }
 });

@@ -1,11 +1,6 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { buildCorsHeaders, handleOptions, jsonResponse } from "../_shared/cors.ts";
+import { internalCall, requireUser, serviceClient } from "../_shared/auth.ts";
 
 interface StitchClipsRequest {
   compilation_id: string;
@@ -27,10 +22,14 @@ interface CompilationClipRow {
   };
 }
 
-function getServiceConfig() {
+function getServiceConfig(): { serviceUrl: string | undefined; serviceKey: string | undefined } {
   const serviceUrl = Deno.env.get("THUMBNAIL_SERVICE_URL") || Deno.env.get("FFMPEG_SERVICE_URL");
   const serviceKey = Deno.env.get("THUMBNAIL_SERVICE_KEY") || Deno.env.get("FFMPEG_SERVICE_KEY");
   return { serviceUrl, serviceKey };
+}
+
+function isHttpUrl(value: string): boolean {
+  return value.startsWith("https://") || value.startsWith("http://");
 }
 
 async function fetchWithTimeout(
@@ -48,6 +47,7 @@ async function fetchWithTimeout(
 }
 
 async function stitchWithFFmpegService(
+  supabase: SupabaseClient,
   videoUrls: string[],
   serviceUrl: string,
   serviceKey: string | undefined
@@ -71,11 +71,7 @@ async function stitchWithFFmpegService(
 
     const data = await response.json();
 
-    if (data.video && data.video.startsWith("data:")) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
+    if (typeof data.video === "string" && data.video.startsWith("data:")) {
       const base64Data = data.video.split(",")[1];
       if (!base64Data) return null;
 
@@ -102,10 +98,15 @@ async function stitchWithFFmpegService(
         .from("videos")
         .getPublicUrl(uploadData.path);
 
-      return publicUrlData.publicUrl;
+      return isHttpUrl(publicUrlData.publicUrl) ? publicUrlData.publicUrl : null;
     }
 
-    return data.videoUrl || null;
+    if (typeof data.videoUrl === "string" && isHttpUrl(data.videoUrl)) {
+      return data.videoUrl;
+    }
+
+    console.error("FFmpeg stitch returned no usable video URL");
+    return null;
   } catch (err) {
     console.error("FFmpeg service stitch error:", err);
     return null;
@@ -148,66 +149,36 @@ function formatSrtTime(seconds: number): string {
 }
 
 Deno.serve(async (req: Request) => {
+  const cors = buildCorsHeaders(req.headers.get("Origin"));
+
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return handleOptions(req);
   }
 
   let parsedBody: Record<string, unknown> = {};
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header is required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
     let authenticatedUserId: string | null = null;
-
-    if (!isInternalCall) {
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const authClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
-      if (authError || !authUser) {
-        return new Response(
-          JSON.stringify({ error: "Invalid or expired token" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      authenticatedUserId = authUser.id;
+    if (internalCall(req)) {
+      authenticatedUserId = null;
+    } else {
+      const { userId } = await requireUser(req);
+      authenticatedUserId = userId;
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = serviceClient();
 
     let body: StitchClipsRequest;
     try {
       body = await req.json();
     } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Invalid JSON body" }, 400, cors);
     }
     parsedBody = body as unknown as Record<string, unknown>;
     const { compilation_id } = body;
 
     if (!compilation_id) {
-      return new Response(
-        JSON.stringify({ error: "compilation_id is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({ error: "compilation_id is required" }, 400, cors);
     }
 
     const { data: compilation, error: compError } = await supabase
@@ -221,10 +192,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (authenticatedUserId && compilation.user_id && compilation.user_id !== authenticatedUserId) {
-      return new Response(
-        JSON.stringify({ error: "Not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Not found" }, 404, cors);
     }
 
     const { data: entries, error: entriesError } = await supabase
@@ -240,16 +208,14 @@ Deno.serve(async (req: Request) => {
     const typedEntries = entries as unknown as CompilationClipRow[];
 
     const allReady = typedEntries.every(
-      (e) => e.clips && e.clips.result_url && e.clips.status === "done"
+      (e) => e.clips && isHttpUrl(e.clips.result_url ?? "") && e.clips.status === "done"
     );
 
     if (!allReady) {
-      return new Response(
-        JSON.stringify({ error: "Not all clips are ready", status: "waiting" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      return jsonResponse(
+        { error: "Not all clips are ready", status: "waiting" },
+        400,
+        cors,
       );
     }
 
@@ -326,6 +292,7 @@ Deno.serve(async (req: Request) => {
       const { serviceUrl, serviceKey } = getServiceConfig();
       if (serviceUrl) {
         finalVideoUrl = await stitchWithFFmpegService(
+          supabase,
           videoUrls,
           serviceUrl,
           serviceKey
@@ -333,9 +300,13 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const isStitchFallback = !finalVideoUrl;
-    if (!finalVideoUrl) {
-      finalVideoUrl = videoUrls[0];
+    if (!finalVideoUrl || !isHttpUrl(finalVideoUrl)) {
+      const message = "Stitching failed: no stitch provider returned a usable video";
+      await supabase
+        .from("compilations")
+        .update({ status: "error", error: message })
+        .eq("id", compilation_id);
+      return jsonResponse({ error: message }, 500, cors);
     }
 
     let captionFileUrl: string | null = null;
@@ -371,7 +342,6 @@ Deno.serve(async (req: Request) => {
         caption_file_url: captionFileUrl,
         thumbnail_url: thumbnailUrl,
         completed_at: new Date().toISOString(),
-        ...(isStitchFallback ? { error: "Stitching unavailable - using first clip as preview" } : {}),
       })
       .eq("id", compilation_id);
 
@@ -379,16 +349,15 @@ Deno.serve(async (req: Request) => {
       throw updateError;
     }
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: true,
         compilation_id,
         final_video_url: finalVideoUrl,
         caption_file_url: captionFileUrl,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
+      200,
+      cors,
     );
   } catch (error) {
     console.error("Stitch clips error:", error);
@@ -396,23 +365,16 @@ Deno.serve(async (req: Request) => {
     try {
       const body = parsedBody || {};
       if (body.compilation_id) {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        const supabase = serviceClient();
 
         await supabase
           .from("compilations")
           .update({ status: "error", error: "Stitching failed" })
-          .eq("id", body.compilation_id);
+          .eq("id", body.compilation_id as string);
       }
     } catch { /* best effort */ }
 
-    return new Response(
-      JSON.stringify({ error: "Clip stitching failed" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    const message = error instanceof Error && error.message ? error.message : "Clip stitching failed";
+    return jsonResponse({ error: message }, 500, cors);
   }
 });
