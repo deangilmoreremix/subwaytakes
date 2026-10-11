@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getAuthToken } from './supabase';
 import type {
   Compilation,
   CompilationStatus,
@@ -9,7 +10,6 @@ import type {
 import { getUserId } from './auth';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const MAX_CLIPS = 20;
 const MIN_CLIPS = 2;
@@ -108,7 +108,7 @@ async function triggerStitching(compilationId: string): Promise<void> {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/stitch-clips`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ compilation_id: compilationId }),
@@ -291,7 +291,7 @@ export async function triggerCompilationCompose(
     const response = await fetch(`${SUPABASE_URL}/functions/v1/compose-overlay`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ compilation_id: compilationId, enhancement_config: config }),

@@ -1,6 +1,8 @@
 import { supabase } from './supabase';
+import { getAuthToken } from './supabase';
 import type {
   Clip,
+  GenerateRequest,
   ClipType,
   SubwaySceneType,
   CityStyle,
@@ -53,7 +55,6 @@ import {
 } from './sanitize';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 interface BackendPromptResult {
   provider_prompt: string;
@@ -75,7 +76,7 @@ async function buildPromptFromBackend(
     const response = await fetch(`${SUPABASE_URL}/functions/v1/build-prompt`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -156,7 +157,7 @@ async function triggerGeneration(clip: Clip, modelTier?: ModelTier, speechScript
     const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-video`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -377,7 +378,7 @@ export async function createClip(options: CreateClipOptions): Promise<Clip> {
         wisdomFormat,
         wisdomDemographic,
         wisdomSetting,
-        subwayLine,
+        subwayLine: subwayLine as GenerateRequest['subwayLine'],
         subwayEnhancements,
         muapiBrainstorm,
         muapiPlan,

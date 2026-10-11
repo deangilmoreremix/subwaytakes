@@ -165,6 +165,7 @@ export function KeywordInput({ onKeywordAnalyzed, disabled, forceClipType }: Key
       studio_interview: 'Studio Interview',
       motivational: 'Motivational',
       wisdom_interview: 'Wisdom Interview',
+      muapi: 'MuAPI Planner',
     };
     return labels[type];
   };

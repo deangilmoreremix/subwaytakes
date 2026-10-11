@@ -89,6 +89,16 @@ const TYPE_PRESETS: Record<ClipType, Partial<EnhancementConfig>> = {
     endcardStyle: 'cta',
     progressBar: true,
   },
+  muapi: {
+    captions: true,
+    captionAnimation: 'word_by_word',
+    colorGrade: 'cinematic',
+    lowerThird: true,
+    lowerThirdStyle: 'minimal',
+    endcard: true,
+    endcardStyle: 'minimal',
+    progressBar: true,
+  },
 };
 
 type ContentUnion = Clip | Episode | Compilation;
