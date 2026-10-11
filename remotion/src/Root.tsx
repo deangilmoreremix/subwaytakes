@@ -2,8 +2,8 @@ import { Composition } from "remotion";
 import { SubwayTakesDemo } from "./SubwayTakesDemo";
 import { SubwayTakesOverlay } from "./SubwayTakesOverlay";
 import type { SubwayTakesOverlayProps } from "./SubwayTakesOverlay";
-import { SubwayEditorComposition, projectDurationInFrames } from "../src/studio/SubwayEditorComposition";
-import { parseProject, createEmptyProject } from "../src/studio/types";
+import { SubwayEditorComposition, projectDurationInFrames } from "../../src/studio/SubwayEditorComposition";
+import { parseProject, createEmptyProject } from "../../src/studio/types";
 import type { StudioProject } from "../src/studio/types";
 
 const defaultOverlayProps: SubwayTakesOverlayProps = {
