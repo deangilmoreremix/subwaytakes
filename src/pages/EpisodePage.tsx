@@ -177,6 +177,7 @@ export function EpisodePage() {
                   try {
                     await triggerComposeOverlay(episodeId);
                   } catch {
+                    /* overlay compose failure surfaced only via state reset */
                   } finally {
                     setComposing(false);
                   }
@@ -302,6 +303,7 @@ function ShotRow({ shot, onRetry }: { shot: EpisodeShot; onRetry: () => void }) 
       await retryEpisodeShot(shot.id);
       onRetry();
     } catch {
+      /* retry failure surfaced only via state reset */
     } finally {
       setRetrying(false);
     }

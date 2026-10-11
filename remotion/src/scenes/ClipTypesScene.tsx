@@ -3,7 +3,6 @@ import {
   AbsoluteFill,
   interpolate,
   spring,
-  Easing,
 } from "remotion";
 
 interface ClipTypesSceneProps {

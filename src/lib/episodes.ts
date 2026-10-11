@@ -101,7 +101,7 @@ export async function createEpisode(options: CreateEpisodeOptions): Promise<Epis
   let hostCharacter: Omit<CharacterBible, 'id' | 'user_id' | 'created_at'>;
   let guestCharacter: Omit<CharacterBible, 'id' | 'user_id' | 'created_at'>;
   let hostId: string | null = hostCharacterId || null;
-  let guestId: string | null = guestCharacterId || null;
+  const guestId: string | null = guestCharacterId || null;
 
   if (hostCharacterId) {
     const { data } = await supabase
