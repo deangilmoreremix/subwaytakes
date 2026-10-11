@@ -62,8 +62,9 @@ interface CaptionJobRow {
   updated_at: string;
 }
 
+/** Reuse the shared SSRF guard: https-only, no private/metadata hosts. */
 function isHttpUrl(value: string): boolean {
-  return value.startsWith("https://") || value.startsWith("http://");
+  return isSafeExternalHttpUrl(value);
 }
 
 function decodeDataUrl(dataUrl: string): string | null {

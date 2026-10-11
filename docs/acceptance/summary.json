@@ -1,0 +1,139 @@
+{
+  "results": [
+    {
+      "name": "app shell renders with authenticated session",
+      "ok": true,
+      "detail": "path=/create"
+    },
+    {
+      "name": "topic -> project creation redirects to editor",
+      "ok": true,
+      "detail": "http://127.0.0.1:4173/studio/subway-editor/13f770e4-3033-4287-8447-7c91f362f602"
+    },
+    {
+      "name": "plan-interview edge function called",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "timeline renders 5 tracks",
+      "ok": true,
+      "detail": "6 rows: 1. Opening Hook6.0s2. Intervie |  |  |  | We stopped talking and nobody  | "
+    },
+    {
+      "name": "timeline renders video clips (7 beats + subtitle cues)",
+      "ok": true,
+      "detail": "14 actions"
+    },
+    {
+      "name": "remotion player mounts composition (caption + watermark layers render)",
+      "ok": true,
+      "detail": "{\"playerAspect\":true,\"hookCaption\":true,\"watermark\":true}"
+    },
+    {
+      "name": "clip inspector opens on select",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "trim slider adjusts clip",
+      "ok": true,
+      "detail": "0 -> 0.1"
+    },
+    {
+      "name": "volume slider adjusts sound",
+      "ok": true,
+      "detail": "0.3 -> 0.25"
+    },
+    {
+      "name": "split adds a clip",
+      "ok": true,
+      "detail": "14 -> 15"
+    },
+    {
+      "name": "undo reverts split",
+      "ok": true,
+      "detail": "14"
+    },
+    {
+      "name": "redo re-applies split",
+      "ok": true,
+      "detail": "15"
+    },
+    {
+      "name": "clip drag moves on timeline",
+      "ok": true,
+      "detail": "x 527 -> 692"
+    },
+    {
+      "name": "scrubbing moves playhead",
+      "ok": true,
+      "detail": "cursor x 525 -> 811"
+    },
+    {
+      "name": "caption edit triggers autosave PATCH",
+      "ok": true,
+      "detail": "1 patches"
+    },
+    {
+      "name": "edited caption visible in editor",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "generate-scene submitted",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "scene-status polled",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "generated scene reflected in UI",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "player renders generated clip (9:16 video decodes, playback advances)",
+      "ok": true,
+      "detail": "{\"w\":318,\"h\":565,\"ratio\":0.563,\"readyState\":4,\"src\":\"https://stub.test/scene-a.mp4#t=0,1.73\"} advanced=true"
+    },
+    {
+      "name": "render-project enqueued",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "export shows download link",
+      "ok": true,
+      "detail": "{\"href\":\"https://stub.test/render-final.mp4\",\"text\":\" Download MP4\"}"
+    },
+    {
+      "name": "download link serves a real video/mp4",
+      "ok": true,
+      "detail": "video/mp4, 631412 bytes"
+    },
+    {
+      "name": "editor stays behind authenticated session (page renders content)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no fatal client errors during flow",
+      "ok": true,
+      "detail": "none"
+    }
+  ],
+  "state": {
+    "patches": 3,
+    "edgeCalls": [
+      "plan-interview",
+      "generate-scene",
+      "scene-status",
+      "scene-status",
+      "render-project"
+    ]
+  }
+}
