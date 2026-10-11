@@ -189,6 +189,23 @@ and a PASS/FAIL summary (1080x1920, h264, aac, duration ≈ expected). An
 untrimmed render would be ~4s, so the duration check proves the trim is
 applied. Exit code 0 = PASS.
 
+### Staging validation suite (no Supabase / Docker needed)
+
+```bash
+cd render-worker
+npm test                       # vitest: test/queue-semantics.test.ts + test/render-pipeline.test.ts
+```
+
+`render-worker/STAGING_CHECKLIST.md` maps every Phase 3 item to what these tests
+prove locally versus what needs a staging deploy (with the exact curl/SQL to
+run there). The queue suite runs the real `src/storage.ts`, `src/render.ts`,
+`src/queue.ts` and `src/index.ts` against an in-memory Supabase stub injected
+through `setSupabaseClientFactory()` — exactly-once claim, heartbeat, stale
+reclaim, terminal states, MAX_CONCURRENCY and the API auth middleware. The
+pipeline suite checks the ffmpeg encode-gate arguments and the probe
+verification rules, and runs real encode + probe assertions wherever a capable
+ffmpeg exists (it skips them, with a NOTE, when the environment has none).
+
 ---
 
 ## 8. Failure modes & troubleshooting

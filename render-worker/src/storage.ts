@@ -28,14 +28,35 @@ export interface RenderJobRow {
 
 let client: SupabaseClient | null = null;
 
+/**
+ * Optional client factory injected by tests (see render-worker/test). It
+ * defaults to null, in which case behavior is exactly as before: a single
+ * lazily-created client built from SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
+ * with @supabase/supabase-js. Production never installs a factory.
+ */
+let clientFactory: (() => SupabaseClient) | null = null;
+
+/** Install a client factory (test seam). `null` restores the default client. */
+export function setSupabaseClientFactory(factory: (() => SupabaseClient) | null): void {
+  clientFactory = factory;
+  client = null;
+}
+
+/** Drop the cached client so the next call re-creates (or re-injects) it. */
+export function resetSupabaseClient(): void {
+  client = null;
+}
+
 export function getSupabase(): SupabaseClient {
   if (!supabaseConfigured) {
     throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for queue operations');
   }
   if (!client) {
-    client = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    client = clientFactory
+      ? clientFactory()
+      : createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
   }
   return client;
 }
