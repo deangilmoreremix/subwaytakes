@@ -41,6 +41,38 @@ services:
       - ./public:/app/public
     restart: unless-stopped
 
+  # Studio render worker (Supabase queue -> Remotion -> ffmpeg delivery spec)
+  render-worker:
+    build:
+      # Build context is the REPO ROOT: the worker renders the repo's
+      # Remotion composition, so the image needs the repo dependencies.
+      context: .
+      dockerfile: render-worker/Dockerfile
+    ports:
+      - "3010:3010"
+    environment:
+      - PORT=3010
+      - WORKER_API_KEY=${WORKER_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - REPO_ROOT=/repo
+      - FFMPEG_PATH=/usr/bin/ffmpeg
+      - FFPROBE_PATH=/usr/bin/ffprobe
+      - POLL_INTERVAL_MS=3000
+      - MAX_CONCURRENCY=1
+      - JOB_TIMEOUT_MS=900000
+      - HEARTBEAT_INTERVAL_MS=30000
+      - RENDER_TIMEOUT_MS=600000
+      - REMOTION_CONCURRENCY=2
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3010/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 volumes:
   thumbnail-temp:
     driver: local
