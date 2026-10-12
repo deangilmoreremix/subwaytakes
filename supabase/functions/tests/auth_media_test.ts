@@ -450,6 +450,8 @@ Deno.test("media-sign: paths referenced by branding.logoRef are owned", async ()
     assertEquals(response.status, 200);
     const body = await response.json() as { signedUrl: string };
     assertIncludes(body.signedUrl, `/object/sign/studio-uploads/${logoPath}`);
+    // the ownership proof went through the caller's project lookup (rule b)
+    assertEquals(calls.length, 1);
   } finally {
     restore();
   }

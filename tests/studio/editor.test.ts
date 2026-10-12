@@ -34,7 +34,6 @@ import {
   createStudioHistory,
   snapSeconds,
   studioReducer,
-  type StudioAction,
 } from '../../src/lib/studioReducer';
 import {
   buildPresetTracks,
@@ -126,10 +125,6 @@ function clipById(project: StudioProject, clipId: string): StudioClip {
     if (clip) return clip;
   }
   throw new Error(`clip ${clipId} not found`);
-}
-
-function dispatchAll(project: StudioProject, actions: StudioAction[]): StudioProject {
-  return actions.reduce((state, action) => studioReducer(state, action), project);
 }
 
 /** Serialize exactly like the queue does (JSONB snapshot) before validating. */
