@@ -119,12 +119,14 @@ async function storeVideoOutput(
     throw new HttpError(500, `Failed to store captioned video: ${uploadError.message}`);
   }
 
-  const { data: publicUrlData } = supabase.storage.from("videos").getPublicUrl(storagePath);
-  if (!isHttpUrl(publicUrlData.publicUrl)) {
-    throw new HttpError(500, "Storage did not return a public URL");
+  const { data: signedData, error: signError } = await supabase.storage
+    .from("videos")
+    .createSignedUrl(storagePath, 604800);
+  if (signError || !signedData?.signedUrl || !isHttpUrl(signedData.signedUrl)) {
+    throw new HttpError(500, "Could not sign private captioned video for playback");
   }
 
-  return publicUrlData.publicUrl;
+  return signedData.signedUrl;
 }
 
 /**
