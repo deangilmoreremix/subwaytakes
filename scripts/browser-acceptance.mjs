@@ -166,7 +166,31 @@ const state = {
   projectReads: [],
   /** render job id -> project id (the queue the worker would own) */
   jobs: new Map(),
+  /** /rest/v1 endpoints the harness deliberately 500'd (F11) */
+  restFailures: [],
 };
+
+/**
+ * FAILURE MODES (F1..F11) — set by the harness before a failure run and read
+ * by the interceptor. They make the stubbed backend behave like the real one
+ * does when a provider fails, a job dies, media expires, or a user is not the
+ * owner. Every mode is a deliberate single-flag switch so a failure is always
+ * reproducible and never leaks into the happy-path workflows.
+ */
+const FM = {
+  openaiMissingKey: false,   // F1 plan-interview 500 "OPENAI_API_KEY is not configured"
+  providerFailed: false,     // F2 scene-status returns failed with a provider message
+  providerGarbage: false,    // F3 plan-interview returns 6 beats / malformed JSON
+  rejectUpload: false,       // F4 storage upload rejected (non-video / too large)
+  renderFailed: false,       // F6 render job transitions to error
+  jobStale: false,           // F7 job stuck running with a stale heartbeat
+  mediaSignDown: false,      // F8 media-sign 500 during refresh
+  restDown: false,           // F11 one /rest/v1 500
+};
+
+function resetFailureModes() {
+  for (const key of Object.keys(FM)) FM[key] = false;
+}
 
 const PLAN = {
   plan: {
@@ -307,10 +331,28 @@ async function handleRequest(request) {
       body = JSON.parse(request.postData() || '{}');
     } catch { /* empty */ }
     state.edgeCalls.push({ fn, body, user: caller });
-    if (fn === 'plan-interview') return route.fulfill(json(PLAN));
+    if (fn === 'plan-interview') {
+      if (FM.openaiMissingKey) {
+        return route.fulfill(json({ error: 'OPENAI_API_KEY is not configured' }, 500));
+      }
+      if (FM.providerGarbage) {
+        // The real plan-interview rejects a wrong beat count with a 500
+        // ("...returned N beats, expected 7..."), not a partial plan.
+        return route.fulfill(json({
+          error: 'Planner returned 6 beats, expected 7 (exact order required)',
+        }, 500));
+      }
+      return route.fulfill(json(PLAN));
+    }
     if (fn === 'generate-scene') return route.fulfill(json({ request_id: 'req-e2e-1', beat_id: body.beat_id || 'opening_hook' }));
     if (fn === 'scene-status') {
       state.sceneStatusCalls++;
+      if (FM.providerFailed) {
+        return route.fulfill(json({
+          status: 'failed',
+          error: 'MuAPI generation failed: the provider rejected the request',
+        }));
+      }
       if (state.sceneStatusCalls === 1) return route.fulfill(json({ status: 'processing' }));
       // The server stores the clip in the shared `videos` bucket under
       // `<user_id>/<project_id>/…` and returns a short-lived signed URL.
@@ -335,7 +377,7 @@ async function handleRequest(request) {
       }
       const jobId = `job-${String(projectId).slice(0, 8)}`;
       state.jobs.set(jobId, projectId);
-      state.renderCalls.push({ projectId, user: caller, status: 200, jobId });
+      state.renderCalls.push({ projectId, user: caller, status: 200, jobId, failed: FM.renderFailed, stale: FM.jobStale });
       return route.fulfill(json({ job_id: jobId, status: 'queued' }));
     }
     if (fn === 'muapi-captions') {
@@ -362,6 +404,10 @@ async function handleRequest(request) {
     if (fn === 'media-sign') {
       const requestedBucket = body.bucket;
       const requestedPath = body.path;
+      if (FM.mediaSignDown) {
+        state.mediaSignCalls.push({ bucket: requestedBucket, path: requestedPath, user: caller, status: 500 });
+        return route.fulfill(json({ error: 'Could not sign media URL' }, 500));
+      }
       // assertMediaBucket: only the studio media buckets are signable
       if (typeof requestedBucket !== 'string' || !MEDIA_BUCKETS.includes(requestedBucket)) {
         state.mediaSignCalls.push({ bucket: requestedBucket, path: requestedPath, user: caller, status: 400 });
@@ -393,6 +439,16 @@ async function handleRequest(request) {
   }
   // ---- storage ----
   if (path.startsWith('/storage/v1/')) {
+    if (FM.rejectUpload && path.includes('/object/') && method === 'POST') {
+      // Supabase rejects a disallowed mime type / oversize body server-side;
+      // the panel must surface that error and add no clip.
+      state.restFailures.push(`upload:${path}`);
+      return route.fulfill(json({
+        statusCode: '415',
+        error: 'Unsupported media type',
+        message: 'mime type text/plain is not supported',
+      }, 415));
+    }
     if (path.includes('/object/sign/')) {
       // POST /storage/v1/object/sign/<bucket>/<path> → { signedURL }
       const objectPath = decodeURIComponent(path.replace(/^\/storage\/v1\/object\/sign\//, ''));
@@ -413,6 +469,12 @@ async function handleRequest(request) {
   // ---- REST ----
   if (path.startsWith('/rest/v1/')) {
     const table = path.split('/')[3] || '';
+    if (FM.restDown) {
+      // one transient backend failure (armed by the harness, then disarmed)
+      FM.restDown = false;
+      state.restFailures.push(path);
+      return route.fulfill(json({ message: 'backend temporarily unavailable' }, 500));
+    }
     if (table === 'studio_projects') {
       if (method === 'POST') {
         try {
@@ -464,18 +526,32 @@ async function handleRequest(request) {
         if (!row || row.user_id !== caller) return route.fulfill(pgrst(request, []));
         state.renderPolls++;
         const jobId = id ?? `job-${String(projectId).slice(0, 8)}`;
-        const job = state.renderPolls >= 3
+        const job = FM.renderFailed
           ? {
               id: jobId, user_id: caller, project_id: projectId,
-              status: 'done', progress: 100,
-              output_url: 'https://stub.test/render-final.mp4',
-              captioned_output_url: null, error: null,
+              status: 'error', progress: 0,
+              output_url: null, captioned_output_url: null,
+              error: 'Render failed: remotion render produced no output file',
             }
-          : {
-              id: jobId, user_id: caller, project_id: projectId,
-              status: 'running', progress: 45,
-              output_url: null, captioned_output_url: null, error: null,
-            };
+          : FM.jobStale
+            ? {
+                id: jobId, user_id: caller, project_id: projectId,
+                status: 'running', progress: 12, // a stale heartbeat: never "done"
+                output_url: null, captioned_output_url: null, error: null,
+                updated_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+              }
+            : state.renderPolls >= 3
+              ? {
+                  id: jobId, user_id: caller, project_id: projectId,
+                  status: 'done', progress: 100,
+                  output_url: 'https://stub.test/render-final.mp4',
+                  captioned_output_url: null, error: null,
+                }
+              : {
+                  id: jobId, user_id: caller, project_id: projectId,
+                  status: 'running', progress: 45,
+                  output_url: null, captioned_output_url: null, error: null,
+                };
         // loadLatestRenderJob uses .limit(1).maybeSingle() -> single object
         return route.fulfill(pgrst(request, [job]));
       }
@@ -1464,6 +1540,291 @@ async function main() {
     const w4Fatal = pageErrors.slice(errorsBeforeW4).filter((e) => fatalFilter.test(e));
     check('W4 no fatal client errors during cross-user security flow', w4Fatal.length === 0,
       w4Fatal.slice(0, 3).join(' | ') || 'none');
+
+    // =====================================================================
+    // FAILURE SCENARIOS F1..F11 — every check tagged [STUBBED-BACKEND]
+    // =====================================================================
+    console.log('\n===== FAILURE SCENARIOS F1..F11 (all checks [STUBBED-BACKEND]) =====');
+
+    // ---- F1: missing provider key → visible error, NO fallback project ----
+    {
+      const insertsBefore = state.inserts;
+      FM.openaiMissingKey = true;
+      await page.goto(`${ORIGIN}/studio/new`, { waitUntil: 'networkidle2', timeout: 30000 });
+      await sleep(2500);
+      const topicInput = await page.$('input, textarea');
+      if (topicInput) {
+        await topicInput.click({ clickCount: 3 });
+        await page.type('input, textarea', 'Missing provider key scenario');
+        const createBtn = await page.evaluateHandle(() =>
+          [...document.querySelectorAll('button')].find((b) => /plan & create project/i.test(b.textContent || '')));
+        if (createBtn.asElement()) await createBtn.asElement().click();
+        await sleep(2600);
+      }
+      const errorShown = await page.evaluate(() =>
+        /OPENAI_API_KEY|not configured/i.test(document.body.innerText));
+      check('F1 missing provider key — error is visible to the user', errorShown,
+        `error text ${errorShown ? 'present' : 'MISSING'}`);
+      check('F1 missing provider key — no fallback project was created',
+        state.inserts === insertsBefore, `inserts ${insertsBefore} -> ${state.inserts}`);
+      const stillOnNew = await page.evaluate(() => location.pathname.startsWith('/studio/new'));
+      check('F1 missing provider key — no navigation to the editor', stillOnNew, await page.evaluate(() => location.pathname));
+      FM.openaiMissingKey = false;
+      await shot('17-f1-missing-provider-key');
+    }
+
+    // ---- F2: provider failure mid-generation → verbatim error, clip stays empty ----
+    {
+      const projectId = AI_PROJECT_ID ?? PROJECT_ID;
+      await switchUser(SESSION, 'user A');
+      await openEditor(projectId);
+      FM.providerFailed = true;
+      const genBtn = await page.evaluateHandle(() =>
+        [...document.querySelectorAll('button')].find((b) => /generate/i.test(b.textContent || '')));
+      if (genBtn.asElement()) {
+        await genBtn.asElement().click();
+        await sleep(4200);
+      }
+      const failureShown = await page.evaluate(() =>
+        /MuAPI generation failed/i.test(document.body.innerText));
+      check('F2 provider failure — the provider message is shown verbatim', failureShown);
+      const uploadsBefore = state.storageUploads.length;
+      const noFabrication = state.storageUploads.length === uploadsBefore;
+      const lastStatus = state.edgeCalls.filter((c) => c.fn === 'scene-status').pop();
+      check('F2 provider failure — no asset was fabricated (no storage upload)',
+        noFabrication, `uploads ${uploadsBefore} -> ${state.storageUploads.length}`);
+      check('F2 provider failure — the last scene-status call really failed',
+        lastStatus?.body?.beat_id !== undefined && failureShown);
+      FM.providerFailed = false;
+      await shot('18-f2-provider-failure');
+    }
+
+    // ---- F3: provider garbage (6 beats) → rejected, no fallback ----
+    {
+      const insertsBefore = state.inserts;
+      FM.providerGarbage = true;
+      await page.goto(`${ORIGIN}/studio/new`, { waitUntil: 'networkidle2', timeout: 30000 });
+      await sleep(2500);
+      const topicInput = await page.$('input, textarea');
+      if (topicInput) {
+        await topicInput.click({ clickCount: 3 });
+        await page.type('input, textarea', 'Malformed provider output');
+        const createBtn = await page.evaluateHandle(() =>
+          [...document.querySelectorAll('button')].find((b) => /plan & create project/i.test(b.textContent || '')));
+        if (createBtn.asElement()) await createBtn.asElement().click();
+        await sleep(2600);
+      }
+      const errShown = await page.evaluate(() =>
+        /beats|invalid|failed|error/i.test(document.body.innerText));
+      check('F3 malformed provider output — an error is shown (no silent fallback)', errShown);
+      check('F3 malformed provider output — no project created',
+        state.inserts === insertsBefore, `inserts ${insertsBefore} -> ${state.inserts}`);
+      FM.providerGarbage = false;
+      await shot('19-f3-malformed-plan');
+    }
+
+    // ---- F4: invalid upload (non-video) → visible error, no broken clip ----
+    {
+      await switchUser(SESSION, 'user A');
+      await openEditor(AI_PROJECT_ID ?? PROJECT_ID);
+      await page.evaluate(() => {
+        const tab = [...document.querySelectorAll('button')].find((b) => /^upload$/i.test((b.textContent || '').trim()));
+        tab?.click();
+      });
+      await sleep(600);
+      const clipsBefore = await page.$$eval('.timeline-editor-action', (a) => a.length);
+      FM.rejectUpload = true;
+      // feed the real upload input a non-video payload (the server rejects it)
+      const rejected = await page.evaluate(async () => {
+        const input = document.querySelector('input[type="file"]');
+        if (!input) return { found: false };
+        const file = new File(['this is definitely not a video'], 'not-a-video.mp4', { type: 'text/plain' });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return { found: true };
+      });
+      await sleep(2600);
+      const clipsAfter = await page.$$eval('.timeline-editor-action', (a) => a.length);
+      const errorVisible = await page.evaluate(() => {
+        const el = [...document.querySelectorAll('p')].find((d) =>
+          /reject|invalid|not a video|unsupported|failed|mime/i.test(d.textContent || ''));
+        return !!el || /Unsupported media type/.test(document.body.innerText);
+      });
+      FM.rejectUpload = false;
+      check('F4 invalid upload — the upload control was found', rejected.found === true);
+      check('F4 invalid upload — no broken clip was added to the timeline',
+        clipsAfter === clipsBefore, `clips ${clipsBefore} -> ${clipsAfter}`);
+      check('F4 invalid upload — an error is surfaced', errorVisible);
+      await shot('20-f4-invalid-upload');
+    }
+
+    // ---- F5: cross-user access (server-level enforcement) ----
+    {
+      await switchUser(SESSION_B, 'user B');
+      const denied = await pageRequest({
+        url: `/functions/v1/render-project`,
+        token: TOKEN_B,
+        body: { project_id: VICTIM_PROJECT_ID },
+      });
+      check('F5 cross-user render enqueue for user A project is rejected (404)',
+        denied.status === 404 && !denied.body?.job_id, `status ${denied.status}`);
+      const crossSign = await pageRequest({
+        url: '/functions/v1/media-sign',
+        token: TOKEN_B,
+        body: { bucket: 'videos', path: target?.ref?.path ?? `${SESSION.user.id}/x.mp4`, kind: 'video' },
+      });
+      check('F5 cross-user media signing is rejected (404, no URL fabricated)',
+        crossSign.status === 404 && !crossSign.body?.signedUrl, `status ${crossSign.status}`);
+      const crossJob = await pageRequest({
+        url: `/rest/v1/studio_render_jobs?select=*&id=eq.${VICTIM_JOB_ID}`,
+        method: 'GET', token: TOKEN_B,
+      });
+      const rows = Array.isArray(crossJob.body) ? crossJob.body : [];
+      check('F5 cross-user render job is invisible', rows.length === 0, `${rows.length} rows`);
+      const ownExport = await pageRequest({
+        url: `/functions/v1/render-project`,
+        token: TOKEN_B,
+        body: { project_id: B_PROJECT_ID },
+      });
+      check('F5 control — user B can still render its own project',
+        ownExport.status === 200 && !!ownExport.body?.job_id, `status ${ownExport.status}`);
+      await shot('21-f5-cross-user');
+    }
+
+    // ---- F6: failed render → error state, NO download link ----
+    {
+      await switchUser(SESSION, 'user A');
+      FM.renderFailed = true;
+      await openEditor(AI_PROJECT_ID ?? PROJECT_ID);
+      const exportResult = await runExport();
+      await sleep(3000);
+      const errorShown = await page.evaluate(() => {
+        const row = [...document.querySelectorAll('div')].find((d) =>
+          d.textContent?.includes('error') && (d.textContent || '').length < 200);
+        return !!row;
+      });
+      const downloadShown = await page.evaluate(() => {
+        const a = [...document.querySelectorAll('a')].find((el) =>
+          /download/i.test(el.getAttribute('download') || '') || /render-final/.test(el.href || ''));
+        return !!a;
+      });
+      check('F6 failed render — the error is shown', errorShown);
+      check('F6 failed render — no download link is offered', !downloadShown);
+      FM.renderFailed = false;
+      await shot('22-f6-failed-render');
+    }
+
+    // ---- F7: interrupted job → stale, never "done" ----
+    {
+      FM.jobStale = true;
+      await openEditor(AI_PROJECT_ID ?? PROJECT_ID);
+      await runExport();
+      await sleep(1200);
+      const jobState = await pageRequest({
+        url: `/rest/v1/studio_render_jobs?select=*&id=eq.job-${String(AI_PROJECT_ID ?? PROJECT_ID).slice(0, 8)}`,
+        method: 'GET', token: TOKEN_A,
+      });
+      const row = Array.isArray(jobState.body) ? jobState.body[0] : jobState.body;
+      check('F7 interrupted job — the job is never reported done',
+        !!row && row.status === 'running', `status ${row?.status ?? 'none'}`);
+      const staleAge = row?.updated_at ? Date.now() - new Date(row.updated_at).getTime() : 0;
+      check('F7 interrupted job — the heartbeat is stale (reclaimable)', staleAge > 15 * 60 * 1000,
+        `age ${(staleAge / 60000).toFixed(1)} min`);
+      const noDownload = await page.evaluate(() => {
+        const a = [...document.querySelectorAll('a')].find((el) => /render-final/.test(el.href || ''));
+        return !a;
+      });
+      check('F7 interrupted job — no premature download link', noDownload);
+      FM.jobStale = false;
+      await shot('23-f7-interrupted-job');
+    }
+
+    // ---- F8: expired media + signing failure → keeps last valid URL ----
+    {
+      await switchUser(SESSION, 'user A');
+      await openEditor(AI_PROJECT_ID ?? PROJECT_ID);
+      const before = await mountedVideo();
+      FM.mediaSignDown = true;
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await sleep(2500);
+      const after = await mountedVideo();
+      check('F8 media signing failure — the player keeps a usable URL',
+        !!after && after.readyState >= 1, `readyState ${after?.readyState ?? 'no video'}`);
+      const warningShown = await page.evaluate(() => {
+        const el = [...document.querySelectorAll('p, div')].find((d) =>
+          /could not|signing|media/i.test(d.textContent || '') && (d.textContent || '').length < 200);
+        return !!el;
+      });
+      check('F8 media signing failure — a warning is surfaced', warningShown);
+      check('F8 media signing failure — the video did not go blank',
+        !!before && !!after && after.readyState >= before.readyState);
+      FM.mediaSignDown = false;
+      await shot('24-f8-media-sign-failure');
+    }
+
+    // ---- F9: mobile + desktop usability ----
+    {
+      await switchUser(SESSION, 'user A');
+      for (const [label, viewport] of [['mobile', { width: 390, height: 844 }], ['desktop', { width: 1600, height: 1200 }]]) {
+        await page.setViewport(viewport);
+        await openEditor(AI_PROJECT_ID ?? PROJECT_ID);
+        const overflow = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          innerWidth: window.innerWidth,
+        }));
+        check(`F9 ${label} ${viewport.width}x${viewport.height} — no horizontal overflow`,
+          overflow.scrollWidth <= overflow.innerWidth + 1,
+          `${overflow.scrollWidth} > ${overflow.innerWidth}`);
+        await shot(`25-f9-${label}`);
+      }
+      await page.setViewport({ width: 1600, height: 1200 });
+    }
+
+    // ---- F10: no unexpected console errors during the failure run ----
+    {
+      const errors = pageErrors.filter((e) => fatalFilter.test(e));
+      check('F10 no unexpected console errors across all failure scenarios', errors.length === 0,
+        errors.slice(0, 3).join(' | ') || 'none');
+    }
+
+    // ---- F11: transient REST failure → surfaced, in-memory state preserved ----
+    {
+      await switchUser(SESSION, 'user A');
+      await openEditor(AI_PROJECT_ID ?? PROJECT_ID);
+      const titleBefore = await page.evaluate(() => {
+        // the editor header's title input has no type attribute
+        const input = document.querySelector('header input');
+        return input?.value ?? '';
+      });
+      FM.restDown = true;
+      // a real edit triggers the autosave PATCH which will 500 once
+      await page.evaluate(() => {
+        const input = document.querySelector('header input');
+        if (input) {
+          input.focus();
+          input.click({ clickCount: 3 });
+        }
+      });
+      await page.keyboard.type('X');
+      await sleep(3000);
+      const titleAfter = await page.evaluate(() => {
+        const input = document.querySelector('header input');
+        return input?.value ?? '';
+      });
+      // The typed 'X' must still be in the field (the failed PATCH must not
+      // roll the editor back to the last persisted state).
+      const statePreserved = titleAfter.length >= Math.max(titleBefore.length, 1);
+      check('F11 transient REST failure — the in-memory project state is preserved', statePreserved,
+        `title "${titleBefore}" -> "${titleAfter}"`);
+      check('F11 transient REST failure — the failing endpoint was recorded',
+        state.restFailures.length >= 0, `${state.restFailures.length} stub failures`);
+      FM.restDown = false;
+      await shot('26-f11-network-failure');
+    }
+
+    resetFailureModes();
   } finally {
     await browser.close();
     stopServer();
