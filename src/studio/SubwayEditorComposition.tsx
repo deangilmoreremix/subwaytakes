@@ -366,21 +366,15 @@ export const SubwayEditorComposition: React.FC<SubwayEditorCompositionProps> = (
             )),
       )}
 
-      {/* ---- captions (editable mode) ---- */}
-      {project.captions.map((caption) => {
-        const startFrame = Math.round(caption.start * fps);
-        const endFrame = Math.round(caption.end * fps);
-        return (
-          <Sequence
-            key={caption.id}
-            from={startFrame}
-            durationInFrames={Math.max(1, endFrame - startFrame)}
-            layout="none"
-          >
-            <CaptionView caption={caption} height={height} />
-          </Sequence>
-        );
-      })}
+      {/* ---- captions (editable mode) ----
+          No <Sequence> wrapper: CaptionView windows itself from the ABSOLUTE
+          frame. Wrapping it in a Sequence from `startFrame` would hand it a
+          sequence-LOCAL frame while its visibility check compares against
+          start/end in seconds — which shifted every caption later by its own
+          start time (a 0.5s caption actually appeared at 1.0s). */}
+      {project.captions.map((caption) => (
+        <CaptionView key={caption.id} caption={caption} height={height} />
+      ))}
 
       {/* ---- branding ---- */}
       {project.branding.showProgressBar && (
