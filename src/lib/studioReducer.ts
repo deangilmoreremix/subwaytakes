@@ -299,8 +299,11 @@ export function studioReducer(project: StudioProject, action: StudioAction): Stu
       const currentBeat = located.clip.beatId ?? null;
       if (currentBeat === action.beatId) return project;
       const scenePlan = project.scenePlan.map((entry) => {
-        // Release the beat from any other clip that claimed it, then attach
-        // this clip to the target beat (and claim the scene-plan entry).
+        // Release the beat this clip used to hold (it becomes available
+        // again) and claim the target beat — an explicit move is the user's
+        // intent, so it takes the beat over from another clip. The other
+        // clip keeps its `beatId` field: the scene plan is the single source
+        // of truth for which clip realizes a beat.
         if (entry.beatId === currentBeat && entry.clipId === action.clipId) {
           return { ...entry, clipId: undefined };
         }

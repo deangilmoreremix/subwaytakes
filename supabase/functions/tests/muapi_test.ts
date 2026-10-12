@@ -167,13 +167,18 @@ Deno.test("muapiPollResult: surfaces provider error and keeps only string output
 
 Deno.test("muapiDownload: streams bytes from an output URL", async () => {
   setTestEnv();
-  const payload = new Uint8Array([1, 2, 3, 4, 5]);
-  const { fetchImpl, calls } = recordingFetch(() => new Response(payload, { status: 200 }));
+  // Media-valid fixture: a plausible size and a media content-type, as the
+  // content-type / minimum-size guard now requires of a real provider output.
+  const payload = new Uint8Array(16384).fill(7);
+  const { fetchImpl, calls } = recordingFetch(() =>
+    new Response(payload, { status: 200, headers: { "Content-Type": "video/mp4" } }),
+  );
 
   const bytes = await muapiDownload("https://cdn.example.com/out.mp4", { fetchImpl });
 
   assertEquals(calls[0].url, "https://cdn.example.com/out.mp4");
-  assertEquals(Array.from(bytes), [1, 2, 3, 4, 5]);
+  assertEquals(bytes.byteLength, 16384);
+  assertEquals(bytes[0], 7);
   assertTrue(bytes instanceof Uint8Array, "download must return a Uint8Array");
 });
 
