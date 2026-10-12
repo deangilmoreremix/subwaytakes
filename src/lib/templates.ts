@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getAuthToken } from './supabase';
 
 export interface VideoTemplate {
   id: string;
@@ -200,7 +201,7 @@ export async function triggerComposeOverlay(episodeId: string, config?: ComposeC
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ episode_id: episodeId, enhancement_config: config }),
@@ -235,7 +236,7 @@ export async function triggerClipCompose(clipId: string, config?: ComposeConfig)
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ clip_id: clipId, enhancement_config: config }),
@@ -317,7 +318,7 @@ export async function createVideoExport(
       await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${await getAuthToken()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

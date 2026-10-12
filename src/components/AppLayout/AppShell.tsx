@@ -77,7 +77,11 @@ export function AppShell({ children }: AppShellProps) {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // The sidebar starts collapsed on small viewports: at 390px a 280px rail
+  // left the editor ~78px of usable width (content pushed off-screen).
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768,
+  );
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -97,7 +101,9 @@ export function AppShell({ children }: AppShellProps) {
 
   const title = getTitleFromPath(location.pathname);
   const displayInitial = profile?.display_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U';
-  const credits = profile?.credits_balance ?? 0;
+  // `user_profiles` is a shared-database table that may be absent or shaped
+  // differently: the chip degrades to a dash instead of claiming 0 credits.
+  const credits = profile?.credits_balance ?? null;
 
   function isNavActive(section: NavSection): boolean {
     const paths = section.matchPaths || [section.path];
@@ -109,7 +115,9 @@ export function AppShell({ children }: AppShellProps) {
       <aside
         className={clsx(
           "flex flex-col border-r border-zinc-800 bg-zinc-900 transition-all duration-300",
-          isSidebarCollapsed ? "w-[72px]" : "w-[280px]"
+          // md: and up may expand; below md the rail stays collapsed even if
+          // the toggle is pressed, so the editor never gets squeezed.
+          isSidebarCollapsed ? "w-[72px]" : "w-[280px] max-md:w-[72px]"
         )}
       >
         <div className="flex items-center gap-3 px-4 py-5 border-b border-zinc-800">
@@ -117,7 +125,7 @@ export function AppShell({ children }: AppShellProps) {
             <Film className="w-5 h-5 text-amber-400" />
           </div>
           {!isSidebarCollapsed && (
-            <div className="min-w-0">
+            <div className="min-w-0 max-md:hidden">
               <h1 className="text-base font-semibold text-white truncate">SubwayTakes</h1>
               <p className="text-xs text-gray-500">Interview Creator</p>
             </div>
@@ -152,7 +160,7 @@ export function AppShell({ children }: AppShellProps) {
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
                 {!isSidebarCollapsed && (
-                  <span className="text-sm font-medium">{section.label}</span>
+                  <span className="text-sm font-medium max-md:hidden">{section.label}</span>
                 )}
                 {section.badge && !isSidebarCollapsed && (
                   <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
@@ -170,7 +178,7 @@ export function AppShell({ children }: AppShellProps) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-medium text-white">{credits} credits</span>
+                  <span className="text-sm font-medium text-white">{credits ?? '–'} credits</span>
                 </div>
                 <span className="text-xs text-zinc-500 capitalize">{profile?.subscription_tier || 'free'}</span>
               </div>

@@ -67,6 +67,7 @@ const CONTENT_TYPE_CONFIG: Record<ClipType, { label: string; icon: string; color
   subway_interview: { label: 'Subway Secrets', icon: '🚇', color: 'orange' },
   motivational: { label: 'Motivation', icon: '💪', color: 'rose' },
   studio_interview: { label: 'Professional', icon: '🎙️', color: 'purple' },
+  muapi: { label: 'MuAPI Studio', icon: '🎬', color: 'violet' },
 };
 
 // Constants

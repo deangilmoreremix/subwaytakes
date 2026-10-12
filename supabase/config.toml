@@ -1,0 +1,35 @@
+# Supabase CLI configuration for SubwayTakes.
+#
+# WHY THIS FILE EXISTS: it was missing from the repository snapshot (only
+# supabase/.temp/* existed, left over from a previous `supabase link` that
+# pointed at the PRODUCTION project ref orcosohomdugkfcgydwj — see
+# supabase/.temp/project-ref). The Supabase CLI requires supabase/config.toml
+# for `supabase db push` and `supabase functions deploy`, so this minimal file
+# restores it. It deliberately contains NO behavior overrides:
+#
+#   * project_id is intentionally NOT set. The target project is selected at
+#     runtime by `supabase link --project-ref <ref>` (which writes
+#     supabase/.temp/project-ref). Hard-coding the production ref here would
+#     make an accidental `supabase db push` against production possible.
+#
+#   * No [functions.*] verify_jwt overrides. Every one of the 13 edge functions
+#     authenticates requests itself — requireUser() from _shared/auth.ts
+#     (plan-interview, generate-scene, scene-status, muapi-captions,
+#     render-project), or server-side getUser() validation / the documented
+#     service-role-internal pattern (build-prompt, generate-script,
+#     secure-clips-api, generate-video, compose-overlay, process-video,
+#     stitch-clips, stitch-episode). The gateway JWT check (verify_jwt=true,
+#     the default) is therefore a redundant outer layer, not the only one.
+#
+#     If function-to-function calls that send the service-role key as the
+#     bearer token start failing at the gateway with 401 "Invalid JWT" (this
+#     happens when the project's service-role key is a non-JWT secret such as
+#     sb_secret_... instead of a legacy JWT key), add per-function sections for
+#     the affected functions only, e.g.:
+#
+#         [functions.generate-video]
+#         verify_jwt = false
+#
+#     Each such function validates its caller itself, so disabling the gateway
+#     check for it does not open the function up. See docs/STAGING_RUNBOOK.md
+#     (Phase 3) for the full per-function auth table.

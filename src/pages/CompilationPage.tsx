@@ -215,6 +215,14 @@ export default function CompilationPage() {
                     Download
                   </a>
                 )}
+                <button
+                  onClick={() => navigate('/studio/subway-editor/new')}
+                  title="Open the SubwayTakes editor with a new studio project"
+                  className="flex items-center gap-2 px-4 py-2.5 border border-amber-500/40 bg-amber-500/10 text-amber-300 rounded-lg text-sm font-medium hover:bg-amber-500/20 transition-colors"
+                >
+                  <Film className="w-4 h-4" />
+                  Edit Video
+                </button>
                 <Link
                   to={`/compilations/${compilation.id}/enhance`}
                   className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 text-white rounded-lg text-sm font-medium hover:bg-zinc-700 transition-colors"
@@ -241,6 +249,12 @@ export default function CompilationPage() {
                 </button>
               </div>
             )}
+
+            <p className="text-[11px] text-zinc-500">
+              Edit Video opens the SubwayTakes editor with a new studio project — a compilation is
+              not a studio project, so it starts empty. Upload footage or generate scenes there, then
+              export an MP4.
+            </p>
           </div>
 
           {/* Right: Details */}

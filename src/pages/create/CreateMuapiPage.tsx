@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Film } from 'lucide-react';
 import { useClipCreation } from '../../hooks/useClipCreation';
 import type { WizardStepDef } from '../../hooks/useClipCreation';
 import { PageHeader, EffectsModal } from '../../components/create/CommonCreateSections';
@@ -68,6 +70,7 @@ function buildPlanSummary(strategy: MuapiStrategyOption, brainstorm: MuapiBrains
 
 export function CreateMuapiPage() {
   const clip = useClipCreation('muapi', STEPS);
+  const navigate = useNavigate();
 
   const [brainstorm, setBrainstorm] = useState<MuapiBrainstormInput>({
     concept: clip.topic,
@@ -251,6 +254,23 @@ export function CreateMuapiPage() {
           <p className="text-sm text-rose-300">Complete concept, objective, and strategy selection before generating.</p>
         </div>
       )}
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
+        <div>
+          <p className="text-sm font-medium text-zinc-200">Edit a finished video</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Opens the SubwayTakes editor with a new studio project — it starts empty (this page is
+            not a studio project). Upload footage or generate scenes there, then export an MP4.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate('/studio/subway-editor/new')}
+          className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 transition hover:bg-amber-500/20"
+        >
+          <Film className="h-4 w-4" />
+          Edit Video
+        </button>
+      </div>
 
       <AdvancedSettingsDrawer clip={clip} />
       <EffectsModal clip={clip} />

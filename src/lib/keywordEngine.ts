@@ -475,13 +475,13 @@ function buildStreetInterviewAnalysis(
   _options?: { sentiment?: SentimentModifier }
 ): KeywordAnalysis {
   let interviewMode: InterviewMode = 'hot_take_challenge';
-  let interviewStyle: InterviewStyle = 'man_on_street';
+  const interviewStyle: InterviewStyle = 'man_on_street';
   let energyLevel: EnergyLevel = 'high_energy';
   let streetScene: StreetScene = 'busy_sidewalk';
-  let timeOfDay: TimeOfDay = 'midday';
+  const timeOfDay: TimeOfDay = 'midday';
   let characterPreset: CharacterPreset = 'street_vox';
   let subjectDemographic: SubjectDemographic = 'any';
-  let subjectStyle: SubjectStyle = 'casual';
+  const subjectStyle: SubjectStyle = 'casual';
   let viralDirection = '';
   let toneDescription = '';
 
@@ -1748,7 +1748,7 @@ export interface ClarificationQuestion {
 
 export function refinePrompt(userInput: string): { refined: string; suggestions: RefinementSuggestion[] } {
   const suggestions: RefinementSuggestion[] = [];
-  let refined = userInput;
+  const refined = userInput;
   
   // Detect vague inputs and suggest refinements
   const vaguePatterns = [

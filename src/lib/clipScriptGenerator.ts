@@ -1,7 +1,7 @@
 import type { ClipType } from './types';
+import { getAuthToken } from './supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export interface ClipScript {
   hook_question: string;
@@ -46,7 +46,7 @@ export async function generateClipScript(
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${await getAuthToken()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

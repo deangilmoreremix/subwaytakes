@@ -1,8 +1,6 @@
 import React from "react";
 import {
   AbsoluteFill,
-  interpolate,
-  spring,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";

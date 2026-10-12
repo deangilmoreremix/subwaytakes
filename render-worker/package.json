@@ -1,0 +1,27 @@
+{
+  "name": "render-worker",
+  "version": "1.0.0",
+  "description": "SubwayTakes studio production render worker (Supabase queue -> Remotion -> ffmpeg delivery spec)",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "smoke": "ts-node src/smoke.ts",
+    "smoke:dist": "node dist/smoke.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.9"
+  }
+}

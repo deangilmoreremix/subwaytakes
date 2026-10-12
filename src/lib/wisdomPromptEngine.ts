@@ -225,7 +225,7 @@ export function buildWisdomPrompt(
   const demographicPrompt = WISDOM_DEMOGRAPHIC_PROMPTS[demographic];
   const settingPrompt = WISDOM_SETTING_PROMPTS[setting];
 
-  let prompt = `Vertical 9:16 short-form interview video, ${durationSeconds} seconds.
+  const prompt = `Vertical 9:16 short-form interview video, ${durationSeconds} seconds.
 Target audience: 55+ viewers, content that respects their intelligence and experience.
 
 ${WISDOM_SYSTEM_PROMPT}

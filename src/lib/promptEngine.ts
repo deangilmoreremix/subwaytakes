@@ -23,7 +23,6 @@ import type {
   MotivationalEnhancementConfig,
   Neighborhood,
   AgeGroup,
-  CinematicEnhancementConfig,
   CinematicCameraConfig,
   CinematicLightingConfig,
   CinematicCompositionConfig,

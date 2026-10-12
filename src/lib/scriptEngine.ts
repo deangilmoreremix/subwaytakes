@@ -1,9 +1,9 @@
 import { supabase } from './supabase';
+import { getAuthToken } from './supabase';
 import type { EpisodeScript } from './types';
 import { getUserId } from './auth';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 interface ScriptTemplate {
   hook_question: string;
@@ -732,7 +732,7 @@ export async function generateScript(topic: string): Promise<EpisodeScript> {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-script`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ topic }),
@@ -873,7 +873,7 @@ export async function regenerateScriptField(
     const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-script`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

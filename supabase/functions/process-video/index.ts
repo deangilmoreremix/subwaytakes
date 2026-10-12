@@ -1,11 +1,7 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { buildCorsHeaders, handleOptions, jsonResponse } from "../_shared/cors.ts";
+import { internalCall, requireUser, serviceClient } from "../_shared/auth.ts";
+import { isSafeExternalHttpUrl } from "../_shared/muapi.ts";
 
 interface ProcessVideoRequest {
   operation: 'thumbnail' | 'stitch' | 'add_captions' | 'convert' | 'trim' | 'get_info';
@@ -28,9 +24,19 @@ interface ProcessVideoRequest {
   };
 }
 
-function getServiceConfig() {
+function getServiceConfig(): { serviceUrl: string | undefined; serviceKey: string | undefined } {
   const serviceUrl = Deno.env.get("THUMBNAIL_SERVICE_URL") || Deno.env.get("FFMPEG_SERVICE_URL");
   const serviceKey = Deno.env.get("THUMBNAIL_SERVICE_KEY") || Deno.env.get("FFMPEG_SERVICE_KEY");
+  return { serviceUrl, serviceKey };
+}
+
+function requireServiceConfig(): { serviceUrl: string; serviceKey: string | undefined } {
+  const { serviceUrl, serviceKey } = getServiceConfig();
+  if (!serviceUrl) {
+    throw new Error(
+      "FFmpeg service is not configured (set THUMBNAIL_SERVICE_URL or FFMPEG_SERVICE_URL)",
+    );
+  }
   return { serviceUrl, serviceKey };
 }
 
@@ -56,157 +62,141 @@ async function fetchWithTimeout(
   }
 }
 
+/**
+ * SSRF guard for user-supplied media URLs: https only, and never localhost,
+ * private ranges, or cloud metadata IPs.
+ */
 function isValidVideoUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return false;
-    const hostname = parsed.hostname;
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname.startsWith("10.") || hostname.startsWith("172.") || hostname.startsWith("192.168.") || hostname === "169.254.169.254") return false;
-    return true;
-  } catch {
-    return false;
-  }
+  return isSafeExternalHttpUrl(url);
 }
 
 async function uploadBase64ToStorage(
+  supabase: SupabaseClient,
   base64DataUrl: string,
   fileName: string,
   bucket: string,
   contentType: string
-): Promise<string | null> {
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const base64Data = base64DataUrl.split(",")[1];
-    if (!base64Data) return null;
-
-    const binaryStr = atob(base64Data);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(`processed/${fileName}`, bytes, {
-        contentType,
-        upsert: true,
-      });
-
-    if (error) {
-      console.error("Storage upload error:", error);
-      return null;
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(data.path);
-
-    return publicUrlData.publicUrl;
-  } catch (err) {
-    console.error("Upload error:", err);
-    return null;
+): Promise<string> {
+  const base64Data = base64DataUrl.split(",")[1];
+  if (!base64Data) {
+    throw new Error("FFmpeg service returned an empty data URL");
   }
+
+  const binaryStr = atob(base64Data);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(`processed/${fileName}`, bytes, {
+      contentType,
+      upsert: true,
+    });
+
+  if (error) {
+    throw new Error(`Storage upload failed: ${error.message}`);
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(data.path);
+
+  if (!publicUrlData.publicUrl.startsWith("https://") && !publicUrlData.publicUrl.startsWith("http://")) {
+    throw new Error("Storage did not return a public URL");
+  }
+
+  return publicUrlData.publicUrl;
+}
+
+/**
+ * Normalize an FFmpeg service result into a usable media URL. Data URLs are
+ * persisted to storage; http(s) URLs are passed through. Anything else is a
+ * hard failure — we never substitute the input URL.
+ */
+async function resolveServiceMedia(
+  data: Record<string, unknown>,
+  media: 'thumbnail' | 'video',
+  fileName: string,
+  contentType: string,
+  supabase: SupabaseClient,
+): Promise<string> {
+  const value = data[media];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`FFmpeg service returned no ${media === 'thumbnail' ? 'thumbnail' : 'video'}`);
+  }
+
+  if (value.startsWith("data:")) {
+    return await uploadBase64ToStorage(supabase, value, fileName, "videos", contentType);
+  }
+
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return value;
+  }
+
+  throw new Error(`FFmpeg service returned an unexpected ${media} value`);
 }
 
 Deno.serve(async (req: Request) => {
+  const cors = buildCorsHeaders(req.headers.get("Origin"));
+
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return handleOptions(req);
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header is required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
-
-    if (!isInternalCall) {
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const authClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
-      if (authError || !authUser) {
-        return new Response(
-          JSON.stringify({ error: "Invalid or expired token" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    if (!internalCall(req)) {
+      await requireUser(req);
     }
 
     let body: ProcessVideoRequest;
     try {
       body = await req.json();
     } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Invalid JSON body" }, 400, cors);
     }
     const { operation, videoUrls, videoUrl, options } = body;
 
     if (!operation) {
-      return new Response(
-        JSON.stringify({ error: "operation is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({ error: "operation is required" }, 400, cors);
     }
 
     if (videoUrl && !isValidVideoUrl(videoUrl)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid video URL" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Invalid video URL" }, 400, cors);
     }
 
     if (videoUrls) {
       for (const u of videoUrls) {
         if (!isValidVideoUrl(u)) {
-          return new Response(
-            JSON.stringify({ error: "Invalid video URL in list" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          return jsonResponse({ error: "Invalid video URL in list" }, 400, cors);
         }
       }
     }
 
+    const supabase = serviceClient();
     let result: Record<string, unknown>;
 
     switch (operation) {
       case 'thumbnail':
         if (!videoUrl) throw new Error("videoUrl is required for thumbnail operation");
-        result = await generateThumbnail(videoUrl, options);
+        result = await generateThumbnail(supabase, videoUrl, options);
         break;
       case 'stitch':
         if (!videoUrls || videoUrls.length === 0) throw new Error("videoUrls array is required for stitch operation");
-        result = await stitchVideos(videoUrls, options);
+        result = await stitchVideos(supabase, videoUrls, options);
         break;
       case 'add_captions':
         if (!videoUrl) throw new Error("videoUrl is required for add_captions operation");
-        result = await addCaptions(videoUrl, options);
+        result = await addCaptions(supabase, videoUrl, options);
         break;
       case 'convert':
         if (!videoUrl) throw new Error("videoUrl is required for convert operation");
-        result = await convertVideo(videoUrl, options);
+        result = await convertVideo(supabase, videoUrl, options);
         break;
       case 'trim':
         if (!videoUrl) throw new Error("videoUrl is required for trim operation");
-        result = await trimVideo(videoUrl, options);
+        result = await trimVideo(supabase, videoUrl, options);
         break;
       case 'get_info':
         if (!videoUrl) throw new Error("videoUrl is required for get_info operation");
@@ -216,245 +206,201 @@ Deno.serve(async (req: Request) => {
         throw new Error(`Unknown operation: ${operation}`);
     }
 
-    return new Response(
-      JSON.stringify({ success: true, operation, result }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResponse({ success: true, operation, result }, 200, cors);
   } catch (error) {
     console.error("Video processing error:", error);
-    return new Response(
-      JSON.stringify({ error: "Video processing failed" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    const message = error instanceof Error && error.message ? error.message : "Video processing failed";
+    return jsonResponse({ error: message }, 500, cors);
   }
 });
 
 async function generateThumbnail(
+  supabase: SupabaseClient,
   videoUrl: string,
   options?: ProcessVideoRequest['options']
 ): Promise<{ thumbnailUrl: string }> {
-  const { serviceUrl, serviceKey } = getServiceConfig();
+  const { serviceUrl, serviceKey } = requireServiceConfig();
 
-  if (serviceUrl) {
-    const response = await fetchWithTimeout(`${serviceUrl}/generate-thumbnail`, {
-      method: 'POST',
-      headers: serviceHeaders(serviceKey),
-      body: JSON.stringify({
-        videoUrl,
-        options: {
-          width: options?.width || 1280,
-          height: options?.height || 720,
-          timestamp: options?.timestamp || '00:00:01',
-        },
-      }),
-    }, 60000);
+  const response = await fetchWithTimeout(`${serviceUrl}/generate-thumbnail`, {
+    method: 'POST',
+    headers: serviceHeaders(serviceKey),
+    body: JSON.stringify({
+      videoUrl,
+      options: {
+        width: options?.width || 1280,
+        height: options?.height || 720,
+        timestamp: options?.timestamp || '00:00:01',
+      },
+    }),
+  }, 60000);
 
-    if (!response.ok) {
-      throw new Error(`Thumbnail generation failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.thumbnail && data.thumbnail.startsWith("data:")) {
-      const storedUrl = await uploadBase64ToStorage(
-        data.thumbnail,
-        `thumb_${Date.now()}.jpg`,
-        "videos",
-        "image/jpeg"
-      );
-      if (storedUrl) return { thumbnailUrl: storedUrl };
-    }
-
-    return { thumbnailUrl: data.thumbnail };
+  if (!response.ok) {
+    throw new Error(`Thumbnail generation failed: ${response.status}`);
   }
 
-  return { thumbnailUrl: videoUrl };
+  const data = await response.json() as Record<string, unknown>;
+  const thumbnailUrl = await resolveServiceMedia(
+    data,
+    'thumbnail',
+    `thumb_${Date.now()}.jpg`,
+    'image/jpeg',
+    supabase,
+  );
+  return { thumbnailUrl };
 }
 
 async function stitchVideos(
+  supabase: SupabaseClient,
   videoUrls: string[],
   options?: ProcessVideoRequest['options']
 ): Promise<{ stitchedVideoUrl: string }> {
-  const { serviceUrl, serviceKey } = getServiceConfig();
+  const { serviceUrl, serviceKey } = requireServiceConfig();
 
-  if (serviceUrl) {
-    const response = await fetchWithTimeout(`${serviceUrl}/stitch-videos`, {
-      method: 'POST',
-      headers: serviceHeaders(serviceKey),
-      body: JSON.stringify({ videoUrls, options }),
-    }, 120000);
+  const response = await fetchWithTimeout(`${serviceUrl}/stitch-videos`, {
+    method: 'POST',
+    headers: serviceHeaders(serviceKey),
+    body: JSON.stringify({ videoUrls, options }),
+  }, 120000);
 
-    if (!response.ok) {
-      throw new Error(`Video stitching failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.video && data.video.startsWith("data:")) {
-      const storedUrl = await uploadBase64ToStorage(
-        data.video,
-        `stitch_${Date.now()}.mp4`,
-        "videos",
-        "video/mp4"
-      );
-      if (storedUrl) return { stitchedVideoUrl: storedUrl };
-    }
-
-    return { stitchedVideoUrl: data.videoUrl || videoUrls[0] };
+  if (!response.ok) {
+    throw new Error(`Video stitching failed: ${response.status}`);
   }
 
-  return { stitchedVideoUrl: videoUrls[0] };
+  const data = await response.json() as Record<string, unknown>;
+  const stitchedVideoUrl = await resolveServiceMedia(
+    data,
+    'video',
+    `stitch_${Date.now()}.mp4`,
+    'video/mp4',
+    supabase,
+  );
+  return { stitchedVideoUrl };
 }
 
 async function addCaptions(
+  supabase: SupabaseClient,
   videoUrl: string,
   options?: ProcessVideoRequest['options']
 ): Promise<{ captionedVideoUrl: string }> {
-  const { serviceUrl, serviceKey } = getServiceConfig();
-
-  if (serviceUrl && options?.captionText) {
-    const response = await fetchWithTimeout(`${serviceUrl}/add-captions`, {
-      method: 'POST',
-      headers: serviceHeaders(serviceKey),
-      body: JSON.stringify({
-        videoUrl,
-        captionText: options.captionText,
-        captionStyle: options.captionStyle,
-      }),
-    }, 90000);
-
-    if (!response.ok) {
-      throw new Error(`Caption addition failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.video && data.video.startsWith("data:")) {
-      const storedUrl = await uploadBase64ToStorage(
-        data.video,
-        `caption_${Date.now()}.mp4`,
-        "videos",
-        "video/mp4"
-      );
-      if (storedUrl) return { captionedVideoUrl: storedUrl };
-    }
-
-    return { captionedVideoUrl: data.videoUrl || videoUrl };
+  if (!options?.captionText) {
+    throw new Error("options.captionText is required for add_captions operation");
   }
 
-  return { captionedVideoUrl: videoUrl };
+  const { serviceUrl, serviceKey } = requireServiceConfig();
+
+  const response = await fetchWithTimeout(`${serviceUrl}/add-captions`, {
+    method: 'POST',
+    headers: serviceHeaders(serviceKey),
+    body: JSON.stringify({
+      videoUrl,
+      captionText: options.captionText,
+      captionStyle: options.captionStyle,
+    }),
+  }, 90000);
+
+  if (!response.ok) {
+    throw new Error(`Caption addition failed: ${response.status}`);
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  const captionedVideoUrl = await resolveServiceMedia(
+    data,
+    'video',
+    `caption_${Date.now()}.mp4`,
+    'video/mp4',
+    supabase,
+  );
+  return { captionedVideoUrl };
 }
 
 async function convertVideo(
+  supabase: SupabaseClient,
   videoUrl: string,
   options?: ProcessVideoRequest['options']
 ): Promise<{ convertedVideoUrl: string }> {
   const format = options?.format || 'mp4';
-  const { serviceUrl, serviceKey } = getServiceConfig();
+  const { serviceUrl, serviceKey } = requireServiceConfig();
 
-  if (serviceUrl) {
-    const response = await fetchWithTimeout(`${serviceUrl}/convert-video`, {
-      method: 'POST',
-      headers: serviceHeaders(serviceKey),
-      body: JSON.stringify({
-        videoUrl,
-        format,
-        quality: options?.quality,
-      }),
-    }, 90000);
+  const response = await fetchWithTimeout(`${serviceUrl}/convert-video`, {
+    method: 'POST',
+    headers: serviceHeaders(serviceKey),
+    body: JSON.stringify({
+      videoUrl,
+      format,
+      quality: options?.quality,
+    }),
+  }, 90000);
 
-    if (!response.ok) {
-      throw new Error(`Video conversion failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.video && data.video.startsWith("data:")) {
-      const storedUrl = await uploadBase64ToStorage(
-        data.video,
-        `convert_${Date.now()}.${format}`,
-        "videos",
-        `video/${format}`
-      );
-      if (storedUrl) return { convertedVideoUrl: storedUrl };
-    }
-
-    return { convertedVideoUrl: data.videoUrl || videoUrl };
+  if (!response.ok) {
+    throw new Error(`Video conversion failed: ${response.status}`);
   }
 
-  return { convertedVideoUrl: videoUrl };
+  const data = await response.json() as Record<string, unknown>;
+  const convertedVideoUrl = await resolveServiceMedia(
+    data,
+    'video',
+    `convert_${Date.now()}.${format}`,
+    `video/${format}`,
+    supabase,
+  );
+  return { convertedVideoUrl };
 }
 
 async function trimVideo(
+  supabase: SupabaseClient,
   videoUrl: string,
   options?: ProcessVideoRequest['options']
 ): Promise<{ trimmedVideoUrl: string }> {
-  const { serviceUrl, serviceKey } = getServiceConfig();
-
-  if (serviceUrl && options?.startTime && options?.endTime) {
-    const response = await fetchWithTimeout(`${serviceUrl}/trim-video`, {
-      method: 'POST',
-      headers: serviceHeaders(serviceKey),
-      body: JSON.stringify({
-        videoUrl,
-        startTime: options.startTime,
-        endTime: options.endTime,
-      }),
-    }, 90000);
-
-    if (!response.ok) {
-      throw new Error(`Video trimming failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.video && data.video.startsWith("data:")) {
-      const storedUrl = await uploadBase64ToStorage(
-        data.video,
-        `trim_${Date.now()}.mp4`,
-        "videos",
-        "video/mp4"
-      );
-      if (storedUrl) return { trimmedVideoUrl: storedUrl };
-    }
-
-    return { trimmedVideoUrl: data.videoUrl || videoUrl };
+  if (!options?.startTime || !options?.endTime) {
+    throw new Error("options.startTime and options.endTime are required for trim operation");
   }
 
-  return { trimmedVideoUrl: videoUrl };
+  const { serviceUrl, serviceKey } = requireServiceConfig();
+
+  const response = await fetchWithTimeout(`${serviceUrl}/trim-video`, {
+    method: 'POST',
+    headers: serviceHeaders(serviceKey),
+    body: JSON.stringify({
+      videoUrl,
+      startTime: options.startTime,
+      endTime: options.endTime,
+    }),
+  }, 90000);
+
+  if (!response.ok) {
+    throw new Error(`Video trimming failed: ${response.status}`);
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  const trimmedVideoUrl = await resolveServiceMedia(
+    data,
+    'video',
+    `trim_${Date.now()}.mp4`,
+    'video/mp4',
+    supabase,
+  );
+  return { trimmedVideoUrl };
 }
 
 async function getVideoInfo(
   videoUrl: string
 ): Promise<{ info: Record<string, unknown> }> {
-  const { serviceUrl, serviceKey } = getServiceConfig();
+  const { serviceUrl, serviceKey } = requireServiceConfig();
 
-  if (serviceUrl) {
-    const response = await fetchWithTimeout(`${serviceUrl}/get-video-info`, {
-      method: 'POST',
-      headers: serviceHeaders(serviceKey),
-      body: JSON.stringify({ videoUrl }),
-    }, 30000);
+  const response = await fetchWithTimeout(`${serviceUrl}/get-video-info`, {
+    method: 'POST',
+    headers: serviceHeaders(serviceKey),
+    body: JSON.stringify({ videoUrl }),
+  }, 30000);
 
-    if (!response.ok) {
-      throw new Error(`Video info failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return { info: data.info };
+  if (!response.ok) {
+    throw new Error(`Video info failed: ${response.status}`);
   }
 
-  return {
-    info: {
-      duration: 0,
-      size: 0,
-      bitrate: 0,
-      format: 'unknown',
-      video: null,
-      audio: null,
-    }
-  };
+  const data = await response.json() as Record<string, unknown>;
+  if (!data.info || typeof data.info !== "object") {
+    throw new Error("FFmpeg service returned no video info");
+  }
+
+  return { info: data.info as Record<string, unknown> };
 }

@@ -102,7 +102,15 @@ export function EpisodePage() {
         </div>
 
         {episode.status === 'done' && episode.final_video_url && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => navigate('/studio/subway-editor/new')}
+              title="Open the SubwayTakes editor with a new studio project"
+              className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/20 transition"
+            >
+              <Film className="h-4 w-4" />
+              Edit Video
+            </button>
             <button
               onClick={() => navigate('/episodes/' + id + '/enhance')}
               className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-black hover:bg-amber-400 transition"
@@ -177,6 +185,7 @@ export function EpisodePage() {
                   try {
                     await triggerComposeOverlay(episodeId);
                   } catch {
+                    /* overlay compose failure surfaced only via state reset */
                   } finally {
                     setComposing(false);
                   }
@@ -202,6 +211,11 @@ export function EpisodePage() {
               poster={episode.thumbnail_url || undefined}
             />
           </div>
+          <p className="text-[11px] text-zinc-500">
+            Edit Video opens the SubwayTakes editor with a new studio project — an episode is not a
+            studio project, so it starts empty. Upload footage or generate scenes there, then export
+            an MP4.
+          </p>
         </div>
       )}
 
@@ -302,6 +316,7 @@ function ShotRow({ shot, onRetry }: { shot: EpisodeShot; onRetry: () => void }) 
       await retryEpisodeShot(shot.id);
       onRetry();
     } catch {
+      /* retry failure surfaced only via state reset */
     } finally {
       setRetrying(false);
     }

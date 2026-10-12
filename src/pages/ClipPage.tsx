@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Layers, MessageCircle, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Film, Layers, MessageCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { ClipActions } from '../components/ClipActions';
 import { VideoProcessingToolbar } from '../components/VideoProcessingToolbar';
 import { ViralScoreCard } from '../components/ViralScoreCard';
@@ -265,8 +265,25 @@ export function ClipPage() {
                 onVariation={() => handleRegenerate('variation')}
                 onCopyLink={handleCopyLink}
               />
+              {ready && (
+                <button
+                  onClick={() => navigate('/studio/subway-editor/new')}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-300 transition hover:bg-amber-500/20"
+                >
+                  <Film className="h-4 w-4" />
+                  Edit Video
+                </button>
+              )}
               {copied && (
                 <p className="mt-2 text-xs text-emerald-400">Link copied to clipboard!</p>
+              )}
+              {ready && (
+                <p className="text-[11px] text-zinc-500">
+                  Edit Video opens the SubwayTakes editor with a{' '}
+                  <strong className="text-zinc-400">new</strong> studio project — a clip is not a
+                  studio project, so it starts empty. Upload footage or generate scenes there, then
+                  export an MP4.
+                </p>
               )}
               {ready && clip.result_url && (
                 <VideoProcessingToolbar videoUrl={clip.result_url} />

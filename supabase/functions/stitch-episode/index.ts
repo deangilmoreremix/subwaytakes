@@ -1,11 +1,6 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { buildCorsHeaders, handleOptions, jsonResponse } from "../_shared/cors.ts";
+import { internalCall, requireUser, serviceClient } from "../_shared/auth.ts";
 
 interface StitchRequest {
   episode_id: string;
@@ -15,15 +10,20 @@ interface EpisodeShot {
   id: string;
   sequence: number;
   result_url: string | null;
+  status: string;
   duration_seconds: number;
   dialogue: string | null;
   speaker: string | null;
 }
 
-function getServiceConfig() {
+function getServiceConfig(): { serviceUrl: string | undefined; serviceKey: string | undefined } {
   const serviceUrl = Deno.env.get("THUMBNAIL_SERVICE_URL") || Deno.env.get("FFMPEG_SERVICE_URL");
   const serviceKey = Deno.env.get("THUMBNAIL_SERVICE_KEY") || Deno.env.get("FFMPEG_SERVICE_KEY");
   return { serviceUrl, serviceKey };
+}
+
+function isHttpUrl(value: string): boolean {
+  return value.startsWith("https://") || value.startsWith("http://");
 }
 
 async function fetchWithTimeout(
@@ -41,6 +41,7 @@ async function fetchWithTimeout(
 }
 
 async function stitchWithFFmpegService(
+  supabase: SupabaseClient,
   videoUrls: string[],
   serviceUrl: string,
   serviceKey: string | undefined
@@ -64,11 +65,7 @@ async function stitchWithFFmpegService(
 
     const data = await response.json();
 
-    if (data.video && data.video.startsWith("data:")) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
+    if (typeof data.video === "string" && data.video.startsWith("data:")) {
       const base64Data = data.video.split(",")[1];
       if (!base64Data) return null;
 
@@ -95,10 +92,15 @@ async function stitchWithFFmpegService(
         .from("videos")
         .getPublicUrl(uploadData.path);
 
-      return publicUrlData.publicUrl;
+      return isHttpUrl(publicUrlData.publicUrl) ? publicUrlData.publicUrl : null;
     }
 
-    return data.videoUrl || null;
+    if (typeof data.videoUrl === "string" && isHttpUrl(data.videoUrl)) {
+      return data.videoUrl;
+    }
+
+    console.error("FFmpeg stitch returned no usable video URL");
+    return null;
   } catch (err) {
     console.error("FFmpeg service stitch error:", err);
     return null;
@@ -106,66 +108,36 @@ async function stitchWithFFmpegService(
 }
 
 Deno.serve(async (req: Request) => {
+  const cors = buildCorsHeaders(req.headers.get("Origin"));
+
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return handleOptions(req);
   }
 
   let parsedBody: Record<string, unknown> = {};
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header is required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const isInternalCall = authHeader === `Bearer ${serviceRoleKey}`;
     let authenticatedUserId: string | null = null;
-
-    if (!isInternalCall) {
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const authClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user: authUser }, error: authError } = await authClient.auth.getUser();
-      if (authError || !authUser) {
-        return new Response(
-          JSON.stringify({ error: "Invalid or expired token" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      authenticatedUserId = authUser.id;
+    if (internalCall(req)) {
+      authenticatedUserId = null;
+    } else {
+      const { userId } = await requireUser(req);
+      authenticatedUserId = userId;
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = serviceClient();
 
     let body: StitchRequest;
     try {
       body = await req.json();
     } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Invalid JSON body" }, 400, cors);
     }
     parsedBody = body as unknown as Record<string, unknown>;
     const { episode_id } = body;
 
     if (!episode_id) {
-      return new Response(
-        JSON.stringify({ error: "episode_id is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({ error: "episode_id is required" }, 400, cors);
     }
 
     const { data: episode } = await supabase
@@ -174,11 +146,12 @@ Deno.serve(async (req: Request) => {
       .eq("id", episode_id)
       .maybeSingle();
 
-    if (authenticatedUserId && episode?.user_id && episode.user_id !== authenticatedUserId) {
-      return new Response(
-        JSON.stringify({ error: "Not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!episode) {
+      return jsonResponse({ error: "Not found" }, 404, cors);
+    }
+
+    if (authenticatedUserId && episode.user_id && episode.user_id !== authenticatedUserId) {
+      return jsonResponse({ error: "Not found" }, 404, cors);
     }
 
     const { data: shots, error: shotsError } = await supabase
@@ -191,23 +164,35 @@ Deno.serve(async (req: Request) => {
       throw new Error("No shots found for episode");
     }
 
-    const allShotsComplete = shots.every(
-      (shot: EpisodeShot) => shot.result_url && shot.result_url.length > 0
+    const typedShots = shots as unknown as EpisodeShot[];
+
+    // Readiness gate: every shot must be 'done' with a usable result URL.
+    // An 'error' (or unfinished) shot blocks stitching instead of stitching
+    // the first shot silently.
+    const allShotsComplete = typedShots.every(
+      (shot) => shot.status === "done" && isHttpUrl(shot.result_url ?? "")
     );
 
     if (!allShotsComplete) {
-      return new Response(
-        JSON.stringify({ error: "Not all shots are complete", status: "waiting" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      const anyError = typedShots.some((shot) => shot.status === "error");
+      if (anyError) {
+        await supabase
+          .from("episodes")
+          .update({ status: "error", error: "One or more shots failed" })
+          .eq("id", episode_id);
+        return jsonResponse({ error: "One or more shots failed" }, 400, cors);
+      }
+      return jsonResponse(
+        { error: "Not all shots are complete", status: "waiting" },
+        400,
+        cors,
       );
     }
 
-    const videoUrls = shots
-      .sort((a: EpisodeShot, b: EpisodeShot) => a.sequence - b.sequence)
-      .map((shot: EpisodeShot) => shot.result_url);
+    const videoUrls = typedShots
+      .slice()
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((shot) => shot.result_url as string);
 
     let finalVideoUrl: string | null = null;
 
@@ -280,20 +265,25 @@ Deno.serve(async (req: Request) => {
       const { serviceUrl, serviceKey } = getServiceConfig();
       if (serviceUrl) {
         finalVideoUrl = await stitchWithFFmpegService(
-          videoUrls as string[],
+          supabase,
+          videoUrls,
           serviceUrl,
           serviceKey
         );
       }
     }
 
-    const isStitchFallback = !finalVideoUrl;
-    if (!finalVideoUrl) {
-      finalVideoUrl = videoUrls[0] as string;
+    if (!finalVideoUrl || !isHttpUrl(finalVideoUrl)) {
+      const message = "Stitching failed: no stitch provider returned a usable video";
+      await supabase
+        .from("episodes")
+        .update({ status: "error", error: message })
+        .eq("id", episode_id);
+      return jsonResponse({ error: message }, 500, cors);
     }
 
     let captionFileUrl: string | null = null;
-    const captions = generateSrtCaptions(shots as EpisodeShot[]);
+    const captions = generateSrtCaptions(typedShots);
 
     if (captions) {
       const captionFileName = `captions_${episode_id}.srt`;
@@ -320,7 +310,6 @@ Deno.serve(async (req: Request) => {
         caption_file_url: captionFileUrl,
         thumbnail_url: videoUrls[0],
         completed_at: new Date().toISOString(),
-        ...(isStitchFallback ? { error: "Stitching unavailable - using first shot as preview" } : {}),
       })
       .eq("id", episode_id);
 
@@ -328,16 +317,15 @@ Deno.serve(async (req: Request) => {
       throw updateError;
     }
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: true,
         episode_id,
         final_video_url: finalVideoUrl,
         caption_file_url: captionFileUrl,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
+      200,
+      cors,
     );
   } catch (error) {
     console.error("Stitch error:", error);
@@ -345,24 +333,17 @@ Deno.serve(async (req: Request) => {
     try {
       const body = parsedBody || {};
       if (body.episode_id) {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        const supabase = serviceClient();
 
         await supabase
           .from("episodes")
           .update({ status: "error", error: "Stitching failed" })
-          .eq("id", body.episode_id);
+          .eq("id", body.episode_id as string);
       }
     } catch { /* best effort */ }
 
-    return new Response(
-      JSON.stringify({ error: "Episode stitching failed" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    const message = error instanceof Error && error.message ? error.message : "Episode stitching failed";
+    return jsonResponse({ error: message }, 500, cors);
   }
 });
 

@@ -2,6 +2,9 @@ import { Composition } from "remotion";
 import { SubwayTakesDemo } from "./SubwayTakesDemo";
 import { SubwayTakesOverlay } from "./SubwayTakesOverlay";
 import type { SubwayTakesOverlayProps } from "./SubwayTakesOverlay";
+import { SubwayEditorComposition, projectDurationInFrames } from "../../src/studio/SubwayEditorComposition";
+import { parseProject, createEmptyProject } from "../../src/studio/types";
+import type { StudioProject } from "../src/studio/types";
 
 const defaultOverlayProps: SubwayTakesOverlayProps = {
   episodeNumber: 634,
@@ -16,6 +19,8 @@ const defaultOverlayProps: SubwayTakesOverlayProps = {
   progressBarEnabled: true,
   progressBarColor: "#F59E0B",
 };
+
+const defaultEditorProject: StudioProject = createEmptyProject("demo-editor-project", "Subway Interview Studio");
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -37,6 +42,25 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         defaultProps={defaultOverlayProps}
+      />
+      <Composition
+        id="SubwayEditor"
+        component={SubwayEditorComposition}
+        durationInFrames={projectDurationInFrames(defaultEditorProject)}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{ project: defaultEditorProject }}
+        calculateMetadata={({ props }) => {
+          const parsed = parseProject((props as { project?: unknown }).project);
+          const project = parsed.ok && parsed.project ? parsed.project : defaultEditorProject;
+          return {
+            durationInFrames: projectDurationInFrames(project),
+            fps: project.fps,
+            width: project.width,
+            height: project.height,
+          };
+        }}
       />
     </>
   );

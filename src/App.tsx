@@ -25,6 +25,12 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ defa
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const CompilationBuilderPage = lazy(() => import('./pages/CompilationBuilderPage'));
 const CompilationPage = lazy(() => import('./pages/CompilationPage'));
+const SubwayEditorPage = lazy(() =>
+  import('./pages/studio/SubwayEditorPage').then(m => ({ default: m.SubwayEditorPage })),
+);
+const NewInterviewPage = lazy(() =>
+  import('./pages/studio/NewInterviewPage').then(m => ({ default: m.NewInterviewPage })),
+);
 
 function PageLoader() {
   return (
@@ -99,6 +105,8 @@ function AppContent() {
                     <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
                     <Route path="/episodes/:id" element={<EpisodePage />} />
                     <Route path="/episodes/:id/enhance" element={<EnhancePage contentType="episode" />} />
+                    <Route path="/studio/new" element={<NewInterviewPage />} />
+                    <Route path="/studio/subway-editor/:projectId" element={<SubwayEditorPage />} />
                     <Route path="/compilations/new" element={<CompilationBuilderPage />} />
                     <Route path="/compilations/:id" element={<CompilationPage />} />
                     <Route path="/compilations/:id/enhance" element={<EnhancePage contentType="compilation" />} />

@@ -8,6 +8,49 @@ function setCurrentAuthUser(userId: string | null) {
   _currentAuthUserId = userId;
 }
 
+/** Logged once per page load so a shared-DB schema mismatch cannot spam the console. */
+let profileProvisionWarningLogged = false;
+
+function warnProfileProvisionFailure(error: unknown) {
+  if (profileProvisionWarningLogged) return;
+  profileProvisionWarningLogged = true;
+  const detail = error && typeof error === 'object' && 'message' in error
+    ? String((error as { message?: unknown }).message)
+    : String(error);
+  console.warn(
+    `user_profiles could not be provisioned for this user (shared-schema drift?). Continuing without profile data: ${detail}`,
+  );
+}
+
+/**
+ * Insert (or refresh) the caller's `user_profiles` row.
+ *
+ * `user_profiles` lives in a database shared with other applications, so the
+ * table may already exist with a different column set. The full payload is
+ * attempted first — identical to the App-owned schema — and `minimal` retries
+ * with only `{ id }`, the one column every variant of this table has. A failed
+ * upsert is reported through `error` so the caller can decide to retry.
+ */
+async function upsertProfileRow(userId: string, variant: 'full' | 'minimal') {
+  const row = variant === 'full'
+    ? {
+        id: userId,
+        credits_balance: 100,
+        subscription_tier: 'free',
+        default_city_style: 'nyc',
+        default_duration: 6,
+      }
+    : { id: userId };
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .upsert(row, { onConflict: 'id' })
+    .select()
+    .maybeSingle();
+
+  return { data: data ?? null, error: error ?? null };
+}
+
 export interface UserProfile {
   id: string;
   display_name: string | null;
@@ -55,22 +98,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('id', userId)
         .maybeSingle();
 
-      if (error || !data) {
-        const { data: newProfile } = await supabase
-          .from('user_profiles')
-          .upsert({
-            id: userId,
-            credits_balance: 100,
-            subscription_tier: 'free',
-            default_city_style: 'nyc',
-            default_duration: 6,
-          }, { onConflict: 'id' })
-          .select()
-          .maybeSingle();
-        setProfile(newProfile);
-      } else {
+      if (!error && data) {
         setProfile(data);
+        return;
       }
+
+      // No row yet (or the read failed): provision one. The full payload is
+      // tried first, then a minimal `{ id }` insert for shared databases whose
+      // `user_profiles` has a different column set, then profile stays null.
+      const full = await upsertProfileRow(userId, 'full');
+      if (!full.error) {
+        setProfile(full.data);
+        return;
+      }
+
+      const minimal = await upsertProfileRow(userId, 'minimal');
+      if (!minimal.error) {
+        setProfile(minimal.data);
+        return;
+      }
+
+      setProfile(null);
+      warnProfileProvisionFailure(minimal.error);
     } catch {
       setProfile(null);
     }

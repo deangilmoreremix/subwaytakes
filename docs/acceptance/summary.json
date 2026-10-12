@@ -1,0 +1,834 @@
+{
+  "generatedAt": "2026-10-12T03:27:01.245Z",
+  "origin": "http://127.0.0.1:4173",
+  "node": "v22.23.2",
+  "counts": {
+    "total": 67,
+    "passed": 67,
+    "failed": 0,
+    "info": 1
+  },
+  "workflows": {
+    "W1-ai-generated-interview": {
+      "passed": 26,
+      "total": 26
+    },
+    "W2-uploaded-interview": {
+      "passed": 13,
+      "total": 13
+    },
+    "W3-media-recovery": {
+      "passed": 11,
+      "total": 11
+    },
+    "W4-cross-user-security": {
+      "passed": 17,
+      "total": 17
+    }
+  },
+  "results": [
+    {
+      "name": "app shell renders with authenticated session",
+      "ok": true,
+      "detail": "path=/create",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "topic -> project creation redirects to editor",
+      "ok": true,
+      "detail": "http://127.0.0.1:4173/studio/subway-editor/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "plan-interview edge function called",
+      "ok": true,
+      "detail": "",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "timeline renders 5 tracks",
+      "ok": true,
+      "detail": "6 rows: 1. Opening Hookfade6.0s2. Inte |  |  |  | We stopped talking and nobody  | ",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "timeline renders video clips (7 beats + subtitle cues)",
+      "ok": true,
+      "detail": "14 actions",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "remotion player mounts composition (caption + watermark layers render)",
+      "ok": true,
+      "detail": "{\"playerAspect\":true,\"hookCaption\":true,\"watermark\":true}",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "clip inspector opens on select",
+      "ok": true,
+      "detail": "",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "trim slider adjusts clip",
+      "ok": true,
+      "detail": "0 -> 0.1",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "volume slider adjusts sound",
+      "ok": true,
+      "detail": "0.3 -> 0.25",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "split adds a clip",
+      "ok": true,
+      "detail": "14 -> 15",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "undo reverts split",
+      "ok": true,
+      "detail": "14",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "redo re-applies split",
+      "ok": true,
+      "detail": "15",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "clip drag moves on timeline",
+      "ok": true,
+      "detail": "x 527 -> 692",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "scrubbing moves playhead",
+      "ok": true,
+      "detail": "cursor x 525 -> 811",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "caption edit triggers autosave PATCH",
+      "ok": true,
+      "detail": "1 patches",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "edited caption visible in editor",
+      "ok": true,
+      "detail": "",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "generate-scene submitted",
+      "ok": true,
+      "detail": "",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "scene-status polled",
+      "ok": true,
+      "detail": "",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "generated scene reflected in UI",
+      "ok": true,
+      "detail": "",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "player renders generated clip (9:16 video decodes, playback advances)",
+      "ok": true,
+      "detail": "{\"src\":\"http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4?token=v2\",\"readyState\":4,\"w\":318,\"h\":565,\"ratio\":0.563} advanced=true",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "W1 generated clip is persisted with a signed URL",
+      "ok": true,
+      "detail": "generated http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-0000",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "render-project enqueued",
+      "ok": true,
+      "detail": "",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "export shows download link",
+      "ok": true,
+      "detail": "{\"href\":\"https://stub.test/render-final.mp4\",\"text\":\" Download MP4\"}",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "download link serves a real video/mp4",
+      "ok": true,
+      "detail": "video/mp4, 1144743 bytes",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "editor stays behind authenticated session (page renders content)",
+      "ok": true,
+      "detail": "",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "no fatal client errors during flow",
+      "ok": true,
+      "detail": "none",
+      "workflow": "W1-ai-generated-interview"
+    },
+    {
+      "name": "W2 second project creation redirects to editor",
+      "ok": true,
+      "detail": "http://127.0.0.1:4173/studio/subway-editor/7fdc7815-41fb-4a76-bc48-ab168f8b33e3",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 storage upload writes under the caller user folder",
+      "ok": true,
+      "detail": "[{\"bucket\":\"studio-uploads\",\"path\":\"e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4\",\"user\":\"e2e-user-0000-0000-0000-000000000000\"}]",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 uploaded object is signed into a storage URL",
+      "ok": true,
+      "detail": "[\"studio-uploads:e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4\"]",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 uploaded clip is persisted on the timeline with an asset URL",
+      "ok": true,
+      "detail": "uploaded http://127.0.0.1:4173/storage/v1/object/sign/studio-uploads/e2e-user-0000-0000-0000-000000",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 uploaded clip ref is user-scoped (bucket+path)",
+      "ok": true,
+      "detail": "{\"bucket\":\"studio-uploads\",\"path\":\"e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4\"}",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 player mounts the uploaded clip with its resolved URL",
+      "ok": true,
+      "detail": "{\"src\":\"http://127.0.0.1:4173/storage/v1/object/sign/studio-uploads/e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4?token=v2\",\"readyState\":4,\"w\":318,\"h\":565,\"ratio\":0.563}",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 uploaded clip trims",
+      "ok": true,
+      "detail": "0 -> 0.0666666666666667",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 uploaded clip splits",
+      "ok": true,
+      "detail": "14 -> 15",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 undo reverts the uploaded split",
+      "ok": true,
+      "detail": "",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 render-project enqueued for the uploaded project",
+      "ok": true,
+      "detail": "",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 export shows download link",
+      "ok": true,
+      "detail": "{\"href\":\"https://stub.test/render-final.mp4\",\"text\":\" Download MP4\"}",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 download link serves a real video/mp4",
+      "ok": true,
+      "detail": "video/mp4, 1144743 bytes",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W2 no fatal client errors during uploaded workflow",
+      "ok": true,
+      "detail": "none",
+      "workflow": "W2-uploaded-interview"
+    },
+    {
+      "name": "W3 generated clip exposes a canonical ref (bucket+path) in the project state",
+      "ok": true,
+      "detail": "{\"bucket\":\"videos\",\"path\":\"e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4\"}",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 media-sign rotates the URL for an unchanged ref (stateful stub)",
+      "ok": true,
+      "detail": "http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4?token=v4 -> http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4?token=v5",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 no media-sign call for another user path (self-guard)",
+      "ok": true,
+      "detail": "8 media-sign calls, all 200 for user A",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 reload re-signs the clip through media-sign (client-side recovery)",
+      "ok": true,
+      "detail": "2 new media-sign calls after reload",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 reload keeps the canonical ref and refreshes the clip URL",
+      "ok": true,
+      "detail": "http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96 -> http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 preview still plays with the refreshed URL",
+      "ok": true,
+      "detail": "{\"src\":\"http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4?token=v7\",\"readyState\":4,\"w\":318,\"h\":565,\"ratio\":0.563}",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 render-project enqueued after recovery",
+      "ok": true,
+      "detail": "",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 export still produces a download link",
+      "ok": true,
+      "detail": "{\"href\":\"https://stub.test/render-final.mp4\",\"text\":\" Download MP4\"}",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 export downloads a real video/mp4 with the refreshed URL",
+      "ok": true,
+      "detail": "video/mp4, 1144743 bytes",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 autosave after recovery persists the ref and the refreshed URL",
+      "ok": true,
+      "detail": "http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W3 no fatal client errors during media recovery",
+      "ok": true,
+      "detail": "none",
+      "workflow": "W3-media-recovery"
+    },
+    {
+      "name": "W4 user B creates their own project",
+      "ok": true,
+      "detail": "project=deab1dc4-f875-4a26-b1b1-5035474f4fcc",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 SELECT studio_projects for user A row as user B returns nothing",
+      "ok": true,
+      "detail": "null",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 SELECT studio_projects list as user B returns only user B rows",
+      "ok": true,
+      "detail": "[{\"id\":\"deab1dc4-f875-4a26-b1b1-5035474f4fcc\",\"user_id\":\"e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb\"}]",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 UI shows \"not found or access denied\" for user A project id",
+      "ok": true,
+      "detail": "SubwayTakes Interview Creator Dashboard Create New Library Templates Analytics 100 credits Free SubwayTakes U Could not open this project Project not found or access denied Try again",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 no media element renders for another user project",
+      "ok": true,
+      "detail": "0 video elements",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 media-sign rejects user B signing user A object (404, no URL fabricated)",
+      "ok": true,
+      "detail": "{\"error\":\"Object not found\"}",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 cross-user media-sign attempt recorded with 404",
+      "ok": true,
+      "detail": "[{\"bucket\":\"videos\",\"path\":\"e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4\",\"user\":\"e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb\",\"status\":404}]",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 media-sign rejects an unlisted bucket (400, no URL fabricated)",
+      "ok": true,
+      "detail": "{\"error\":\"bucket must be one of: videos, studio-uploads, studio-exports\"}",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 media-sign rejects traversal/relative path segments (400)",
+      "ok": true,
+      "detail": "{\"error\":\"path must not contain empty or relative segments\"}",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 media-sign rejects an absolute path (400)",
+      "ok": true,
+      "detail": "{\"error\":\"path must be a relative storage path\"}",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 export of another user project is rejected",
+      "ok": true,
+      "detail": "status=404 body={\"error\":\"Not found\"}",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 another user render job row is invisible (RLS simulation)",
+      "ok": true,
+      "detail": "[]",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 control — user B renders their own project",
+      "ok": true,
+      "detail": "https://stub.test/render-final.mp4",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 control — user B download serves a real video/mp4",
+      "ok": true,
+      "detail": "video/mp4, 1144743 bytes",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 control — user B project row belongs to user B",
+      "ok": true,
+      "detail": "user_id=e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 user A session still opens its own project",
+      "ok": true,
+      "detail": "http://127.0.0.1:4173/storage/v1/object/sign/videos/e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96",
+      "workflow": "W4-cross-user-security"
+    },
+    {
+      "name": "W4 no fatal client errors during cross-user security flow",
+      "ok": true,
+      "detail": "none",
+      "workflow": "W4-cross-user-security"
+    }
+  ],
+  "state": {
+    "patches": 7,
+    "inserts": 3,
+    "sceneStatusCalls": 2,
+    "renderPolls": 6,
+    "projects": [
+      {
+        "id": "d228fd0a-ae87-4b4d-96fd-ff0f7217cffa",
+        "user_id": "e2e-user-0000-0000-0000-000000000000",
+        "title": "Is it okay to ghost a situationship?"
+      },
+      {
+        "id": "7fdc7815-41fb-4a76-bc48-ab168f8b33e3",
+        "user_id": "e2e-user-0000-0000-0000-000000000000",
+        "title": "Is it okay to ghost a situationship?"
+      },
+      {
+        "id": "deab1dc4-f875-4a26-b1b1-5035474f4fcc",
+        "user_id": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "title": "Is it okay to ghost a situationship?"
+      }
+    ],
+    "edgeCalls": [
+      {
+        "fn": "plan-interview",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "generate-scene",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "scene-status",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "scene-status",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "render-project",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "plan-interview",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "render-project",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "render-project",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "plan-interview",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      },
+      {
+        "fn": "render-project",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      },
+      {
+        "fn": "render-project",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      },
+      {
+        "fn": "media-sign",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      }
+    ],
+    "storageUploads": [
+      {
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000"
+      }
+    ],
+    "signCalls": [
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v1",
+        "source": "scene-status"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v2",
+        "source": "media-sign"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v3",
+        "source": "media-sign"
+      },
+      {
+        "key": "studio-uploads:e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v1",
+        "source": "storage-sign"
+      },
+      {
+        "key": "studio-uploads:e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v2",
+        "source": "media-sign"
+      },
+      {
+        "key": "studio-uploads:e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v3",
+        "source": "media-sign"
+      },
+      {
+        "key": "studio-uploads:e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v4",
+        "source": "media-sign"
+      },
+      {
+        "key": "studio-uploads:e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v5",
+        "source": "media-sign"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v4",
+        "source": "media-sign"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v5",
+        "source": "media-sign"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v6",
+        "source": "media-sign"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v7",
+        "source": "media-sign"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v8",
+        "source": "media-sign"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v9",
+        "source": "media-sign"
+      },
+      {
+        "key": "videos:e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "token": "v10",
+        "source": "media-sign"
+      }
+    ],
+    "mediaSignCalls": [
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "studio-uploads",
+        "path": "e2e-user-0000-0000-0000-000000000000/7fdc7815-41fb-4a76-bc48-ab168f8b33e3/opening_hook-1791775565810-scene-a.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "status": 404
+      },
+      {
+        "bucket": "evil-bucket",
+        "path": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb/clip.mp4",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "status": 400
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb/../../e2e-user-0000-0000-0000-000000000000/clip.mp4",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "status": 400
+      },
+      {
+        "bucket": "videos",
+        "path": "/etc/passwd",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "status": 400
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      },
+      {
+        "bucket": "videos",
+        "path": "e2e-user-0000-0000-0000-000000000000/d228fd0a-ae87-4b4d-96fd-ff0f7217cffa/scene-opening_hook.mp4",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200
+      }
+    ],
+    "renderCalls": [
+      {
+        "projectId": "d228fd0a-ae87-4b4d-96fd-ff0f7217cffa",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200,
+        "jobId": "job-d228fd0a"
+      },
+      {
+        "projectId": "7fdc7815-41fb-4a76-bc48-ab168f8b33e3",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200,
+        "jobId": "job-7fdc7815"
+      },
+      {
+        "projectId": "d228fd0a-ae87-4b4d-96fd-ff0f7217cffa",
+        "user": "e2e-user-0000-0000-0000-000000000000",
+        "status": 200,
+        "jobId": "job-d228fd0a"
+      },
+      {
+        "projectId": "d228fd0a-ae87-4b4d-96fd-ff0f7217cffa",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "status": 404
+      },
+      {
+        "projectId": "deab1dc4-f875-4a26-b1b1-5035474f4fcc",
+        "user": "e2e-user-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "status": 200,
+        "jobId": "job-deab1dc4"
+      }
+    ]
+  }
+}

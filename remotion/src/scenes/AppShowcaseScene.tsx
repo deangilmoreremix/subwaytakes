@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, interpolate, spring, Easing } from "remotion";
+import { AbsoluteFill, interpolate } from "remotion";
 
 interface AppShowcaseSceneProps {
   frame: number;
@@ -29,8 +29,7 @@ const showcaseItems = [
 
 export const AppShowcaseScene: React.FC<AppShowcaseSceneProps> = ({
   frame,
-  fps,
-}) => {
+}: AppShowcaseSceneProps) => {
   const titleOpacity = interpolate(frame, [0, 20], [0, 1]);
   const titleY = interpolate(frame, [0, 20], [-40, 0]);
 

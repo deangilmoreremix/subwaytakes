@@ -1,0 +1,35 @@
+# Netlify deployment for the SubwayTakes SPA.
+#
+# Environment variables to set in the Netlify UI (Site settings → Environment):
+#   VITE_SUPABASE_URL   — the shared project URL (https://<ref>.supabase.co)
+#   VITE_SUPABASE_ANON_KEY — the anon key
+# NEVER set SUPABASE_SERVICE_ROLE_KEY, MUAPI_API_KEY or OPENAI_API_KEY here:
+# they are server-side secrets and Vite would inline them into the bundle.
+
+[build]
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--no-audit --no-fund"
+
+# SPA fallback: /studio/subway-editor/:projectId is a deep link and must
+# survive a hard refresh. status 200 (not force) so real assets still 404
+# correctly when they genuinely do not exist.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer-when-downgrade"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

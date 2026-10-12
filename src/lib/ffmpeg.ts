@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
+import { getAuthToken } from './supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export interface ThumbnailOptions {
   width?: number;
@@ -49,7 +49,7 @@ export async function generateThumbnail(
     const response = await fetch(`${SUPABASE_URL}/functions/v1/process-video`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -82,7 +82,7 @@ export async function stitchVideos(
     const response = await fetch(`${SUPABASE_URL}/functions/v1/process-video`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -116,7 +116,7 @@ export async function addCaptions(
     const response = await fetch(`${SUPABASE_URL}/functions/v1/process-video`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -153,7 +153,7 @@ export async function convertVideo(
     const response = await fetch(`${SUPABASE_URL}/functions/v1/process-video`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -187,7 +187,7 @@ export async function trimVideo(
     const response = await fetch(`${SUPABASE_URL}/functions/v1/process-video`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -214,7 +214,7 @@ export async function getVideoInfo(videoUrl: string): Promise<VideoInfo> {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/process-video`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

@@ -9,6 +9,7 @@ const TYPE_LABELS: Record<ClipType, string> = {
   motivational: 'Motivational',
   wisdom_interview: 'Wisdom',
   studio_interview: 'Studio',
+  muapi: 'MuAPI',
 };
 
 const TYPE_COLORS: Record<ClipType, string> = {
@@ -17,6 +18,7 @@ const TYPE_COLORS: Record<ClipType, string> = {
   motivational: 'bg-red-500/20 text-red-300',
   wisdom_interview: 'bg-yellow-500/20 text-yellow-300',
   studio_interview: 'bg-sky-500/20 text-sky-300',
+  muapi: 'bg-violet-500/20 text-violet-300',
 };
 
 interface Props {

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getAuthToken } from './supabase';
 import type {
   Episode,
   EpisodeShot,
@@ -17,7 +18,6 @@ import { generateScript } from './scriptEngine';
 import { buildAllShotPrompts } from './episodePromptEngine';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const CAMERA_MAP: Record<ShotType, CameraDirection> = {
   cold_open: 'two-shot',
@@ -41,7 +41,7 @@ async function triggerShotGeneration(shot: EpisodeShot): Promise<void> {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-video`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -101,7 +101,7 @@ export async function createEpisode(options: CreateEpisodeOptions): Promise<Epis
   let hostCharacter: Omit<CharacterBible, 'id' | 'user_id' | 'created_at'>;
   let guestCharacter: Omit<CharacterBible, 'id' | 'user_id' | 'created_at'>;
   let hostId: string | null = hostCharacterId || null;
-  let guestId: string | null = guestCharacterId || null;
+  const guestId: string | null = guestCharacterId || null;
 
   if (hostCharacterId) {
     const { data } = await supabase
@@ -299,7 +299,7 @@ async function triggerStitching(episodeId: string): Promise<void> {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/stitch-episode`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ episode_id: episodeId }),

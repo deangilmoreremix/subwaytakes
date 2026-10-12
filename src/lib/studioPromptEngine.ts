@@ -53,7 +53,7 @@ export function buildStudioInterviewPrompt(
     ? `Guest: ${subjectParts.join(', ')}.`
     : 'Guest: Professional, articulate, confident speaker with genuine expertise on the topic.';
 
-  let prompt = `Vertical 9:16 studio interview video, ${durationSeconds} seconds, single continuous shot.
+  const prompt = `Vertical 9:16 studio interview video, ${durationSeconds} seconds, single continuous shot.
 
 STUDIO ENVIRONMENT:
 ${setupPrompt}
