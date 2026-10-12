@@ -450,8 +450,12 @@ Deno.test("media-sign: paths referenced by branding.logoRef are owned", async ()
     assertEquals(response.status, 200);
     const body = await response.json() as { signedUrl: string };
     assertIncludes(body.signedUrl, `/object/sign/studio-uploads/${logoPath}`);
-    // the ownership proof went through the caller's project lookup (rule b)
-    assertEquals(calls.length, 1);
+    // the ownership proof went through the caller's project lookup (rule b):
+    // exactly one PostgREST query, scoped to the caller
+    const ownershipQueries = restCalls(calls);
+    assertEquals(ownershipQueries.length, 1);
+    assertIncludes(ownershipQueries[0]!.url, "studio_projects");
+    assertIncludes(ownershipQueries[0]!.url, encodeURIComponent(USER_ID));
   } finally {
     restore();
   }
