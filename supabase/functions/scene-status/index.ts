@@ -8,7 +8,7 @@ import { muapiDownload, muapiPollResult } from "../_shared/muapi.ts";
  *
  * POST /functions/v1/scene-status
  * Body: { project_id, beat_id, request_id }
- * 200: { status: "done", assetUrl }   (clip stored in the public videos bucket
+ * 200: { status: "done", assetUrl }   (clip stored in the private videos bucket
  *      and wired into the project's video track)
  * 200: { status: "processing" }       (client polls again, ~every 5s)
  * 400: validation errors, 404: project not found / not owned by caller,
@@ -131,10 +131,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: publicUrlData } = supabase.storage.from("videos").getPublicUrl(storagePath);
-    const assetUrl = publicUrlData.publicUrl;
-    if (!isHttpUrl(assetUrl)) {
-      return jsonResponse({ error: "Storage did not return a public URL" }, 500, cors);
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from("videos")
+      .createSignedUrl(storagePath, 604800);
+    const assetUrl = signedUrlData?.signedUrl;
+    if (signedUrlError || !assetUrl || !isHttpUrl(assetUrl)) {
+      return jsonResponse({ error: "Could not sign private scene video for playback" }, 500, cors);
     }
 
     const { data: projectRow, error: projectLoadError } = await supabase
