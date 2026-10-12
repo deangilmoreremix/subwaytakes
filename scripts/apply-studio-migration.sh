@@ -69,7 +69,7 @@ MIGRATION_PATH="$REPO_ROOT/supabase/migrations/$MIGRATION_NAME"
 # as of 2026-10-12 on branch feat/subway-interview-studio (399 lines). Update
 # THIS constant — and only this constant — when the file is intentionally
 # changed and reviewed (the exact procedure is printed on hash mismatch).
-PINNED_SHA256="a9447a108eeea58bfd3ebd49ed70b3d2eb4785673cf981a3066a45ea64239753"
+PINNED_SHA256="7949c720b587469728ce323573c7217c87583926fe193760296573b75ce6cc0a"
 
 # Expected post-apply inventory (docs/RLS_TEST_EVIDENCE.md §4, PG14.24).
 EXPECT_TABLES=3      EXPECT_POLICIES=10  EXPECT_TRIGGERS=8

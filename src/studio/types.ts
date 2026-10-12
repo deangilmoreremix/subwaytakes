@@ -18,6 +18,9 @@
 
 export const PROJECT_FORMAT_VERSION = 1;
 
+import { isMediaRef } from './mediaRefs';
+import type { MediaRef } from './mediaRefs';
+
 export type StudioTrackKind = 'video' | 'narration' | 'music' | 'ambient' | 'subtitle';
 
 export type ShotType =
@@ -39,8 +42,16 @@ export type BeatId =
 /** A single media item placed on a track. Times are in seconds on the timeline. */
 export interface StudioClip {
   id: string;
-  /** Asset URL (Supabase storage public URL or remote CDN). Empty = placeholder. */
+  /**
+   * Derived session URL (short-lived signed URL for private buckets, or an
+   * external CDN URL). NOT the identity of the asset — see assetRef.
+   */
   assetUrl: string;
+  /**
+   * Canonical identity of the asset (bucket + object path). Persist THIS.
+   * Optional for legacy projects and external URLs.
+   */
+  assetRef?: MediaRef;
   /** Asset kind: generated AI clip, user upload, or pure audio asset. */
   assetKind: 'generated' | 'uploaded' | 'audio';
   /** Which beat of the interview preset this clip belongs to (if any). */
@@ -89,6 +100,9 @@ export interface StudioCaption {
 
 export interface StudioBranding {
   handle: string;
+  /** Canonical identity of the logo asset (bucket + path). */
+  logoRef?: MediaRef;
+  /** Derived session URL for the logo (short-lived signed URL when private). */
   logoUrl?: string;
   watermarkText: string;
   watermarkPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
@@ -255,6 +269,7 @@ function parseClip(raw: unknown): StudioClip | null {
   return {
     id: str(r.id, crypto.randomUUID()),
     assetUrl: str(r.assetUrl, ''),
+    ...(isMediaRef(r.assetRef) ? { assetRef: r.assetRef } : {}),
     assetKind: (['generated', 'uploaded', 'audio'] as const).includes(r.assetKind as never)
       ? (r.assetKind as StudioClip['assetKind'])
       : 'generated',
@@ -348,6 +363,7 @@ export function parseProject(input: unknown): ParseResult {
   const rawBranding = (r.branding && typeof r.branding === 'object' ? r.branding : {}) as Record<string, unknown>;
   const branding: StudioBranding = {
     handle: str(rawBranding.handle, '@subwaytakes'),
+    ...(isMediaRef(rawBranding.logoRef) ? { logoRef: rawBranding.logoRef } : {}),
     logoUrl: rawBranding.logoUrl === undefined ? undefined : str(rawBranding.logoUrl, ''),
     watermarkText: str(rawBranding.watermarkText, str(rawBranding.handle, '@subwaytakes')),
     watermarkPosition: (['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const).includes(

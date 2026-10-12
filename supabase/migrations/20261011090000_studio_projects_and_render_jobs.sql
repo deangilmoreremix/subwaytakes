@@ -244,6 +244,11 @@ CREATE TABLE IF NOT EXISTS public.studio_render_jobs (
   status text NOT NULL DEFAULT 'queued'
     CHECK (status IN ('queued', 'running', 'done', 'error')),
   progress integer NOT NULL DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
+  -- output_url / captioned_output_url keep the LAST signed URL for
+  -- convenience (short-lived); the canonical identity is the *_ref pair,
+  -- from which fresh signed URLs are derived on demand.
+  output_ref jsonb,
+  captioned_output_ref jsonb,
   output_url text,
   captioned_output_url text,
   error text,
@@ -309,6 +314,7 @@ CREATE TABLE IF NOT EXISTS public.muapi_caption_jobs (
   theme text NOT NULL DEFAULT 'Hormozi_1',
   status text NOT NULL DEFAULT 'queued'
     CHECK (status IN ('queued', 'running', 'done', 'error')),
+  output_ref jsonb,
   output_url text,
   -- editable mode: transcribed timed captions returned to the editor
   captions jsonb,
