@@ -8,6 +8,13 @@ import { config, supabaseConfigured } from './config';
  * between queue states and to re-sign private media for a render.
  */
 
+/** Canonical media reference persisted with a finished render. */
+export interface RenderOutputRef {
+  bucket: string;
+  path: string;
+  kind: 'video' | 'audio' | 'image';
+}
+
 export interface RenderJobRow {
   id: string;
   user_id: string;
@@ -15,7 +22,10 @@ export interface RenderJobRow {
   status: 'queued' | 'running' | 'done' | 'error';
   progress: number;
   output_url: string | null;
+  /** Canonical ref of the rendered MP4 (jsonb) — survives URL expiry. */
+  output_ref: RenderOutputRef | null;
   captioned_output_url: string | null;
+  captioned_output_ref: unknown | null;
   error: string | null;
   worker_id: string | null;
   /** Snapshot of the project JSON at enqueue time (jsonb, NOT NULL). */
@@ -174,13 +184,25 @@ export async function heartbeatJob(jobId: string): Promise<void> {
   if (error) throw new Error(`heartbeat failed: ${error.message}`);
 }
 
-export async function markJobDone(jobId: string, outputUrl: string): Promise<void> {
+export async function markJobDone(
+  jobId: string,
+  outputUrl: string,
+  outputRef?: RenderOutputRef | null,
+): Promise<void> {
   const supabase = requireClient();
+  // Persist the canonical ref beside the (short-lived) signed URL so the
+  // export stays re-signable after the URL expires. A structurally invalid
+  // ref is dropped rather than stored.
+  const ref =
+    outputRef && typeof outputRef.bucket === 'string' && typeof outputRef.path === 'string'
+      ? outputRef
+      : null;
   const { error } = await supabase
     .from('studio_render_jobs')
     .update({
       status: 'done',
       output_url: outputUrl,
+      output_ref: ref,
       progress: 100,
       error: null,
       updated_at: new Date().toISOString(),
@@ -188,6 +210,11 @@ export async function markJobDone(jobId: string, outputUrl: string): Promise<voi
     .eq('id', jobId)
     .eq('status', 'running'); // never overwrite a job another worker reclaimed
   if (error) throw new Error(`mark done failed: ${error.message}`);
+}
+
+/** Build the canonical ref for a render output stored under studio-exports. */
+export function renderOutputRef(storagePath: string): RenderOutputRef {
+  return { bucket: 'studio-exports', path: storagePath, kind: 'video' };
 }
 
 export async function markJobError(jobId: string, message: string): Promise<void> {

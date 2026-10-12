@@ -218,9 +218,21 @@ export async function muapiPollResult(
 }
 
 /** Download a provider output URL. Streams with an abort timeout. */
+/** Minimum plausible size for a real video/audio asset (bytes). */
+export const MUAPI_MIN_OUTPUT_BYTES = 10240;
+
+export interface MuapiDownloadOptions extends MuapiSubmitOptions {
+  /**
+   * Accepted content-type prefixes. A provider response that is not one of
+   * these (an HTML error page, a JSON error body, ...) must never be stored
+   * as a media asset.
+   */
+  acceptContentTypes?: string[];
+}
+
 export async function muapiDownload(
   url: string,
-  options: MuapiSubmitOptions = {},
+  options: MuapiDownloadOptions = {},
 ): Promise<Uint8Array> {
   const fetchImpl = options.fetchImpl ?? (globalThis.fetch as MuapiFetch);
 
@@ -241,7 +253,25 @@ export async function muapiDownload(
     );
   }
 
+  // Provider outputs must be real media: reject non-media content types and
+  // implausibly small bodies so a JSON/HTML error page can never be uploaded
+  // and stored as an MP4/AAC asset.
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  const accepted = options.acceptContentTypes ?? ["video/", "audio/"];
+  if (accepted.length > 0 && !accepted.some((prefix) => contentType.startsWith(prefix))) {
+    throw new MuapiError(
+      `MuAPI output is not a media file (content-type "${contentType || "unknown"}")`,
+      500,
+    );
+  }
+
   const buffer = await response.arrayBuffer();
+  if (buffer.byteLength < MUAPI_MIN_OUTPUT_BYTES) {
+    throw new MuapiError(
+      `MuAPI output is too small to be a media file (${buffer.byteLength} bytes)`,
+      500,
+    );
+  }
   return new Uint8Array(buffer);
 }
 

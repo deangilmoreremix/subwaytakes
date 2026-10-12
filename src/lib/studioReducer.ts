@@ -10,6 +10,7 @@
 
 import type { MediaRef } from '../studio/mediaRefs';
 import type {
+  BeatId,
   StudioBranding,
   StudioCaption,
   StudioClip,
@@ -49,6 +50,12 @@ export type StudioAction =
   | { type: 'SET_TRACK_VOLUME'; trackId: string; volume: number }
   | { type: 'TOGGLE_TRACK_MUTE'; trackId: string }
   | { type: 'SET_CLIP_FADE'; clipId: string; fadeIn?: number; fadeOut?: number }
+  | {
+      type: 'SET_CLIP_BEAT';
+      clipId: string;
+      /** Beat to link the clip to, or null to unlink it from its beat. */
+      beatId: BeatId | null;
+    }
   | {
       type: 'SET_CLIP_ASSET';
       clipId: string;
@@ -286,6 +293,29 @@ export function studioReducer(project: StudioProject, action: StudioAction): Stu
       });
     }
 
+    case 'SET_CLIP_BEAT': {
+      const located = findClip(project, action.clipId);
+      if (!located) return project;
+      const currentBeat = located.clip.beatId ?? null;
+      if (currentBeat === action.beatId) return project;
+      const scenePlan = project.scenePlan.map((entry) => {
+        // Release the beat from any other clip that claimed it, then attach
+        // this clip to the target beat (and claim the scene-plan entry).
+        if (entry.beatId === currentBeat && entry.clipId === action.clipId) {
+          return { ...entry, clipId: undefined };
+        }
+        if (action.beatId && entry.beatId === action.beatId) {
+          return { ...entry, clipId: action.clipId };
+        }
+        return entry;
+      });
+      const next = mapClip(project, action.clipId, (c) => ({
+        ...c,
+        beatId: action.beatId ?? undefined,
+      }));
+      return { ...next, scenePlan };
+    }
+
     case 'SET_CLIP_ASSET': {
       const located = findClip(project, action.clipId);
       if (!located) return project;
@@ -319,7 +349,7 @@ export function studioReducer(project: StudioProject, action: StudioAction): Stu
         const end = Math.max(start + 0.1, merged.end);
         if (Math.abs(caption.start - start) < 1e-6 && Math.abs(caption.end - end) < 1e-6 &&
             caption.text === merged.text && caption.kind === merged.kind &&
-            caption.speaker === merged.speaker) {
+            caption.speaker === merged.speaker && caption.style === merged.style) {
           return caption;
         }
         return { ...merged, start, end };

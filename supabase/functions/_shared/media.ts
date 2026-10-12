@@ -76,6 +76,11 @@ export function assertMediaPath(value: unknown): string {
   if (value.startsWith("/") || value.includes("\\")) {
     throw new HttpError(400, "path must be a relative storage path");
   }
+  // Control characters (NUL, C0, DEL) can truncate downstream headers/URLs.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
+    throw new HttpError(400, "path must not contain control characters");
+  }
   const segments = value.split("/");
   if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
     throw new HttpError(400, "path must not contain empty or relative segments");

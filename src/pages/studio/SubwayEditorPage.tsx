@@ -111,6 +111,17 @@ export function SubwayEditorPage() {
   const [activeTab, setActiveTab] = useState<StudioTab>('scenes');
   const [titleDraft, setTitleDraft] = useState(project.title);
 
+  /**
+   * The title commits on a short debounce as well as on blur/Enter: a typed
+   * title that is never blurred used to be lost (nothing dispatched, nothing
+   * autosaved).
+   */
+  useEffect(() => {
+    if (titleDraft === project.title) return;
+    const timer = setTimeout(() => dispatch({ type: 'SET_TITLE', title: titleDraft }), 400);
+    return () => clearTimeout(timer);
+  }, [titleDraft, project.title, dispatch]);
+
   const fps = project.fps;
   const durationInFrames = useMemo(() => projectDurationInFrames(project), [project]);
   const totalSeconds = useMemo(() => projectDurationSeconds(project), [project]);

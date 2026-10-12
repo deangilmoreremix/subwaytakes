@@ -343,6 +343,18 @@ export function useStudioRender(
       setError('Project is still saving — wait for the first autosave, then retry.');
       return;
     }
+    // An empty timeline cannot render (the worker rejects it): refuse here
+    // with an explanation instead of enqueueing a doomed job.
+    const hasContent = projectRef.current.tracks.some(
+      (track) => track.kind !== 'subtitle' && track.clips.length > 0,
+    );
+    if (!hasContent) {
+      setError(
+        'This project has no clips yet. Generate scenes or upload footage before rendering.',
+      );
+      setBusy(false);
+      return;
+    }
     setBusy(true);
     setError(null);
     setNote(null);

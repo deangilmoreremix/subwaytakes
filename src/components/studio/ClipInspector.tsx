@@ -361,9 +361,18 @@ export function ClipInspector({ project, selection, dispatch, playheadSeconds }:
           <select
             value={clip.beatId ?? ''}
             onChange={(event) => {
-              const beatId = event.target.value as (typeof beats)[number]['beatId'];
+              const value = event.target.value;
+              // Record the beat association AND move the clip to the beat's
+              // timeline position — the association used to be dropped, so the
+              // select snapped back and the link never existed.
+              if (value === '') {
+                dispatch({ type: 'SET_CLIP_BEAT', clipId: clip.id, beatId: null });
+                return;
+              }
+              const beatId = value as (typeof beats)[number]['beatId'];
               const beat = beats.find((entry) => entry.beatId === beatId);
               if (!beat) return;
+              dispatch({ type: 'SET_CLIP_BEAT', clipId: clip.id, beatId });
               dispatch({ type: 'MOVE_CLIP', clipId: clip.id, newStart: beat.start });
             }}
             className="w-full rounded-xl border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 focus:border-amber-500/50 focus:outline-none focus:ring-1 focus:ring-amber-500/50"

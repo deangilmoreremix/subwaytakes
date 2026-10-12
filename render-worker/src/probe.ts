@@ -114,6 +114,12 @@ export interface VerifyOptions {
   fps?: number;
   /** Expected pixel format (delivery spec). Checked when the probe reports one. */
   pixFmt?: string;
+  /**
+   * Accept full-range equivalents of the delivery pixel format (e.g. yuvj420p
+   * for yuv420p). Only ever set for the RAW pre-render gate — the final gate
+   * must require the exact delivery format.
+   */
+  allowFullRangePixFmt?: boolean;
 }
 
 export interface VerifyResult {
@@ -125,6 +131,15 @@ const DURATION_TOLERANCE_SECONDS = 0.5;
 const FPS_TOLERANCE = 0.5;
 /** Players (and Safari in particular) refuse 10-bit / non-4:2:0 sources. */
 const REQUIRED_PIXEL_FORMAT = 'yuv420p';
+/**
+ * Full-range variants of the delivery pixel format. Remotion's headless Chrome
+ * composites in `yuvj420p` even when asked for `yuv420p`, so the RAW render
+ * gate must accept the full-range equivalent — the FINAL gate still requires
+ * exactly `yuv420p` (normalization converts it).
+ */
+export const FULL_RANGE_PIXEL_FORMAT_EQUIVALENTS: Record<string, string[]> = {
+  yuv420p: ['yuvj420p'],
+};
 
 /**
  * Verify a rendered file against the delivery spec BEFORE it is accepted.
@@ -158,7 +173,12 @@ export function verifyDelivery(probe: ProbeInfo, options: VerifyOptions): Verify
   }
   const requiredPixFmt = options.pixFmt ?? REQUIRED_PIXEL_FORMAT;
   if (probe.pixFmt !== undefined && probe.pixFmt !== requiredPixFmt) {
-    failures.push(`pixel format is "${probe.pixFmt}", expected ${requiredPixFmt}`);
+    const accepted =
+      options.allowFullRangePixFmt === true &&
+      (FULL_RANGE_PIXEL_FORMAT_EQUIVALENTS[requiredPixFmt] ?? []).includes(probe.pixFmt);
+    if (!accepted) {
+      failures.push(`pixel format is "${probe.pixFmt}", expected ${requiredPixFmt}`);
+    }
   }
   if (options.requireAudio && probe.audioCodec !== 'aac') {
     failures.push(`audio codec is "${probe.audioCodec ?? 'none'}", expected aac`);

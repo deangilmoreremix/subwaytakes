@@ -42,7 +42,11 @@ function parseKind(value: unknown): MediaKind {
   return MEDIA_KINDS.includes(value as MediaKind) ? (value as MediaKind) : "video";
 }
 
-Deno.serve(async (req: Request) => {
+/**
+ * Handler exported separately from the Deno.serve wiring so it can be driven
+ * directly in tests (same pattern as plan-interview / generate-scene).
+ */
+export async function handleMediaSignRequest(req: Request): Promise<Response> {
   const cors = buildCorsHeaders(req.headers.get("Origin"));
 
   if (req.method === "OPTIONS") {
@@ -57,7 +61,13 @@ Deno.serve(async (req: Request) => {
 
     let body: MediaSignBody;
     try {
-      body = await req.json();
+      const parsed = await req.json();
+      // A valid-JSON-but-not-an-object body (null, array, primitive) must be a
+      // 400, not a TypeError 500 when the fields are read.
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return jsonResponse({ error: "Request body must be a JSON object" }, 400, cors);
+      }
+      body = parsed as MediaSignBody;
     } catch {
       return jsonResponse({ error: "Invalid JSON body" }, 400, cors);
     }
@@ -96,4 +106,6 @@ Deno.serve(async (req: Request) => {
     const message = error instanceof Error && error.message ? error.message : "Could not sign media URL";
     return jsonResponse({ error: message }, 500, cors);
   }
-});
+}
+
+Deno.serve(handleMediaSignRequest);

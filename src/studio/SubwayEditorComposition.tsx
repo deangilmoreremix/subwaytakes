@@ -8,7 +8,7 @@ import {
   useVideoConfig,
   interpolate,
 } from 'remotion';
-import type { StudioProject, StudioClip, StudioCaption } from './types';
+import type { StudioProject, StudioClip, StudioCaption, StudioTrack } from './types';
 import { clipLength } from './types';
 import {
   readCaptionStyle,
@@ -56,7 +56,7 @@ function ClipFade({
   return <AbsoluteFill style={{ opacity }}>{children}</AbsoluteFill>;
 }
 
-function VideoClipView({ clip }: { clip: StudioClip }) {
+function VideoClipView({ clip, effectiveVolume }: { clip: StudioClip; effectiveVolume: number }) {
   const { fps, height } = useVideoConfig();
 
   if (!clip.assetUrl) {
@@ -86,7 +86,7 @@ function VideoClipView({ clip }: { clip: StudioClip }) {
       src={clip.assetUrl}
       startFrom={Math.round(clip.trimStart * fps)}
       endAt={Math.round(clip.trimEnd * fps)}
-      volume={clip.volume}
+      volume={effectiveVolume}
       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
     />
   );
@@ -95,6 +95,17 @@ function VideoClipView({ clip }: { clip: StudioClip }) {
 function AudioClipView({ clip }: { clip: StudioClip }) {
   if (!clip.assetUrl) return null;
   return <Audio src={clip.assetUrl} volume={clip.volume} />;
+}
+
+/**
+ * Single volume rule used by BOTH the preview and the render: a clip's volume
+ * multiplied by its track's volume, and zero when the track is muted. Applied
+ * to the video track's embedded audio too (the track slider/mute must affect
+ * the clip's own audio, not only narration/music/ambient layers).
+ */
+export function effectiveClipVolume(clip: StudioClip, track: StudioTrack): number {
+  if (track.muted) return 0;
+  return Math.max(0, Math.min(1, clip.volume * track.volume));
 }
 
 type CaptionPlacementBox = 'top' | 'center' | 'bottom';
@@ -333,7 +344,7 @@ export const SubwayEditorComposition: React.FC<SubwayEditorCompositionProps> = (
             layout="none"
           >
             <ClipFade clip={clip}>
-              <VideoClipView clip={clip} />
+              <VideoClipView clip={clip} effectiveVolume={effectiveClipVolume(clip, videoTrack)} />
             </ClipFade>
           </Sequence>
         );

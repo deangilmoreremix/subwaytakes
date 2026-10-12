@@ -13,6 +13,7 @@ import {
   heartbeatJob,
   markJobDone,
   markJobError,
+  renderOutputRef,
   resolveMediaRef,
   resolveAssetUrl,
   updateJobProgress,
@@ -71,6 +72,8 @@ export interface StudioTrack {
   locked?: boolean;
 }
 
+export type CaptionStyle = 'bold' | 'boxed' | 'minimal' | 'yellow';
+
 export interface StudioCaption {
   id: string;
   text: string;
@@ -78,6 +81,8 @@ export interface StudioCaption {
   end: number;
   kind: 'dialogue' | 'hook' | 'lower_third';
   speaker?: string;
+  /** Visual style variant rendered by the composition. */
+  style?: CaptionStyle;
 }
 
 export interface StudioBranding {
@@ -260,6 +265,10 @@ export function validateProjectSnapshot(input: unknown): ParseResult {
         ? (cr.kind as StudioCaption['kind'])
         : 'dialogue',
       speaker: cr.speaker === undefined ? undefined : str(cr.speaker, ''),
+      // Preserve the caption style: the editor's styles must reach the MP4.
+      ...(['bold', 'boxed', 'minimal', 'yellow'] as const).includes(cr.style as never)
+        ? { style: cr.style as CaptionStyle }
+        : {},
     });
   }
   captions.sort((a, b) => a.start - b.start);
@@ -485,6 +494,9 @@ export async function renderProjectToFile(
   }
 
   // 4. Verify the RAW render before spending time on normalization.
+  //    Remotion's headless Chrome composites in FULL-RANGE yuvj420p even when
+  //    asked for yuv420p, so the raw gate accepts the full-range equivalent;
+  //    the final gate below still requires exactly yuv420p.
   const expectedDurationSeconds = timelineDurationSeconds(signedProject);
   const rawProbe = await probeFile(rawOut);
   const rawVerify = verifyDelivery(rawProbe, {
@@ -493,6 +505,7 @@ export async function renderProjectToFile(
     height: settings.height,
     fps: settings.fps,
     requireAudio: false,
+    allowFullRangePixFmt: true,
   });
   if (!rawVerify.ok) {
     throw new Error(rawVerify.error);
@@ -529,7 +542,34 @@ export async function renderProjectToFile(
 // Job orchestration
 // ---------------------------------------------------------------------------
 
+/**
+ * Remove temp dirs left behind by a SIGKILLed previous attempt of THIS job
+ * (a killed process never runs its finally block). Scoped strictly by the
+ * job-id prefix so another job's in-flight dirs are never touched.
+ */
+function cleanupOrphanedJobTemp(jobId: string): void {
+  const prefix = `render-job-${jobId}-`;
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(os.tmpdir());
+  } catch {
+    return; // tmpdir unreadable — nothing safe to clean
+  }
+  for (const entry of entries) {
+    if (!entry.startsWith(prefix)) continue;
+    try {
+      fs.rmSync(path.join(os.tmpdir(), entry), { recursive: true, force: true });
+      console.log(`[worker] removed orphaned temp dir for job ${jobId}: ${entry}`);
+    } catch (err) {
+      console.warn(`[worker] could not remove orphaned temp dir ${entry}: ${(err as Error).message}`);
+    }
+  }
+}
+
 export async function processRenderJob(job: RenderJobRow): Promise<void> {
+  // A previous SIGKILLed attempt of this job may have left its temp dir behind
+  // (finally never runs); clean it before creating this attempt's dir.
+  cleanupOrphanedJobTemp(job.id);
   // All temp artifacts live under os.tmpdir() and are removed in finally.
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `render-job-${job.id}-`));
   let heartbeat: NodeJS.Timeout | null = null;
@@ -571,7 +611,9 @@ export async function processRenderJob(job: RenderJobRow): Promise<void> {
 
     // 7-day signed URL is what the app stores/uses.
     const signedUrl = await createSignedRenderUrl(storagePath);
-    await markJobDone(job.id, signedUrl);
+    // Persist the canonical ref beside the short-lived URL: the export must
+    // stay re-signable after the URL expires.
+    await markJobDone(job.id, signedUrl, renderOutputRef(storagePath));
 
     console.log(
       `[worker] job ${job.id} done in ${result.probe.durationSeconds?.toFixed(2)}s -> ${storagePath}`,
