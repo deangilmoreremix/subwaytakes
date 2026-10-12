@@ -19,7 +19,7 @@ import {
  * 500: MuAPI submission failed after retries (upstream message surfaced)
  */
 
-const BEAT_IDS = [
+export const BEAT_IDS = [
   "opening_hook",
   "interviewer_intro",
   "guest_responds",
@@ -30,12 +30,12 @@ const BEAT_IDS = [
 ] as const;
 
 const SHOT_TYPES = ["host", "guest", "two_shot", "reaction", "environment"] as const;
-const MUAPI_MODELS: MuapiVideoModel[] = ["veo3", "seedance", "kling"];
+export const MUAPI_MODELS: MuapiVideoModel[] = ["veo3", "seedance", "kling"];
 
-const SUBMIT_ATTEMPTS = 4;
-const SUBMIT_BACKOFF_MS = [1000, 2000, 4000];
+export const SUBMIT_ATTEMPTS = 4;
+export const SUBMIT_BACKOFF_MS = [1000, 2000, 4000];
 
-interface GenerateSceneRequest {
+export interface GenerateSceneRequest {
   project_id: string;
   beat_id: string;
   prompt: string;
@@ -43,20 +43,83 @@ interface GenerateSceneRequest {
   shot_type?: string;
 }
 
-function sleep(ms: number): Promise<void> {
+export type ParseResult =
+  | {
+      ok: true;
+      value: {
+        projectId: string;
+        beatId: typeof BEAT_IDS[number];
+        prompt: string;
+        model: MuapiVideoModel;
+        shotType?: string;
+      };
+    }
+  | { ok: false; error: string };
+
+export function parseGenerateSceneRequest(body: GenerateSceneRequest): ParseResult {
+  const { project_id: projectId, beat_id: beatId, prompt, model, shot_type: shotType } = body;
+
+  if (!projectId || typeof projectId !== "string") {
+    return { ok: false, error: "project_id is required" };
+  }
+  if (!beatId || typeof beatId !== "string" || !BEAT_IDS.includes(beatId as typeof BEAT_IDS[number])) {
+    return { ok: false, error: `beat_id is required and must be one of: ${BEAT_IDS.join(", ")}` };
+  }
+  if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
+    return { ok: false, error: "prompt is required" };
+  }
+  if (prompt.length > 10000) {
+    return { ok: false, error: "prompt exceeds maximum length of 10000 characters" };
+  }
+  if (model !== undefined && !MUAPI_MODELS.includes(model)) {
+    return { ok: false, error: `Invalid model. Must be one of: ${MUAPI_MODELS.join(", ")}` };
+  }
+  if (shotType !== undefined && !SHOT_TYPES.includes(shotType as typeof SHOT_TYPES[number])) {
+    return { ok: false, error: `Invalid shot_type. Must be one of: ${SHOT_TYPES.join(", ")}` };
+  }
+
+  return {
+    ok: true,
+    value: {
+      projectId,
+      beatId: beatId as typeof BEAT_IDS[number],
+      prompt: prompt.trim(),
+      model: model ?? "veo3",
+      ...(shotType ? { shotType } : {}),
+    },
+  };
+}
+
+/** MuAPI text-to-video request for one beat: vertical 9:16, 5s default. */
+export function buildSceneMuapiRequest(
+  model: MuapiVideoModel,
+  prompt: string,
+): { endpoint: string; payload: Record<string, unknown> } {
+  return muapiVideoRequest(model, prompt, { aspectRatio: "9:16", durationSec: 5 });
+}
+
+function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export interface SubmitRetryOptions {
+  submit?: (endpoint: string, payload: Record<string, unknown>) => Promise<string>;
+  sleep?: (ms: number) => Promise<void>;
+}
+
 /** Submit with up to 3 retries (1s/2s/4s backoff) on network errors and 5xx. */
-async function submitWithRetries(
+export async function submitWithRetries(
   endpoint: string,
   payload: Record<string, unknown>,
+  options: SubmitRetryOptions = {},
 ): Promise<string> {
+  const submit = options.submit ?? muapiSubmit;
+  const sleep = options.sleep ?? defaultSleep;
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < SUBMIT_ATTEMPTS; attempt++) {
     try {
-      return await muapiSubmit(endpoint, payload);
+      return await submit(endpoint, payload);
     } catch (error) {
       lastError = error;
       const isLastAttempt = attempt === SUBMIT_ATTEMPTS - 1;
@@ -76,7 +139,7 @@ async function submitWithRetries(
     : new MuapiError("MuAPI submission failed");
 }
 
-Deno.serve(async (req: Request) => {
+export async function handleGenerateSceneRequest(req: Request): Promise<Response> {
   const cors = buildCorsHeaders(req.headers.get("Origin"));
 
   if (req.method === "OPTIONS") {
@@ -93,46 +156,16 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Invalid JSON body" }, 400, cors);
     }
 
-    const { project_id: projectId, beat_id: beatId, prompt, model, shot_type: shotType } = body;
-
-    if (!projectId || typeof projectId !== "string") {
-      return jsonResponse({ error: "project_id is required" }, 400, cors);
+    const parsed = parseGenerateSceneRequest(body);
+    if (!parsed.ok) {
+      return jsonResponse({ error: parsed.error }, 400, cors);
     }
-    if (!beatId || typeof beatId !== "string" || !BEAT_IDS.includes(beatId as typeof BEAT_IDS[number])) {
-      return jsonResponse(
-        { error: `beat_id is required and must be one of: ${BEAT_IDS.join(", ")}` },
-        400,
-        cors,
-      );
-    }
-    if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
-      return jsonResponse({ error: "prompt is required" }, 400, cors);
-    }
-    if (prompt.length > 10000) {
-      return jsonResponse({ error: "prompt exceeds maximum length of 10000 characters" }, 400, cors);
-    }
-    if (model !== undefined && !MUAPI_MODELS.includes(model)) {
-      return jsonResponse(
-        { error: `Invalid model. Must be one of: ${MUAPI_MODELS.join(", ")}` },
-        400,
-        cors,
-      );
-    }
-    if (shotType !== undefined && !SHOT_TYPES.includes(shotType as typeof SHOT_TYPES[number])) {
-      return jsonResponse(
-        { error: `Invalid shot_type. Must be one of: ${SHOT_TYPES.join(", ")}` },
-        400,
-        cors,
-      );
-    }
+    const { projectId, beatId, prompt, model } = parsed.value;
 
     const supabase = serviceClient();
     await assertProjectOwnership(supabase, projectId, userId);
 
-    const { endpoint, payload } = muapiVideoRequest(model ?? "veo3", prompt, {
-      aspectRatio: "9:16",
-      durationSec: 5,
-    });
+    const { endpoint, payload } = buildSceneMuapiRequest(model, prompt);
 
     const requestId = await submitWithRetries(endpoint, payload);
 
@@ -145,4 +178,6 @@ Deno.serve(async (req: Request) => {
     const message = error instanceof Error && error.message ? error.message : "Scene generation failed";
     return jsonResponse({ error: message }, 500, cors);
   }
-});
+}
+
+Deno.serve(handleGenerateSceneRequest);

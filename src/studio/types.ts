@@ -19,7 +19,15 @@
 export const PROJECT_FORMAT_VERSION = 1;
 
 import { isMediaRef } from './mediaRefs';
+import { isCaptionStyle } from './captionStyles';
+import type { CaptionStyle } from './captionStyles';
 import type { MediaRef } from './mediaRefs';
+
+// Re-export so `types.ts` is a complete surface for the project schema (the
+// clip/branding ref fields below are MediaRef). Canonical definition stays in
+// mediaRefs.ts — this is an alias, not a redefinition.
+export type { MediaRef } from './mediaRefs';
+export type { MediaKind } from './mediaRefs';
 
 export type StudioTrackKind = 'video' | 'narration' | 'music' | 'ambient' | 'subtitle';
 
@@ -96,6 +104,8 @@ export interface StudioCaption {
   kind: 'dialogue' | 'hook' | 'lower_third';
   /** Optional speaker name for lower thirds. */
   speaker?: string;
+  /** Visual style variant (rendered by SubwayEditorComposition). */
+  style?: CaptionStyle;
 }
 
 export interface StudioBranding {
@@ -339,6 +349,7 @@ export function parseProject(input: unknown): ParseResult {
         ? (cr.kind as StudioCaption['kind'])
         : 'dialogue',
       speaker: cr.speaker === undefined ? undefined : str(cr.speaker, ''),
+      ...(isCaptionStyle(cr.style) ? { style: cr.style } : {}),
     });
   }
   captions.sort((a, b) => a.start - b.start);

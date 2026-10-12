@@ -97,7 +97,9 @@ export function AppShell({ children }: AppShellProps) {
 
   const title = getTitleFromPath(location.pathname);
   const displayInitial = profile?.display_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U';
-  const credits = profile?.credits_balance ?? 0;
+  // `user_profiles` is a shared-database table that may be absent or shaped
+  // differently: the chip degrades to a dash instead of claiming 0 credits.
+  const credits = profile?.credits_balance ?? null;
 
   function isNavActive(section: NavSection): boolean {
     const paths = section.matchPaths || [section.path];
@@ -170,7 +172,7 @@ export function AppShell({ children }: AppShellProps) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-medium text-white">{credits} credits</span>
+                  <span className="text-sm font-medium text-white">{credits ?? '–'} credits</span>
                 </div>
                 <span className="text-xs text-zinc-500 capitalize">{profile?.subscription_tier || 'free'}</span>
               </div>

@@ -207,7 +207,7 @@ async function main(): Promise<number> {
     console.log('\n[c] running render pipeline (remotion render -> probe -> normalize)...');
     const result = await renderProjectToFile(parsed.project, {
       workDir,
-      renderSettings: { width: 1080, height: 1920 },
+      renderSettings: { width: 1080, height: 1920, fps: 30 },
     });
     console.log(`    final output: ${result.outputPath}`);
 

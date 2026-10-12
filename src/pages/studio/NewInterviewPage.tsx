@@ -4,7 +4,7 @@ import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 
 import type { ShotType, StudioCaption, StudioScenePlanEntry } from '../../studio/types';
 import { createEmptyProject, sanitizeProject } from '../../studio/types';
-import { INTERVIEW_BEATS, buildHookCaption, buildPresetTracks } from '../../studio/interviewPreset';
+import { INTERVIEW_BEATS, buildBeatVideoPrompt, buildHookCaption, buildPresetTracks } from '../../studio/interviewPreset';
 import {
   createProject,
   describeError,
@@ -20,6 +20,16 @@ const ENVIRONMENTS: Array<[string, string]> = [
   ['inside_train', 'Inside the train'],
   ['train_arriving', 'Train arriving'],
 ];
+
+/** Richer descriptions handed to the planner / prompt builder per environment. */
+const ENVIRONMENT_DESCRIPTIONS: Record<string, string> = {
+  subway_platform:
+    'a NYC subway platform, tiled walls with ads, a train arriving, fluorescent lighting, commuters waiting',
+  inside_train:
+    'the interior of a moving NYC subway car, grab poles, rattling windows, fluorescent lighting, passengers in the background',
+  train_arriving:
+    'a NYC subway platform as the train pulls in, wind and motion, screeching brakes, fluorescent lighting',
+};
 
 const SPEAKERS: Array<'host' | 'guest' | 'none'> = ['host', 'guest', 'none'];
 
@@ -38,6 +48,11 @@ export function NewInterviewPage() {
     [environment],
   );
 
+  const environmentDescription = useMemo(
+    () => ENVIRONMENT_DESCRIPTIONS[environment] ?? environmentLabel,
+    [environment, environmentLabel],
+  );
+
   const canSubmit = topic.trim().length >= 3 && status !== 'planning' && status !== 'creating';
 
   async function buildProject(options: {
@@ -48,6 +63,8 @@ export function NewInterviewPage() {
   }): Promise<string> {
     const { beats: plan, hookQuestion, title, handle } = options;
     const id = crypto.randomUUID();
+    const host = hostDescription.trim();
+    const guest = guestDescription.trim();
     const planByBeat = new Map<string, InterviewPlanBeat>(
       (plan ?? []).map((beat, index) => [
         typeof beat.beatId === 'string' && beat.beatId ? beat.beatId : INTERVIEW_BEATS[index]?.beatId ?? '',
@@ -80,7 +97,13 @@ export function NewInterviewPage() {
         dialogue,
         speaker,
         cameraDirection: planned?.cameraDirection?.trim() || beat.defaultCamera,
-        prompt: planned?.videoPrompt?.trim() || planned?.prompt?.trim() || '',
+        // The planner's own prompt wins; the fallback is rebuilt from the SAME
+        // host/guest descriptions entered on this page so one presentation
+        // persists across every beat.
+        prompt:
+          planned?.videoPrompt?.trim() ||
+          planned?.prompt?.trim() ||
+          buildBeatVideoPrompt(beat, topic.trim(), host, guest, environmentDescription),
       });
 
       if (dialogue) {
@@ -129,7 +152,7 @@ export function NewInterviewPage() {
           topic: topic.trim(),
           hostDescription: hostDescription.trim(),
           guestDescription: guestDescription.trim(),
-          environment: environmentLabel,
+          environment: environmentDescription,
         });
         planBeats = Array.isArray(plan.beats) ? plan.beats : null;
         hookQuestion = plan.hookQuestion ?? null;

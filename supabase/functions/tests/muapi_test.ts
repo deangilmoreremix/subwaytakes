@@ -11,8 +11,11 @@ import {
   type MuapiFetch,
 } from "../_shared/muapi.ts";
 
-Deno.env.set("MUAPI_API_KEY", "test-api-key");
-Deno.env.delete("MUAPI_BASE_URL");
+// Set inside tests (not module scope) so `deno test` needs no permission flags.
+function setTestEnv(): void {
+  Deno.env.set("MUAPI_API_KEY", "test-api-key");
+  Deno.env.delete("MUAPI_BASE_URL");
+}
 
 // --- local assertion helpers (dependency-free) -----------------------------
 
@@ -64,6 +67,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 // --- tests ------------------------------------------------------------------
 
 Deno.test("muapiSubmit: builds URL, headers and body; returns request_id", async () => {
+  setTestEnv();
   const { fetchImpl, calls } = recordingFetch(() =>
     jsonResponse({ request_id: "req_123", status: "queued", cost: 0.1 }),
   );
@@ -92,6 +96,7 @@ Deno.test("muapiSubmit: builds URL, headers and body; returns request_id", async
 });
 
 Deno.test("muapiSubmit: honours MUAPI_BASE_URL override without double slashes", async () => {
+  setTestEnv();
   Deno.env.set("MUAPI_BASE_URL", "https://muapi.example.test/api/v1/");
   try {
     const { fetchImpl, calls } = recordingFetch(() => jsonResponse({ request_id: "req_1" }));
@@ -105,6 +110,7 @@ Deno.test("muapiSubmit: honours MUAPI_BASE_URL override without double slashes",
 });
 
 Deno.test("muapiSubmit: throws MuapiError with the provider message on non-ok", async () => {
+  setTestEnv();
   const { fetchImpl } = recordingFetch(() => jsonResponse({ error: "Invalid theme" }, 400));
 
   let caught: unknown = null;
@@ -123,6 +129,7 @@ Deno.test("muapiSubmit: throws MuapiError with the provider message on non-ok", 
 });
 
 Deno.test("muapiPollResult: parses status and outputs", async () => {
+  setTestEnv();
   const { fetchImpl, calls } = recordingFetch(() =>
     jsonResponse({ id: "req_9", status: "completed", outputs: ["https://cdn.example.com/out.mp4"] }),
   );
@@ -142,6 +149,7 @@ Deno.test("muapiPollResult: parses status and outputs", async () => {
 });
 
 Deno.test("muapiPollResult: surfaces provider error and keeps only string outputs", async () => {
+  setTestEnv();
   const { fetchImpl } = recordingFetch(() =>
     jsonResponse({
       status: "failed",
@@ -158,6 +166,7 @@ Deno.test("muapiPollResult: surfaces provider error and keeps only string output
 });
 
 Deno.test("muapiDownload: streams bytes from an output URL", async () => {
+  setTestEnv();
   const payload = new Uint8Array([1, 2, 3, 4, 5]);
   const { fetchImpl, calls } = recordingFetch(() => new Response(payload, { status: 200 }));
 
@@ -169,6 +178,7 @@ Deno.test("muapiDownload: streams bytes from an output URL", async () => {
 });
 
 Deno.test("caption constants: 18 themes and 45 languages, all unique", () => {
+  setTestEnv();
   assertEquals(MUAPI_CAPTION_THEMES.length, 18);
   assertTrue(MUAPI_CAPTION_THEMES.includes("Hormozi_1"));
   assertTrue(MUAPI_CAPTION_THEMES.includes("William"));
@@ -186,6 +196,7 @@ Deno.test("caption constants: 18 themes and 45 languages, all unique", () => {
 });
 
 Deno.test("muapiVideoRequest: endpoint and payload per model", () => {
+  setTestEnv();
   const veo3 = muapiVideoRequest("veo3", "a subway interview", { aspectRatio: "9:16", durationSec: 5 });
   assertEquals(veo3.endpoint, "veo3-text-to-video");
   assertEquals(veo3.payload, { prompt: "a subway interview", aspect_ratio: "9:16" });

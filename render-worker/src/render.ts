@@ -8,14 +8,17 @@ import { probeFile, verifyDelivery, ProbeInfo } from './probe';
 import { normalizeToDeliverySpec } from './ffmpeg';
 import {
   RenderJobRow,
+  fetchProjectOwner,
   fetchProjectSnapshot,
   heartbeatJob,
   markJobDone,
   markJobError,
+  resolveMediaRef,
   resolveAssetUrl,
   updateJobProgress,
   uploadRender,
   createSignedRenderUrl,
+  type MediaRefLike,
 } from './storage';
 
 /**
@@ -26,6 +29,11 @@ import {
  * The snapshot validation below intentionally re-implements the structural
  * rules of src/studio/types.ts (`parseProject`) instead of importing them:
  * the worker is a separate deployable and the DB payload is untrusted.
+ *
+ * MEDIA: every clip ref is re-signed here, worker-side, with the service-role
+ * client AFTER an ownership check against the project row's user_id (see
+ * `resolveProjectMedia`). The resolved URLs only ever reach the Remotion props
+ * file — they are never written back to the database.
  */
 
 // ---------------------------------------------------------------------------
@@ -37,6 +45,8 @@ export type StudioTrackKind = 'video' | 'narration' | 'music' | 'ambient' | 'sub
 export interface StudioClip {
   id: string;
   assetUrl: string;
+  /** Canonical identity (bucket + path). Persist THIS; assetUrl is derived. */
+  assetRef?: MediaRefLike;
   assetKind: 'generated' | 'uploaded' | 'audio';
   beatId?: string;
   shotType?: string;
@@ -72,6 +82,8 @@ export interface StudioCaption {
 
 export interface StudioBranding {
   handle: string;
+  /** Canonical identity of the logo asset (bucket + path). */
+  logoRef?: MediaRefLike;
   logoUrl?: string;
   watermarkText: string;
   watermarkPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
@@ -98,6 +110,7 @@ export interface StudioProject {
 export interface RenderSettings {
   width: number;
   height: number;
+  fps: number;
 }
 
 const TRACK_KINDS: StudioTrackKind[] = ['video', 'narration', 'music', 'ambient', 'subtitle'];
@@ -121,6 +134,18 @@ function bool(v: unknown, fallback: boolean): boolean {
 }
 function randomId(): string {
   return randomUUID();
+}
+
+const MEDIA_REF_KINDS = ['video', 'audio', 'image'];
+
+/** Accept only structurally valid refs (mirrors isMediaRef in mediaRefs.ts). */
+function parseMediaRef(value: unknown): MediaRefLike | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const r = value as Record<string, unknown>;
+  if (typeof r.bucket !== 'string' || r.bucket.length === 0) return undefined;
+  if (typeof r.path !== 'string' || r.path.length === 0) return undefined;
+  if (typeof r.kind !== 'string' || !MEDIA_REF_KINDS.includes(r.kind)) return undefined;
+  return { bucket: r.bucket, path: r.path, kind: r.kind };
 }
 
 function isLoopbackHost(hostname: string): boolean {
@@ -188,9 +213,11 @@ export function validateProjectSnapshot(input: unknown): ParseResult {
           error: `track ${i} clip ${j} has invalid assetUrl "${assetUrl}" (must be https, or http on loopback)`,
         };
       }
+      const assetRef = parseMediaRef(c.assetRef);
       clips.push({
         id: str(c.id, randomId()),
         assetUrl,
+        ...(assetRef ? { assetRef } : {}),
         assetKind: (['generated', 'uploaded', 'audio'] as const).includes(c.assetKind as never)
           ? (c.assetKind as StudioClip['assetKind'])
           : 'generated',
@@ -241,8 +268,10 @@ export function validateProjectSnapshot(input: unknown): ParseResult {
   if (rawBranding.watermarkText !== undefined && typeof rawBranding.watermarkText !== 'string') {
     return { ok: false, error: 'branding.watermarkText must be a string' };
   }
+  const logoRef = parseMediaRef(rawBranding.logoRef);
   const branding: StudioBranding = {
     handle: str(rawBranding.handle, '@subwaytakes'),
+    ...(logoRef ? { logoRef } : {}),
     logoUrl: rawBranding.logoUrl === undefined ? undefined : str(rawBranding.logoUrl, ''),
     watermarkText: str(rawBranding.watermarkText, str(rawBranding.handle, '@subwaytakes')),
     watermarkPosition: (['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const).includes(
@@ -298,6 +327,7 @@ export function parseRenderSettings(raw: unknown): RenderSettings {
   return {
     width: num(r.width, config.outputWidth),
     height: num(r.height, config.outputHeight),
+    fps: Math.min(60, Math.max(12, num(r.fps, config.outputFps))),
   };
 }
 
@@ -305,7 +335,7 @@ export function parseRenderSettings(raw: unknown): RenderSettings {
 export function hasAudioContent(project: StudioProject): boolean {
   return project.tracks.some(
     (t) => (t.kind === 'narration' || t.kind === 'music' || t.kind === 'ambient') && !t.muted
-      && t.clips.some((c) => c.assetUrl !== ''),
+      && t.clips.some((c) => c.assetUrl !== '' || c.assetRef !== undefined),
   );
 }
 
@@ -324,6 +354,12 @@ function remotionBin(): string {
 export interface RenderProjectOptions {
   workDir: string;
   renderSettings?: RenderSettings;
+  /**
+   * Owner of the project row (queue path). Required whenever the snapshot
+   * carries media refs: a ref is only signed when its path starts with this
+   * user id.
+   */
+  ownerUserId?: string;
 }
 
 export interface RenderProjectResult {
@@ -335,6 +371,48 @@ export interface RenderProjectResult {
 }
 
 /**
+ * Resolve every media identity of a project to a short-lived, fetchable URL
+ * and return a COPY — the input project is never mutated.
+ *
+ * - `clip.assetRef` / `branding.logoRef` (canonical identity) is signed with
+ *   the service-role client, but ONLY after the ownership check against
+ *   `ownerUserId` (see resolveMediaRef). A ref without an owner is a hard
+ *   error: private media must never be resolvable cross-user.
+ * - a persisted `clip.assetUrl` is re-signed when it points at our own
+ *   storage (again ownership-checked when an owner is known) and passed
+ *   through when it is an external CDN URL.
+ * - nothing is persisted: the returned URLs live in the props file only.
+ */
+export async function resolveProjectMedia(
+  project: StudioProject,
+  options: { ownerUserId?: string } = {},
+): Promise<StudioProject> {
+  const ownerUserId = options.ownerUserId;
+  const signedProject: StudioProject = JSON.parse(JSON.stringify(project));
+
+  for (const track of signedProject.tracks) {
+    for (const clip of track.clips) {
+      if (clip.assetRef) {
+        clip.assetUrl = await resolveMediaRef(clip.assetRef, ownerUserId ?? '');
+        continue;
+      }
+      if (clip.assetUrl) {
+        clip.assetUrl = await resolveAssetUrl(clip.assetUrl, ownerUserId);
+      }
+    }
+  }
+
+  const branding = signedProject.branding;
+  if (branding.logoRef) {
+    branding.logoUrl = await resolveMediaRef(branding.logoRef, ownerUserId ?? '');
+  } else if (branding.logoUrl) {
+    branding.logoUrl = await resolveAssetUrl(branding.logoUrl, ownerUserId);
+  }
+
+  return signedProject;
+}
+
+/**
  * Core pipeline (no DB): validate -> props file -> remotion render ->
  * probe verify -> normalize to delivery spec. Returns the FINAL mp4 path.
  */
@@ -343,19 +421,19 @@ export async function renderProjectToFile(
   options: RenderProjectOptions,
 ): Promise<RenderProjectResult> {
   const { workDir } = options;
-  const settings = options.renderSettings ?? { width: config.outputWidth, height: config.outputHeight };
+  const settings: RenderSettings = options.renderSettings ?? {
+    width: config.outputWidth,
+    height: config.outputHeight,
+    fps: config.outputFps,
+  };
   fs.mkdirSync(workDir, { recursive: true });
 
-  // 1. Rewrite Supabase storage asset URLs into short-lived signed URLs so
-  //    headless Chromium can fetch private bucket objects.
-  const signedProject: StudioProject = JSON.parse(JSON.stringify(project));
-  for (const track of signedProject.tracks) {
-    for (const clip of track.clips) {
-      if (clip.assetUrl) {
-        clip.assetUrl = await resolveAssetUrl(clip.assetUrl);
-      }
-    }
-  }
+  // 1. Rewrite Supabase storage asset URLs / refs into short-lived signed URLs
+  //    so headless Chromium can fetch private bucket objects. Worker-side
+  //    only: these URLs never reach the database.
+  const signedProject = await resolveProjectMedia(project, {
+    ownerUserId: options.ownerUserId,
+  });
 
   // 2. Props go through a FILE — never argv (payloads are tens of KB+).
   const propsPath = path.join(workDir, 'props.json');
@@ -413,6 +491,7 @@ export async function renderProjectToFile(
     durationSeconds: expectedDurationSeconds,
     width: settings.width,
     height: settings.height,
+    fps: settings.fps,
     requireAudio: false,
   });
   if (!rawVerify.ok) {
@@ -430,6 +509,7 @@ export async function renderProjectToFile(
     durationSeconds: expectedDurationSeconds,
     width: settings.width,
     height: settings.height,
+    fps: settings.fps,
     requireAudio: hasAudioContent(signedProject),
   });
   if (!finalVerify.ok) {
@@ -463,6 +543,10 @@ export async function processRenderJob(job: RenderJobRow): Promise<void> {
 
     await updateJobProgress(job.id, 5);
 
+    // Owner of the media: read from the project ROW (never from the client).
+    // Every clip ref is checked against it before it is signed.
+    const ownerUserId = await resolveJobOwner(job);
+
     // Heartbeat: any progress update refreshes updated_at (DB trigger also
     // bumps it), but we bump explicitly every HEARTBEAT_INTERVAL_MS so long
     // ffmpeg/remotion phases cannot look stale to the reclaimer.
@@ -474,7 +558,11 @@ export async function processRenderJob(job: RenderJobRow): Promise<void> {
 
     const settings = parseRenderSettings(job.render_settings);
 
-    const result = await renderProjectToFile(parsed.project, { workDir, renderSettings: settings });
+    const result = await renderProjectToFile(parsed.project, {
+      workDir,
+      renderSettings: settings,
+      ownerUserId,
+    });
     await updateJobProgress(job.id, 85);
 
     // Upload: <user_id>/<project_id>/render-<job_id>.mp4 (private bucket).
@@ -498,7 +586,28 @@ export async function processRenderJob(job: RenderJobRow): Promise<void> {
     }
   } finally {
     if (heartbeat) clearInterval(heartbeat);
-    // Temp props/render/normalize files never outlive the job.
+    // Temp props/render/normalize files never outlive the job — on success AND
+    // on every failure path (validation, ownership, remotion, probe, ffmpeg,
+    // upload), because every artifact was written inside workDir.
     fs.rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Media owner for a job. `studio_projects.user_id` is the authority; the job
+ * row's own user_id is only a fallback for snapshot-only jobs whose project
+ * row is gone (re-logged so it is visible in the worker logs).
+ */
+async function resolveJobOwner(job: RenderJobRow): Promise<string> {
+  try {
+    return await fetchProjectOwner(job.project_id);
+  } catch (err) {
+    const fallback = typeof job.user_id === 'string' ? job.user_id : '';
+    if (!fallback) throw err;
+    console.warn(
+      `[worker] job ${job.id}: could not read the project owner (${(err as Error).message}); ` +
+        `falling back to the job row user_id`,
+    );
+    return fallback;
   }
 }

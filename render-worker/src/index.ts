@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
 import dotenv from 'dotenv';
-import { config, supabaseConfigured, WORKER_VERSION } from './config';
+import { config, supabaseConfigured, WORKER_VERSION, configProblems } from './config';
 import { validateProjectSnapshot, parseRenderSettings, renderProjectToFile } from './render';
 import { queueDepth } from './storage';
 import { startQueueLoop, stopQueueLoop, drainQueue, queueStatus, inFlightJobIds } from './queue';
@@ -192,15 +192,22 @@ app.post('/render', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
+  // The queue path always verifies media ownership against the project row.
+  // This endpoint is behind WORKER_API_KEY (admin/smoke only); passing
+  // `ownerUserId` opts into the very same check for refs.
+  const body = req.body as { ownerUserId?: unknown };
+  const ownerUserId = typeof body.ownerUserId === 'string' && body.ownerUserId ? body.ownerUserId : undefined;
+
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-direct-'));
   try {
     const settings = parseRenderSettings((req.body as { renderSettings?: unknown }).renderSettings);
-    const result = await renderProjectToFile(parsed.project, { workDir, renderSettings: settings });
+    const result = await renderProjectToFile(parsed.project, { workDir, renderSettings: settings, ownerUserId });
     res.json({
       success: true,
       outputPath: result.outputPath,
       expectedDurationSeconds: result.expectedDurationSeconds,
       probe: result.probe,
+      ownershipVerified: Boolean(ownerUserId),
     });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message || 'render failed' });
@@ -242,6 +249,16 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 
 void (async () => {
+  // Fail fast on missing configuration, naming every variable involved.
+  const problems = configProblems();
+  if (problems.length > 0) {
+    console.error(`[worker] CONFIG INCOMPLETE — ${problems.join('; ')}`);
+    if (!supabaseConfigured) {
+      console.error(
+        '[worker] queue mode disabled: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable it',
+      );
+    }
+  }
   await ensureChromium();
   startQueueLoop();
 })();

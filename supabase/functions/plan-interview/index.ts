@@ -16,7 +16,7 @@ import { callOpenAIResponses } from "../_shared/openai.ts";
  * (the upstream message is surfaced — there is no fallback script).
  */
 
-const BEAT_IDS = [
+export const BEAT_IDS = [
   "opening_hook",
   "interviewer_intro",
   "guest_responds",
@@ -29,11 +29,11 @@ const BEAT_IDS = [
 const SHOT_TYPES = ["host", "guest", "two_shot", "reaction", "environment"] as const;
 const SPEAKERS = ["host", "guest", "none"] as const;
 
-type BeatId = typeof BEAT_IDS[number];
-type ShotType = typeof SHOT_TYPES[number];
-type Speaker = typeof SPEAKERS[number];
+export type BeatId = typeof BEAT_IDS[number];
+export type ShotType = typeof SHOT_TYPES[number];
+export type Speaker = typeof SPEAKERS[number];
 
-interface PlanRequest {
+export interface PlanRequest {
   topic: string;
   hostDescription?: string;
   guestDescription?: string;
@@ -43,7 +43,7 @@ interface PlanRequest {
   handle?: string;
 }
 
-interface InterviewBeat {
+export interface InterviewBeat {
   beatId: BeatId;
   shotType: ShotType;
   speaker: Speaker;
@@ -52,20 +52,20 @@ interface InterviewBeat {
   videoPrompt: string;
 }
 
-interface InterviewPlan {
+export interface InterviewPlan {
   title: string;
   hookQuestion: string;
   handle: string;
   beats: InterviewBeat[];
 }
 
-const PLAN_SCHEMA: Record<string, unknown> = {
+export const PLAN_SCHEMA: Record<string, unknown> = {
   type: "object",
   additionalProperties: false,
   required: ["title", "hookQuestion", "handle", "beats"],
   properties: {
-    title: { type: "string" },
-    hookQuestion: { type: "string" },
+    title: { type: "string", minLength: 1 },
+    hookQuestion: { type: "string", minLength: 1 },
     handle: { type: "string" },
     beats: {
       type: "array",
@@ -79,9 +79,9 @@ const PLAN_SCHEMA: Record<string, unknown> = {
           beatId: { type: "string", enum: [...BEAT_IDS] },
           shotType: { type: "string", enum: [...SHOT_TYPES] },
           speaker: { type: "string", enum: [...SPEAKERS] },
-          dialogue: { type: "string" },
-          cameraDirection: { type: "string" },
-          videoPrompt: { type: "string" },
+          dialogue: { type: "string", minLength: 1 },
+          cameraDirection: { type: "string", minLength: 1 },
+          videoPrompt: { type: "string", minLength: 1 },
         },
       },
     },
@@ -95,10 +95,11 @@ Write a documentary subway interview script about the given topic. Rules:
 - Dialogue must sound like natural spoken language — what people actually say on the subway, never written prose. Each beat's dialogue is 1 to 3 sentences.
 - Each beat needs a concise camera direction (shot size, movement, framing) appropriate for documentary handheld work.
 - Each beat needs a text-to-video prompt for a vertical 9:16 video model. Prompts must describe: the on-camera person(s) using the host and guest descriptions provided, the subway environment described below, and MUST include the exact phrase "documentary, natural lighting, no AI artifacts". Prompts must not ask for on-screen text or captions.
+- The host and guest descriptions are the show's cast: EVERY beat's videoPrompt must describe those same two people with the same presentation (same wardrobe, same physical look). Never invent a different looking host or guest, and never drop the cast description from a beat.
 - Shot types are limited to: host, guest, two_shot, reaction, environment. Speakers are limited to: host, guest, none.
 - Keep the whole script tight and watchable: the hook must stop the scroll.`;
 
-function buildUserPrompt(body: PlanRequest): string {
+export function buildUserPrompt(body: PlanRequest): string {
   const parts: string[] = [`TOPIC: ${body.topic}`];
 
   if (body.hostDescription) parts.push(`HOST (the interviewer): ${body.hostDescription}`);
@@ -115,7 +116,7 @@ function buildUserPrompt(body: PlanRequest): string {
   return parts.join("\n");
 }
 
-function parseBeats(rawBeats: unknown): InterviewBeat[] {
+export function parseBeats(rawBeats: unknown): InterviewBeat[] {
   if (!Array.isArray(rawBeats)) {
     throw new HttpError(500, "Interview plan validation failed: beats is not an array");
   }
@@ -157,7 +158,7 @@ function parseBeats(rawBeats: unknown): InterviewBeat[] {
   return beats;
 }
 
-function parsePlan(raw: Record<string, unknown>): InterviewPlan {
+export function parsePlan(raw: Record<string, unknown>): InterviewPlan {
   const title = typeof raw.title === "string" ? raw.title.trim() : "";
   const hookQuestion = typeof raw.hookQuestion === "string" ? raw.hookQuestion.trim() : "";
   if (!title || !hookQuestion) {
@@ -172,7 +173,7 @@ function parsePlan(raw: Record<string, unknown>): InterviewPlan {
   };
 }
 
-Deno.serve(async (req: Request) => {
+export async function handlePlanInterviewRequest(req: Request): Promise<Response> {
   const cors = buildCorsHeaders(req.headers.get("Origin"));
 
   if (req.method === "OPTIONS") {
@@ -214,4 +215,6 @@ Deno.serve(async (req: Request) => {
     const message = error instanceof Error && error.message ? error.message : "Interview planning failed";
     return jsonResponse({ error: message }, 500, cors);
   }
-});
+}
+
+Deno.serve(handlePlanInterviewRequest);

@@ -52,6 +52,8 @@ interface ActionLookup {
   label: string;
   meta: string;
   kind: 'clip' | 'caption';
+  fadeIn: number;
+  fadeOut: number;
 }
 
 function lookupAction(project: StudioProject, rowId: string, actionId: string): ActionLookup | null {
@@ -64,14 +66,18 @@ function lookupAction(project: StudioProject, rowId: string, actionId: string): 
         label: caption.text || 'Caption',
         meta: caption.kind === 'hook' ? 'Hook title' : caption.kind === 'lower_third' ? 'Lower third' : 'Dialogue',
         kind: 'caption',
+        fadeIn: 0,
+        fadeOut: 0,
       };
     }
     const clip = track.clips.find((c) => c.id === actionId);
     if (!clip) return null;
     return {
       label: clip.label || track.name,
-      meta: clip.assetUrl ? `${clip.assetKind} asset` : 'placeholder',
+      meta: clip.assetUrl || clip.assetRef ? `${clip.assetKind} asset` : 'placeholder',
       kind: 'clip',
+      fadeIn: clip.fadeIn,
+      fadeOut: clip.fadeOut,
     };
   }
   return null;
@@ -163,6 +169,20 @@ export function StudioTimeline({
     dispatch({ type: 'SPLIT_CLIP', clipId: selection.id, atSeconds: playheadSeconds });
   }, [dispatch, playheadSeconds, selection]);
 
+  const duplicateSelection = useCallback(() => {
+    if (!selection || selection.kind !== 'clip') return;
+    dispatch({ type: 'DUPLICATE_CLIP', clipId: selection.id });
+  }, [dispatch, selection]);
+
+  const deleteSelection = useCallback(() => {
+    if (!selection) return;
+    if (selection.kind === 'caption') {
+      dispatch({ type: 'REMOVE_CAPTION', captionId: selection.id });
+      return;
+    }
+    dispatch({ type: 'REMOVE_CLIP', clipId: selection.id });
+  }, [dispatch, selection]);
+
   const totalSeconds = useMemo(
     () =>
       Math.max(
@@ -200,6 +220,24 @@ export function StudioTimeline({
           >
             Split at playhead
           </button>
+          <button
+            type="button"
+            onClick={duplicateSelection}
+            disabled={!selection || selection.kind !== 'clip'}
+            title="Copy the selected clip right after the original"
+            className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-2.5 py-1 text-[11px] font-medium text-zinc-200 transition hover:border-amber-500/60 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Duplicate
+          </button>
+          <button
+            type="button"
+            onClick={deleteSelection}
+            disabled={!selection}
+            title="Delete the selected clip or caption — undo with ⌘Z / Ctrl+Z"
+            className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-[11px] font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Delete
+          </button>
         </div>
       </div>
 
@@ -233,6 +271,7 @@ export function StudioTimeline({
             const style = STUDIO_TRACK_STYLE[kind];
             const info = lookupAction(project, row.id, action.id);
             const selected = selectedId === action.id;
+            const hasFades = (info?.fadeIn ?? 0) > 0 || (info?.fadeOut ?? 0) > 0;
             return (
               <div
                 className={`flex h-full w-full items-center gap-1.5 overflow-hidden rounded-md border px-2 ${style.bar} ${style.text} ${
@@ -241,6 +280,14 @@ export function StudioTimeline({
               >
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
                 <span className="truncate text-[11px] font-medium">{info?.label ?? 'Clip'}</span>
+                {hasFades && (
+                  <span
+                    className="shrink-0 rounded bg-black/40 px-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-200"
+                    title={`Fade in ${info?.fadeIn.toFixed(2)}s · fade out ${info?.fadeOut.toFixed(2)}s`}
+                  >
+                    fade
+                  </span>
+                )}
                 <span className="ml-auto shrink-0 text-[9px] uppercase tracking-wide opacity-70">
                   {(action.end - action.start).toFixed(1)}s
                 </span>
@@ -252,7 +299,8 @@ export function StudioTimeline({
 
       <p className="mt-2 text-[11px] text-zinc-500">
         Drag clips to move them (snaps to a 0.25s grid), drag their edges to trim, drag the blue
-        cursor to scrub the preview. Click a clip to inspect it.
+        cursor to scrub the preview. Click a clip to inspect it, use Split / Duplicate / Delete on
+        the selection (every change is undoable with ⌘Z).
       </p>
     </div>
   );

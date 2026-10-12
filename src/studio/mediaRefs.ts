@@ -89,11 +89,16 @@ export function mediaRefFromStorageUrl(url: string, kind: MediaKind = 'video'): 
  * Does this storage path belong to the given user? Studio objects are written
  * under `<user_id>/...`. Used as a path-level ownership guard wherever a
  * caller may influence which object gets signed or downloaded.
+ *
+ * Rejects traversal (`..`/`.`) and absolute paths so a crafted path such as
+ * `<uid>/../../<other>/clip.mp4` can never satisfy the check.
  */
 export function isPathOwnedBy(path: string, userId: string): boolean {
   if (!path || !userId) return false;
-  const first = path.split('/')[0];
-  return first === userId;
+  if (path.startsWith('/') || path.includes('\\') || path.includes('\0')) return false;
+  const segments = path.split('/');
+  if (segments.some((s) => s === '' || s === '.' || s === '..')) return false;
+  return segments[0] === userId;
 }
 
 /** True when a derived URL must be refreshed (unknown or about to expire). */

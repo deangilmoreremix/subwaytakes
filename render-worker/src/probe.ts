@@ -13,6 +13,7 @@ export interface FfprobeStream {
   width?: number;
   height?: number;
   r_frame_rate?: string;
+  pix_fmt?: string;
 }
 
 /** Format entry from ffprobe JSON output. */
@@ -36,6 +37,8 @@ export interface ProbeInfo {
   width: number | null;
   height: number | null;
   fps: number | null;
+  /** Pixel format of the video stream, e.g. "yuv420p" (players reject others). */
+  pixFmt?: string;
   raw: FfprobeJson;
 }
 
@@ -95,6 +98,7 @@ export async function probeFile(filePath: string): Promise<ProbeInfo> {
     width: video?.width ?? null,
     height: video?.height ?? null,
     fps: video ? parseFrameRate(video.r_frame_rate) : null,
+    pixFmt: typeof video?.pix_fmt === 'string' ? video.pix_fmt : undefined,
     raw,
   };
 }
@@ -106,6 +110,10 @@ export interface VerifyOptions {
   height: number;
   /** Require an AAC audio stream (projects with audio tracks). */
   requireAudio?: boolean;
+  /** Expected frame rate (delivery spec). Checked when the probe reports one. */
+  fps?: number;
+  /** Expected pixel format (delivery spec). Checked when the probe reports one. */
+  pixFmt?: string;
 }
 
 export interface VerifyResult {
@@ -114,6 +122,9 @@ export interface VerifyResult {
 }
 
 const DURATION_TOLERANCE_SECONDS = 0.5;
+const FPS_TOLERANCE = 0.5;
+/** Players (and Safari in particular) refuse 10-bit / non-4:2:0 sources. */
+const REQUIRED_PIXEL_FORMAT = 'yuv420p';
 
 /**
  * Verify a rendered file against the delivery spec BEFORE it is accepted.
@@ -139,6 +150,15 @@ export function verifyDelivery(probe: ProbeInfo, options: VerifyOptions): Verify
     failures.push(
       `duration ${probe.durationSeconds.toFixed(3)}s is not within ${DURATION_TOLERANCE_SECONDS}s of expected ${options.durationSeconds.toFixed(3)}s`,
     );
+  }
+  if (options.fps !== undefined && probe.fps !== null) {
+    if (Math.abs(probe.fps - options.fps) > FPS_TOLERANCE) {
+      failures.push(`frame rate is ${probe.fps}, expected ${options.fps} (delivery spec)`);
+    }
+  }
+  const requiredPixFmt = options.pixFmt ?? REQUIRED_PIXEL_FORMAT;
+  if (probe.pixFmt !== undefined && probe.pixFmt !== requiredPixFmt) {
+    failures.push(`pixel format is "${probe.pixFmt}", expected ${requiredPixFmt}`);
   }
   if (options.requireAudio && probe.audioCodec !== 'aac') {
     failures.push(`audio codec is "${probe.audioCodec ?? 'none'}", expected aac`);

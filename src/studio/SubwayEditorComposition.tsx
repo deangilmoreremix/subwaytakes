@@ -10,6 +10,10 @@ import {
 } from 'remotion';
 import type { StudioProject, StudioClip, StudioCaption } from './types';
 import { clipLength } from './types';
+import {
+  readCaptionStyle,
+  type CaptionStyle,
+} from './captionStyles';
 import { BrandWatermark } from '../../remotion/src/overlays/BrandWatermark';
 import { ProgressBar } from '../../remotion/src/overlays/ProgressBar';
 
@@ -93,6 +97,106 @@ function AudioClipView({ clip }: { clip: StudioClip }) {
   return <Audio src={clip.assetUrl} volume={clip.volume} />;
 }
 
+type CaptionPlacementBox = 'top' | 'center' | 'bottom';
+
+/**
+ * Visual variant for one caption style. The caption style rides on the caption
+ * object through `withStyle()`/`readCaptionStyle()` (src/studio/captionStyles.ts)
+ * because `StudioCaption` in types.ts cannot be extended here; anything unset or
+ * unknown falls back to the bold-stroke default.
+ */
+interface CaptionTextVariant {
+  color: string;
+  fontWeight: number;
+  textShadow: string;
+  webkitTextStroke?: string;
+  textTransform?: 'lowercase';
+  /** Set for 'boxed': the text sits inside a solid chip. */
+  chip?: React.CSSProperties;
+  /** Plate background for card-style captions (hook / lower_third). */
+  plate: string;
+  plateRadius: number;
+  platePaddingV: number;
+  platePaddingH: number;
+  plateBorder: string;
+}
+
+function captionTextVariant(style: CaptionStyle, scale: number): CaptionTextVariant {
+  const px = (value: number) => `${Math.max(1, Math.round(value * scale))}px`;
+  switch (style) {
+    case 'boxed':
+      return {
+        color: '#ffffff',
+        fontWeight: 800,
+        textShadow: '0 2px 8px rgba(0,0,0,0.55)',
+        chip: {
+          background: 'rgba(0,0,0,0.82)',
+          borderRadius: Math.round(14 * scale),
+          padding: `${px(10)} ${px(20)}`,
+        },
+        plate: 'rgba(0,0,0,0.88)',
+        plateRadius: Math.round(16 * scale),
+        platePaddingV: Math.round(14 * scale),
+        platePaddingH: Math.round(26 * scale),
+        plateBorder: '1px solid rgba(255,255,255,0.18)',
+      };
+    case 'minimal':
+      return {
+        color: 'rgba(255,255,255,0.92)',
+        fontWeight: 500,
+        textShadow: '0 1px 6px rgba(0,0,0,0.5)',
+        textTransform: 'lowercase',
+        plate: 'transparent',
+        plateRadius: Math.round(10 * scale),
+        platePaddingV: Math.round(8 * scale),
+        platePaddingH: Math.round(12 * scale),
+        plateBorder: '1px solid rgba(255,255,255,0.12)',
+      };
+    case 'yellow':
+      // Hormozi-ish: saturated yellow with a heavy dark outline.
+      return {
+        color: '#FDE047',
+        fontWeight: 900,
+        textShadow: '0 3px 10px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,1)',
+        webkitTextStroke: `${px(2)} rgba(0,0,0,0.9)`,
+        plate: 'rgba(0,0,0,0.78)',
+        plateRadius: Math.round(16 * scale),
+        platePaddingV: Math.round(12 * scale),
+        platePaddingH: Math.round(24 * scale),
+        plateBorder: '1px solid rgba(253,224,71,0.45)',
+      };
+    case 'bold':
+    default:
+      return {
+        color: '#ffffff',
+        fontWeight: 800,
+        textShadow: '0 4px 12px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,1)',
+        webkitTextStroke: `${px(1.5)} rgba(0,0,0,0.85)`,
+        plate: 'rgba(0,0,0,0.72)',
+        plateRadius: Math.round(24 * scale),
+        platePaddingV: Math.round(20 * scale),
+        platePaddingH: Math.round(36 * scale),
+        plateBorder: '1px solid rgba(255,255,255,0.06)',
+      };
+  }
+}
+
+const PLACEMENT_BOX: Record<StudioCaption['kind'], CaptionPlacementBox> = {
+  hook: 'top',
+  lower_third: 'center',
+  dialogue: 'bottom',
+};
+
+function placementStyle(box: CaptionPlacementBox, height: number): React.CSSProperties {
+  if (box === 'top') {
+    return { justifyContent: 'flex-start', alignItems: 'center', paddingTop: height * 0.16 };
+  }
+  if (box === 'center') {
+    return { justifyContent: 'center', alignItems: 'center' };
+  }
+  return { justifyContent: 'flex-end', alignItems: 'center', paddingBottom: height * 0.12 };
+}
+
 function CaptionView({ caption, height }: { caption: StudioCaption; height: number }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -112,23 +216,44 @@ function CaptionView({ caption, height }: { caption: StudioCaption; height: numb
 
   const baseFont = Math.round(height * 0.032);
   const accent = '#F59E0B';
+  const style = readCaptionStyle(caption);
+  const variant = captionTextVariant(style, baseFont / 32);
+  const box = PLACEMENT_BOX[caption.kind] ?? 'bottom';
+  const containerStyle: React.CSSProperties = {
+    ...placementStyle(box, height),
+    opacity,
+  };
+
+  const textStyle: React.CSSProperties = {
+    color: variant.color,
+    fontSize: baseFont,
+    fontWeight: variant.fontWeight,
+    fontFamily: 'Inter, Arial, Helvetica, sans-serif',
+    textAlign: 'center',
+    textShadow: variant.textShadow,
+    ...(variant.webkitTextStroke ? { WebkitTextStroke: variant.webkitTextStroke } : {}),
+    ...(variant.textTransform ? { textTransform: variant.textTransform } : {}),
+    lineHeight: 1.25,
+    maxWidth: '90%',
+  };
 
   if (caption.kind === 'hook') {
     return (
-      <AbsoluteFill style={{ justifyContent: 'flex-start', alignItems: 'center', paddingTop: height * 0.16, opacity }}>
+      <AbsoluteFill style={containerStyle}>
         <div
           style={{
-            background: 'rgba(0,0,0,0.72)',
-            borderRadius: 24,
-            padding: '28px 40px',
+            background: variant.plate,
+            borderRadius: variant.plateRadius,
+            padding: `${variant.platePaddingV}px ${variant.platePaddingH}px`,
             maxWidth: '86%',
             textAlign: 'center',
+            border: variant.plateBorder,
           }}
         >
           <div style={{ color: accent, fontSize: baseFont * 0.62, fontFamily: 'Inter, Arial, sans-serif', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>
             {caption.speaker || '@subwaytakes'}
           </div>
-          <div style={{ color: '#fff', fontSize: baseFont * 1.05, fontWeight: 800, fontFamily: 'Inter, Arial, sans-serif', lineHeight: 1.2, marginTop: 10 }}>
+          <div style={{ ...textStyle, fontSize: baseFont * 1.05, marginTop: 10 }}>
             {caption.text}
           </div>
         </div>
@@ -138,19 +263,21 @@ function CaptionView({ caption, height }: { caption: StudioCaption; height: numb
 
   if (caption.kind === 'lower_third') {
     return (
-      <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'flex-start', padding: height * 0.05, opacity }}>
+      <AbsoluteFill style={containerStyle}>
         <div
           style={{
-            background: `linear-gradient(90deg, ${accent} 0%, rgba(0,0,0,0.85) 60%)`,
-            borderRadius: 12,
-            padding: '18px 32px',
+            background: variant.plate,
+            borderRadius: variant.plateRadius,
+            padding: `${variant.platePaddingV}px ${variant.platePaddingH}px`,
+            border: variant.plateBorder,
+            textAlign: 'center',
           }}
         >
-          <div style={{ color: '#fff', fontSize: baseFont * 0.85, fontWeight: 800, fontFamily: 'Inter, Arial, sans-serif' }}>
+          <div style={{ ...textStyle, fontSize: baseFont * 0.85 }}>
             {caption.text}
           </div>
           {caption.speaker ? (
-            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: baseFont * 0.55, fontFamily: 'Inter, Arial, sans-serif', marginTop: 4 }}>
+            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: baseFont * 0.55, fontFamily: 'Inter, Arial, sans-serif', marginTop: 4, textAlign: 'center' }}>
               {caption.speaker}
             </div>
           ) : null}
@@ -159,24 +286,20 @@ function CaptionView({ caption, height }: { caption: StudioCaption; height: numb
     );
   }
 
-  // dialogue caption — bottom centered, bold, black stroke
+  // dialogue caption — placement + style variant (bottom-center by default)
   return (
-    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: height * 0.12, opacity }}>
+    <AbsoluteFill style={containerStyle}>
       <div
         style={{
-          color: '#fff',
-          fontSize: baseFont,
-          fontWeight: 800,
-          fontFamily: 'Inter, Arial, Helvetica, sans-serif',
-          textAlign: 'center',
-          textShadow: '0 4px 12px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,1)',
-          WebkitTextStroke: '1.5px rgba(0,0,0,0.85)',
-          padding: '0 48px',
-          lineHeight: 1.25,
-          maxWidth: '90%',
+          ...textStyle,
+          padding: variant.chip ? 0 : '0 48px',
         }}
       >
-        {caption.text}
+        {variant.chip ? (
+          <span style={{ ...variant.chip, display: 'inline-block' }}>{caption.text}</span>
+        ) : (
+          caption.text
+        )}
       </div>
     </AbsoluteFill>
   );
@@ -257,6 +380,7 @@ export const SubwayEditorComposition: React.FC<SubwayEditorCompositionProps> = (
         fps={fps}
         text={project.branding.watermarkText}
         position={project.branding.watermarkPosition}
+        logoUrl={project.branding.logoUrl ?? null}
         showLogo={Boolean(project.branding.logoUrl)}
       />
     </AbsoluteFill>

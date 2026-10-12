@@ -1,4 +1,13 @@
-import { ArrowDown, ArrowUp, Scissors, Trash2, Volume2, VolumeX } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  Scissors,
+  Trash2,
+  Undo2,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 
 import type { StudioProject, StudioTrack } from '../../studio/types';
 import { clipLength } from '../../studio/types';
@@ -12,6 +21,13 @@ export interface ClipInspectorProps {
   dispatch(action: StudioAction): void;
   playheadSeconds: number;
 }
+
+/** Fade presets offered in the inspector (0 = hard cut, i.e. "None"). */
+const FADE_PRESETS: Array<{ label: string; seconds: number }> = [
+  { label: 'None', seconds: 0 },
+  { label: '0.3s', seconds: 0.3 },
+  { label: '0.8s', seconds: 0.8 },
+];
 
 function findTrack(project: StudioProject, trackId: string): StudioTrack | undefined {
   return project.tracks.find((track) => track.id === trackId);
@@ -94,9 +110,12 @@ export function ClipInspector({ project, selection, dispatch, playheadSeconds }:
           <button
             type="button"
             onClick={() => dispatch({ type: 'REMOVE_CAPTION', captionId: caption.id })}
+            title="Delete this caption — press ⌘Z / Ctrl+Z to undo"
             className="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300 transition hover:bg-rose-500/20"
           >
             <Trash2 className="h-3 w-3" /> Delete
+            <Undo2 className="h-3 w-3 text-rose-300/70" />
+            <span className="hidden text-rose-300/70 sm:inline">(undo with ⌘Z)</span>
           </button>
         </div>
         <Field label="Kind" value={caption.kind.replace('_', ' ')} />
@@ -184,13 +203,26 @@ export function ClipInspector({ project, selection, dispatch, playheadSeconds }:
             {track.name} · {clip.assetKind} · {(clipLength(clip)).toFixed(2)}s at {clip.start.toFixed(2)}s
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: 'REMOVE_CLIP', clipId: clip.id })}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300 transition hover:bg-rose-500/20"
-        >
-          <Trash2 className="h-3 w-3" /> Delete
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'DUPLICATE_CLIP', clipId: clip.id })}
+            title="Copy this clip right after the original (trim, volume and fades are preserved)"
+            className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/60 px-2 py-1 text-[11px] font-medium text-zinc-200 transition hover:border-amber-500/60 hover:text-amber-300"
+          >
+            <Copy className="h-3 w-3" /> Duplicate
+          </button>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'REMOVE_CLIP', clipId: clip.id })}
+            title="Delete this clip — press ⌘Z / Ctrl+Z to undo"
+            className="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300 transition hover:bg-rose-500/20"
+          >
+            <Trash2 className="h-3 w-3" /> Delete
+            <Undo2 className="h-3 w-3 text-rose-300/70" />
+            <span className="hidden text-rose-300/70 sm:inline">(undo with ⌘Z)</span>
+          </button>
+        </div>
       </div>
 
       {clip.assetUrl ? (
@@ -286,6 +318,41 @@ export function ClipInspector({ project, selection, dispatch, playheadSeconds }:
           suffix="s"
           onChange={(fadeOut) => dispatch({ type: 'SET_CLIP_FADE', clipId: clip.id, fadeOut })}
         />
+      </div>
+
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+        <p className="text-[11px] font-medium text-zinc-400">
+          Transitions <span className="text-zinc-500">(fade presets apply to in and out)</span>
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {FADE_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() =>
+                dispatch({
+                  type: 'SET_CLIP_FADE',
+                  clipId: clip.id,
+                  fadeIn: preset.seconds,
+                  fadeOut: preset.seconds,
+                })
+              }
+              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${
+                Math.abs(clip.fadeIn - preset.seconds) < 1e-6 &&
+                Math.abs(clip.fadeOut - preset.seconds) < 1e-6
+                  ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
+                  : 'border-zinc-700 bg-zinc-800/60 text-zinc-300 hover:border-zinc-500'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[10px] text-zinc-500">
+          {clip.fadeIn > 0 || clip.fadeOut > 0
+            ? `Fades: in ${clip.fadeIn.toFixed(2)}s · out ${clip.fadeOut.toFixed(2)}s — rendered by the preview and the server render.`
+            : 'No fades — this clip cuts hard.'}
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

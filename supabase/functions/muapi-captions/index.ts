@@ -3,6 +3,13 @@ import { buildCorsHeaders, handleOptions, HttpError, jsonResponse } from "../_sh
 import { requireUser, serviceClient } from "../_shared/auth.ts";
 import { assertProjectOwnership } from "../_shared/ownership.ts";
 import {
+  DEFAULT_SIGN_TTL_SECONDS,
+  isMediaRef,
+  refFromUrl,
+  signRef,
+  type MediaRef,
+} from "../_shared/media.ts";
+import {
   isMuapiCaptionLanguage,
   isMuapiCaptionTheme,
   isSafeExternalHttpUrl,
@@ -19,15 +26,21 @@ import { parseVttToSegments, segmentsToCaptions } from "../_shared/vtt.ts";
  *
  * POST /functions/v1/muapi-captions
  * action "submit": { project_id, video_url, mode: "styled"|"editable",
- *                    language?, theme?, render_job_id? }
+ *                    language?, theme?, render_job_id?, clip_id? }
  *   200: { job_id, status: "running" }
- *   400: invalid mode / language / theme / video_url
- *   404: project not found or not owned by caller
+ *   400: invalid mode / language / theme / video_url / clip_id
+ *   404: project/clip not found or not owned by caller
  *   500: MuAPI submission failed (upstream message surfaced)
+ *
+ * `clip_id` (optional) makes the server resolve the source itself: the clip is
+ * loaded from the caller's project and its canonical ref is signed for 1 hour
+ * so MuAPI can fetch a private object without the bucket becoming public.
+ * Without it the caller-supplied `video_url` is used, as before.
  *
  * action "poll": { job_id }
  *   200: the muapi_caption_jobs row (status 'running' | 'done' | 'error');
- *        'done' carries output_url (styled) or captions (editable)
+ *        'done' carries output_ref (canonical) + output_url (1-hour signed
+ *        URL) for styled mode, or captions for editable mode
  *   404: job not found or not owned by caller, 500: MuAPI poll failed
  */
 
@@ -38,6 +51,13 @@ interface CaptionsRequestBody {
   action: CaptionAction;
   project_id?: string;
   video_url?: string;
+  /**
+   * Optional: sign the source clip server-side instead of trusting a
+   * client-supplied URL. The clip is looked up in the caller's project and,
+   * when it carries a canonical assetRef, MuAPI receives a fresh 1-hour
+   * signed URL (the buckets stay private).
+   */
+  clip_id?: string;
   mode?: CaptionMode;
   language?: string;
   theme?: string;
@@ -55,6 +75,9 @@ interface CaptionJobRow {
   language: string;
   theme: string;
   status: string;
+  /** Canonical identity of the captioned output (never expires). */
+  output_ref: MediaRef | null;
+  /** Last derived 1-hour signed URL for that output (session state). */
   output_url: string | null;
   captions: unknown;
   error: string | null;
@@ -87,12 +110,18 @@ function decodeDataUrl(dataUrl: string): string | null {
   }
 }
 
+interface StoredVideoOutput {
+  ref: MediaRef;
+  /** 1-hour signed URL (session state, not the asset identity). */
+  url: string;
+}
+
 /** Persist a provider output (http(s) URL or data URL) into a storage bucket. */
 async function storeVideoOutput(
   supabase: SupabaseClient,
   output: string,
   storagePath: string,
-): Promise<string> {
+): Promise<StoredVideoOutput> {
   let bytes: Uint8Array;
 
   if (output.startsWith("data:")) {
@@ -119,14 +148,15 @@ async function storeVideoOutput(
     throw new HttpError(500, `Failed to store captioned video: ${uploadError.message}`);
   }
 
-  const { data: signedData, error: signError } = await supabase.storage
-    .from("videos")
-    .createSignedUrl(storagePath, 604800);
-  if (signError || !signedData?.signedUrl || !isHttpUrl(signedData.signedUrl)) {
+  const ref: MediaRef = { bucket: "videos", path: storagePath, kind: "video" };
+  try {
+    // 1 hour: enough for immediate playback/download, never an identity.
+    const signed = await signRef(supabase, ref, DEFAULT_SIGN_TTL_SECONDS);
+    return { ref, url: signed.url };
+  } catch (error) {
+    console.error("Captioned output signing error:", error);
     throw new HttpError(500, "Could not sign private captioned video for playback");
   }
-
-  return signedData.signedUrl;
 }
 
 /**
@@ -175,24 +205,115 @@ async function extractTranscriptText(result: MuapiPollResult): Promise<string | 
 
 type HandlerResult = { status: number; body: unknown };
 
+/**
+ * Resolve the media URL MuAPI must fetch. Prefers the caller-supplied
+ * `clip_id`: the clip is loaded from the caller's own project and, when it
+ * carries a canonical ref, a fresh 1-hour signed URL is minted here so the
+ * private bucket never has to become public. Falls back to the client-supplied
+ * `video_url` (external CDN or a freshly minted session URL) for callers that
+ * do not send a clip id.
+ */
+async function resolveSourceUrl(
+  supabase: SupabaseClient,
+  projectId: string,
+  userId: string,
+  clipId: string | undefined,
+  fallbackUrl: string | undefined,
+): Promise<string> {
+  if (!clipId) {
+    if (!fallbackUrl || !isSafeExternalHttpUrl(fallbackUrl)) {
+      throw new HttpError(400, "video_url is required and must be an https URL");
+    }
+    // The caller already holds a URL for this object, so recovering its ref and
+    // re-signing it here grants nothing new — it just guarantees MuAPI receives
+    // a freshly valid 1-hour URL instead of one that may be about to expire.
+    const recovered = refFromUrl(fallbackUrl, "video");
+    if (recovered) {
+      try {
+        const signed = await signRef(supabase, recovered, DEFAULT_SIGN_TTL_SECONDS);
+        return signed.url;
+      } catch (error) {
+        console.error("Caption source re-signing failed, using the supplied URL:", error);
+      }
+    }
+    return fallbackUrl;
+  }
+
+  const { data: projectRow, error: projectError } = await supabase
+    .from("studio_projects")
+    .select("project")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (projectError) {
+    throw new HttpError(500, `Failed to load project: ${projectError.message}`);
+  }
+  if (!projectRow?.project) {
+    throw new HttpError(404, "Not found");
+  }
+
+  const project = projectRow.project as { tracks?: Array<{ clips?: Array<Record<string, unknown>> }> };
+  const clip = (project.tracks ?? [])
+    .flatMap((track) => (Array.isArray(track.clips) ? track.clips : []))
+    .find((candidate) => candidate && candidate.id === clipId);
+
+  if (!clip) {
+    throw new HttpError(404, "Not found");
+  }
+
+  const assetRef = clip.assetRef;
+  if (isMediaRef(assetRef)) {
+    try {
+      // 1 hour: MuAPI only needs to fetch the source once.
+      const signed = await signRef(supabase, assetRef, DEFAULT_SIGN_TTL_SECONDS);
+      return signed.url;
+    } catch (error) {
+      console.error("Caption source signing error:", error);
+      throw new HttpError(500, "Could not sign the source clip for the caption provider");
+    }
+  }
+
+  const assetUrl = typeof clip.assetUrl === "string" ? clip.assetUrl : "";
+  if (isSafeExternalHttpUrl(assetUrl)) return assetUrl;
+  throw new HttpError(400, `Clip "${clipId}" has no media to caption`);
+}
+
 async function handleSubmit(
   supabase: SupabaseClient,
   userId: string,
   body: CaptionsRequestBody,
 ): Promise<HandlerResult> {
-  const { project_id: projectId, video_url: videoUrl, mode } = body;
+  const renderJobId = body.render_job_id;
+  if (renderJobId !== undefined && (typeof renderJobId !== "string" || renderJobId.length === 0)) {
+    return {
+      status: 400,
+      body: { error: "render_job_id must be a non-empty string when provided" },
+    };
+  }
 
+  const clipId = body.clip_id;
+  if (clipId !== undefined && (typeof clipId !== "string" || clipId.length === 0)) {
+    return { status: 400, body: { error: "clip_id must be a non-empty string when provided" } };
+  }
+
+  const { project_id: projectId, mode } = body;
   if (!projectId || typeof projectId !== "string") {
     return { status: 400, body: { error: "project_id is required" } };
   }
   if (mode !== "styled" && mode !== "editable") {
     return { status: 400, body: { error: "mode is required and must be one of: styled, editable" } };
   }
-  if (!videoUrl || !isSafeExternalHttpUrl(videoUrl)) {
-    return {
-      status: 400,
-      body: { error: "video_url is required and must be an https URL" },
-    };
+
+  // video_url is still required as a field for backwards compatibility, but
+  // when clip_id is present the clip's ref decides the URL MuAPI receives.
+  if (!body.video_url || typeof body.video_url !== "string") {
+    if (!clipId) {
+      return {
+        status: 400,
+        body: { error: "video_url is required and must be an https URL" },
+      };
+    }
   }
 
   const language = body.language ?? "English";
@@ -211,15 +332,23 @@ async function handleSubmit(
     };
   }
 
-  const renderJobId = body.render_job_id;
-  if (renderJobId !== undefined && (typeof renderJobId !== "string" || renderJobId.length === 0)) {
-    return {
-      status: 400,
-      body: { error: "render_job_id must be a non-empty string when provided" },
-    };
-  }
-
   await assertProjectOwnership(supabase, projectId, userId);
+
+  let sourceUrl: string;
+  try {
+    sourceUrl = await resolveSourceUrl(
+      supabase,
+      projectId,
+      userId,
+      clipId,
+      typeof body.video_url === "string" ? body.video_url : undefined,
+    );
+  } catch (error) {
+    if (error instanceof HttpError) {
+      return { status: error.status, body: { error: error.message } };
+    }
+    throw error;
+  }
 
   const { data: inserted, error: insertError } = await supabase
     .from("muapi_caption_jobs")
@@ -243,12 +372,12 @@ async function handleSubmit(
 
   try {
     const requestId = mode === "styled"
-      ? await muapiSubmit("ai-captions", { video_url: videoUrl, language, theme })
+      ? await muapiSubmit("ai-captions", { video_url: sourceUrl, language, theme })
       : await muapiSubmit("openai-whisper", {
-        audio_url: videoUrl,
-        language: toWhisperLanguage(language),
-        response_format: "vtt",
-      });
+          audio_url: sourceUrl,
+          language: toWhisperLanguage(language),
+          response_format: "vtt",
+        });
 
     const { error: updateError } = await supabase
       .from("muapi_caption_jobs")
@@ -324,18 +453,23 @@ async function handlePoll(
       return { status: 500, body: { error: "MuAPI captions job returned no video output" } };
     }
 
-    const outputUrl = await storeVideoOutput(
+    const { ref: outputRef, url: outputUrl } = await storeVideoOutput(
       supabase,
       output,
-      `studio-captions/${userId}/${jobId}.mp4`,
+      // uid-scoped path: media-sign's path-prefix ownership rule can re-sign
+      // this ref forever, so captioned outputs never expire permanently.
+      `${userId}/captioned/${jobId}.mp4`,
     );
 
     await supabase
       .from("muapi_caption_jobs")
-      .update({ status: "done", output_url: outputUrl, error: null })
+      .update({ status: "done", output_ref: outputRef, output_url: outputUrl, error: null })
       .eq("id", jobId);
 
-    return { status: 200, body: { ...job, status: "done", output_url: outputUrl, error: null } };
+    return {
+      status: 200,
+      body: { ...job, status: "done", output_ref: outputRef, output_url: outputUrl, error: null },
+    };
   }
 
   const transcript = await extractTranscriptText(result);

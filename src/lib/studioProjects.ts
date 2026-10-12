@@ -6,7 +6,16 @@
  *   studio_render_jobs  — server render queue (enqueued through the edge fn)
  *   muapi_caption_jobs  — MuAPI AI Captions jobs (styled + editable)
  * Storage:
- *   studio-uploads      — private bucket, one folder per user + project
+ *   videos          — shared bucket (Studio scenes/captions live under a
+ *                     `<uid>/scenes|/captioned/…` prefix)
+ *   studio-uploads  — private bucket, one folder per user + project
+ *   studio-exports  — private bucket, render outputs under `<uid>/…`
+ *
+ * MEDIA MODEL (src/studio/mediaRefs.ts): clips persist a canonical `assetRef`
+ * (bucket + path) next to `assetUrl`. `assetUrl` is SESSION state — a 1-hour
+ * signed URL derived through the `media-sign` edge function (or an external
+ * CDN URL, which is its own identity). Never persist a long-lived URL as the
+ * identity of an asset.
  *
  * The timeline editor mapping lives here too (see the "Timeline editor
  * mapping" section at the bottom).
@@ -26,10 +35,17 @@ import { supabase } from './supabase';
 import { callEdgeFunction } from './edgeFunctions';
 import { getUserId } from './auth';
 import type { TimelineAction, TimelineRow } from '@xzdarcy/timeline-engine';
+import type { MediaRef, MediaKind } from '../studio/mediaRefs';
+import {
+  SIGNED_URL_TTL_SECONDS,
+  isMediaRef,
+  mediaRefFromStorageUrl,
+} from '../studio/mediaRefs';
+import { MediaUrlResolver, type MediaSigner } from './mediaAccess';
 
 export const UPLOAD_BUCKET = 'studio-uploads';
-/** 10 years — the bucket is private, so the renderer needs a long-lived URL. */
-export const SIGNED_URL_TTL_SECONDS = 315360000;
+/** Re-export of the canonical TTL: derived URLs live for 1 hour, never longer. */
+export { SIGNED_URL_TTL_SECONDS };
 
 const EPSILON = 0.005;
 
@@ -105,9 +121,16 @@ export async function loadProject(id: string): Promise<StudioProject> {
   return parsed.project;
 }
 
-/** Persist the project JSON + title. */
+/**
+ * Persist the project JSON + title.
+ *
+ * The payload is healed first (`recoverProjectRefs`): any clip that only has a
+ * URL — legacy projects, freshly generated scenes, uploads — gains its
+ * canonical ref, so what is persisted is identity, not a URL that expires.
+ */
 export async function saveProject(id: string, project: StudioProject): Promise<void> {
-  const payload = { ...project, updatedAt: new Date().toISOString() };
+  const withRefs = recoverProjectRefs(project);
+  const payload = { ...withRefs, updatedAt: new Date().toISOString() };
   const { error } = await supabase
     .from('studio_projects')
     .update({ project: payload, title: payload.title, updated_at: payload.updatedAt })
@@ -127,16 +150,29 @@ function sanitizeFileName(name: string): string {
   return cleaned || 'asset';
 }
 
+/** What an upload produces: the canonical ref plus a 1-hour session URL. */
+export interface UploadedFootage {
+  /** Canonical identity of the uploaded object (bucket + path). Persist THIS. */
+  ref: MediaRef;
+  /** Derived session URL for immediate playback (expires in 1 hour). */
+  url: string;
+  /** Object path inside the bucket (same as `ref.path`). */
+  path: string;
+}
+
 /**
- * Upload footage to the private `studio-uploads` bucket and return a signed URL
- * (10 years) the preview player and the render worker can fetch.
+ * Upload footage to the private `studio-uploads` bucket and return BOTH the
+ * canonical ref ({ bucket: 'studio-uploads', path, kind }) and a 1-hour
+ * session URL. The ref is what gets persisted on the clip; the URL is derived
+ * state that `media-sign` can always re-mint (see refreshProjectMedia).
  */
-export async function uploadFootage(
+export async function uploadFootageRef(
   projectId: string,
   file: File,
   beatId?: BeatId,
-): Promise<string> {
+): Promise<UploadedFootage> {
   const userId = authedUserId('upload footage');
+  const kind: MediaKind = 'video';
   const path = `${userId}/${projectId}/${beatId ?? 'clip'}-${Date.now()}-${sanitizeFileName(file.name)}`;
 
   const { error: uploadError } = await supabase.storage
@@ -150,7 +186,124 @@ export async function uploadFootage(
   if (signError || !data?.signedUrl) {
     throw new Error(describeError(signError, 'Could not sign the uploaded asset URL'));
   }
-  return data.signedUrl;
+
+  return { ref: { bucket: UPLOAD_BUCKET, path, kind }, url: data.signedUrl, path };
+}
+
+/**
+ * Upload footage and return the session URL only.
+ *
+ * Kept for the existing upload panel; new call sites should use
+ * `uploadFootageRef` so the clip can persist the canonical `assetRef` next to
+ * the URL (the ref survives URL expiry, the URL does not).
+ */
+export async function uploadFootage(
+  projectId: string,
+  file: File,
+  beatId?: BeatId,
+): Promise<string> {
+  const uploaded = await uploadFootageRef(projectId, file, beatId);
+  return uploaded.url;
+}
+
+// ---------------------------------------------------------------------------
+// Media URL resolution (refs are canonical, URLs are derived)
+// ---------------------------------------------------------------------------
+
+let sharedResolver: MediaUrlResolver | null = null;
+
+/** Process-wide resolver used by the media helpers below (default signer). */
+export function mediaResolver(signer?: MediaSigner): MediaUrlResolver {
+  if (signer || !sharedResolver) {
+    if (signer) return new MediaUrlResolver(signer);
+    sharedResolver = new MediaUrlResolver();
+  }
+  return sharedResolver;
+}
+
+function kindForTrack(trackKind: StudioTrackKind): MediaKind {
+  return trackKind === 'video' ? 'video' : 'audio';
+}
+
+/**
+ * Heal a project that only has URLs (legacy records, or uploads that never
+ * stored a ref): recover a canonical ref from every Supabase storage URL so
+ * the asset can be re-signed after the persisted URL expires. External CDN
+ * URLs are left untouched — they are their own identity.
+ */
+export function recoverProjectRefs(project: StudioProject): StudioProject {
+  return {
+    ...project,
+    tracks: project.tracks.map((track) => ({
+      ...track,
+      clips: track.clips.map((clip) => {
+        if (isMediaRef(clip.assetRef)) return clip;
+        const recovered = clip.assetUrl
+          ? mediaRefFromStorageUrl(clip.assetUrl, kindForTrack(track.kind))
+          : null;
+        return recovered ? { ...clip, assetRef: recovered } : clip;
+      }),
+    })),
+    branding: isMediaRef(project.branding.logoRef) || !project.branding.logoUrl
+      ? project.branding
+      : {
+          ...project.branding,
+          logoRef: mediaRefFromStorageUrl(project.branding.logoUrl, 'image') ?? undefined,
+        },
+  };
+}
+
+/**
+ * Replace the in-memory session URLs of a project with freshly signed ones.
+ * `resolvedUrls` is keyed like `MediaUrlResolver.resolveProject`
+ * (`clip.assetUrl || clip.assetRef.path`, plus `'branding.logo'`).
+ */
+export function applyResolvedMediaUrls(
+  project: StudioProject,
+  resolvedUrls: Map<string, string>,
+): StudioProject {
+  if (resolvedUrls.size === 0) return project;
+
+  const urlFor = (clip: { assetUrl: string; assetRef?: MediaRef }): string | undefined =>
+    resolvedUrls.get(clip.assetUrl || clip.assetRef?.path || '');
+
+  let changed = false;
+  const tracks = project.tracks.map((track) => ({
+    ...track,
+    clips: track.clips.map((clip) => {
+      const fresh = urlFor(clip);
+      if (!fresh || fresh === clip.assetUrl) return clip;
+      changed = true;
+      return { ...clip, assetUrl: fresh };
+    }),
+  }));
+
+  const logoUrl = resolvedUrls.get('branding.logo');
+  const branding = logoUrl && logoUrl !== project.branding.logoUrl
+    ? { ...project.branding, logoUrl }
+    : project.branding;
+  if (branding !== project.branding) changed = true;
+
+  return changed ? { ...project, tracks, branding } : project;
+}
+
+/**
+ * Resolve every media URL of a project to a fresh session URL (and heal refs
+ * for legacy URL-only records). Returns a new project — nothing is persisted
+ * here; callers still save through `saveProject`.
+ */
+export async function refreshProjectMedia(
+  project: StudioProject,
+  resolver: MediaUrlResolver = mediaResolver(),
+): Promise<StudioProject> {
+  const healed = recoverProjectRefs(project);
+  try {
+    const resolvedUrls = await resolver.resolveProject(healed);
+    return applyResolvedMediaUrls(healed, resolvedUrls);
+  } catch {
+    // Keep the last known URLs rather than blanking the timeline.
+    return healed;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +338,64 @@ export async function loadLatestRenderJob(projectId: string): Promise<StudioRend
     .maybeSingle();
   if (error) throw new Error(describeError(error, 'Could not load render jobs'));
   return (data as StudioRenderJobRow | null) ?? null;
+}
+
+/** Render job row plus the ref columns the migration adds (canonical identity). */
+export interface StudioRenderJobRowWithRefs extends StudioRenderJobRow {
+  output_ref?: MediaRef | null;
+  captioned_output_ref?: MediaRef | null;
+}
+
+/**
+ * Sign one job output: prefer the canonical ref, recover one from a legacy
+ * storage URL when the ref is missing, and pass external URLs through. On any
+ * failure the last known URL is kept (never blank a finished job).
+ */
+export async function resolveJobMediaUrl(
+  url: string | null | undefined,
+  ref: MediaRef | null | undefined,
+  kind: MediaKind,
+  resolver: MediaUrlResolver = mediaResolver(),
+): Promise<string | null> {
+  if ((!url || url.length === 0) && !ref) return null;
+  try {
+    const resolved = await resolver.resolveAsset(url ?? undefined, ref ?? undefined, kind);
+    return resolved.url || null;
+  } catch {
+    return url ?? null;
+  }
+}
+
+export interface ResolvedRenderJobMedia {
+  outputUrl: string | null;
+  captionedOutputUrl: string | null;
+}
+
+/**
+ * Map a render job's `output_ref` / `captioned_output_ref` columns to fresh
+ * signed URLs. Consumers (`loadLatestRenderJob` / `watchRenderJob` readers,
+ * the export + caption panels) get URLs that stay playable for an hour and can
+ * always be re-derived — the row keeps both ref and last URL.
+ */
+export async function resolveRenderJobMedia(
+  job: StudioRenderJobRowWithRefs | null | undefined,
+  resolver: MediaUrlResolver = mediaResolver(),
+): Promise<ResolvedRenderJobMedia> {
+  if (!job) return { outputUrl: null, captionedOutputUrl: null };
+  const [outputUrl, captionedOutputUrl] = await Promise.all([
+    resolveJobMediaUrl(job.output_url, job.output_ref ?? null, 'video', resolver),
+    resolveJobMediaUrl(job.captioned_output_url, job.captioned_output_ref ?? null, 'video', resolver),
+  ]);
+  return { outputUrl, captionedOutputUrl };
+}
+
+/** Same mapping for MuAPI caption jobs (styled output ref + last URL). */
+export async function resolveCaptionJobMedia(
+  job: { output_url?: string | null; output_ref?: MediaRef | null } | null | undefined,
+  resolver: MediaUrlResolver = mediaResolver(),
+): Promise<string | null> {
+  if (!job) return null;
+  return resolveJobMediaUrl(job.output_url, job.output_ref ?? null, 'video', resolver);
 }
 
 const RENDER_JOB_POLL_MS = 3000;
@@ -262,9 +473,12 @@ export interface SceneSubmitResponse {
 
 export interface SceneStatusResponse {
   status?: string | null;
-  /** `scene-status` returns the stored public URL as `assetUrl`. */
+  /** 1-hour signed URL for immediate playback (session state). */
   assetUrl?: string | null;
+  /** Canonical identity of the stored clip — persist THIS. */
+  assetRef?: MediaRef | null;
   output_url?: string | null;
+  clipId?: string | null;
   clip_id?: string | null;
   error?: string | null;
 }
@@ -272,6 +486,7 @@ export interface SceneStatusResponse {
 export interface SceneJobState {
   status: SceneJobStatus;
   outputUrl: string | null;
+  outputRef: MediaRef | null;
   clipId: string | null;
   error: string | null;
 }
@@ -306,8 +521,8 @@ export async function generateScene(
 
 /**
  * Poll a beat's generation through the `scene-status` edge function. When the
- * job is done the server has already stored the clip and wired it into the
- * project row, and returns the public asset URL.
+ * job is done the server has stored the clip (canonical ref + 1-hour signed
+ * URL) and wired it into the project row, and returns both.
  */
 export async function pollSceneStatus(
   projectId: string,
@@ -322,7 +537,8 @@ export async function pollSceneStatus(
   return {
     status: normalizeSceneStatus(response?.status),
     outputUrl: response?.assetUrl ?? response?.output_url ?? null,
-    clipId: response?.clip_id ?? null,
+    outputRef: isMediaRef(response?.assetRef) ? (response?.assetRef as MediaRef) : null,
+    clipId: response?.clipId ?? response?.clip_id ?? null,
     error: response?.error ?? null,
   };
 }
@@ -341,6 +557,11 @@ export interface CaptionSubmitPayload {
   /** Public(ly reachable) video/audio URL to transcribe or caption. */
   videoUrl: string;
   renderJobId?: string | null;
+  /**
+   * Optional: the server resolves this clip from the project and signs a
+   * 1-hour URL from its canonical ref, so MuAPI never needs a public bucket.
+   */
+  clipId?: string | null;
 }
 
 export interface CaptionSubmitResponse {
@@ -354,6 +575,8 @@ export interface CaptionSubmitResponse {
 export interface CaptionStatusResponse {
   status?: string | null;
   output_url?: string | null;
+  /** Canonical identity of the captioned output (bucket + path). */
+  output_ref?: MediaRef | null;
   captions?: StudioCaption[] | null;
   error?: string | null;
 }
@@ -361,6 +584,7 @@ export interface CaptionStatusResponse {
 export interface CaptionJobState {
   status: SceneJobStatus;
   outputUrl: string | null;
+  outputRef: MediaRef | null;
   captions: StudioCaption[];
   error: string | null;
 }
@@ -375,6 +599,7 @@ export async function captionSubmit(payload: CaptionSubmitPayload): Promise<stri
     theme: payload.theme,
     video_url: payload.videoUrl,
     render_job_id: payload.renderJobId ?? null,
+    ...(payload.clipId ? { clip_id: payload.clipId } : {}),
   });
   const jobId = response?.job_id ?? response?.id ?? null;
   if (!jobId) throw new Error(response?.error ?? 'Caption job did not return a job id');
@@ -391,6 +616,7 @@ export async function captionPoll(projectId: string, jobId: string): Promise<Cap
   return {
     status: normalizeSceneStatus(response?.status),
     outputUrl: response?.output_url ?? null,
+    outputRef: isMediaRef(response?.output_ref) ? (response.output_ref as MediaRef) : null,
     captions: Array.isArray(response?.captions) ? (response.captions as StudioCaption[]) : [],
     error: response?.error ?? null,
   };

@@ -1,6 +1,7 @@
 import { buildCorsHeaders, handleOptions, HttpError, jsonResponse } from "../_shared/cors.ts";
 import { requireUser, serviceClient } from "../_shared/auth.ts";
 import { assertProjectOwnership } from "../_shared/ownership.ts";
+import { findUnownedClipRefs } from "../_shared/media.ts";
 import { validateProjectForRender } from "../_shared/project.ts";
 
 /**
@@ -9,10 +10,15 @@ import { validateProjectForRender } from "../_shared/project.ts";
  * POST /functions/v1/render-project
  * Body: { project_id, settings?: { width?, height?, fps?, codec?, pixelFormat? } }
  * 200: { job_id, status: "queued" }   (client watches studio_render_jobs via RLS)
- * 400: project_id missing or project fails structural validation (details included)
+ * 400: project_id missing, project fails structural validation (details
+ *      included), or a clip references media owned by another account
  * 404: project not found or not owned by caller
  * 409: a queued/running job already exists for this project
  * 500: unexpected failures
+ *
+ * The snapshot stored in studio_render_jobs.project_snapshot keeps BOTH the
+ * canonical refs and the session URLs — the worker resolves refs (or re-signs
+ * the URLs) with the service role at render time.
  */
 
 interface RenderSettings {
@@ -80,7 +86,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = serviceClient();
-    await assertProjectOwnership(supabase, projectId, userId);
+    const { user_id: ownerUserId } = await assertProjectOwnership(supabase, projectId, userId);
 
     const { data: projectRow, error: projectLoadError } = await supabase
       .from("studio_projects")
@@ -96,6 +102,21 @@ Deno.serve(async (req: Request) => {
     }
 
     const project = projectRow.project;
+
+    // Media ownership: every clip ref must belong to the project owner.
+    // External http(s) asset URLs stay allowed (they are their own identity).
+    const unownedRefs = findUnownedClipRefs(project, ownerUserId);
+    if (unownedRefs.length > 0) {
+      return jsonResponse(
+        {
+          error: "Project references media owned by another account",
+          details: unownedRefs,
+        },
+        400,
+        cors,
+      );
+    }
+
     const validation = validateProjectForRender(project);
     if (!validation.ok || !validation.project) {
       return jsonResponse(

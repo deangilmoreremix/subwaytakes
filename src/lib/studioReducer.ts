@@ -8,6 +8,7 @@
  * can be driven by `useSyncExternalStore`.
  */
 
+import type { MediaRef } from '../studio/mediaRefs';
 import type {
   StudioBranding,
   StudioCaption,
@@ -39,6 +40,7 @@ export function snapSeconds(value: number): number {
 export type StudioAction =
   | { type: 'ADD_CLIP'; trackId: string; clip: StudioClip }
   | { type: 'REMOVE_CLIP'; clipId: string }
+  | { type: 'DUPLICATE_CLIP'; clipId: string }
   | { type: 'TRIM_CLIP'; clipId: string; trimStart: number; trimEnd: number }
   | { type: 'MOVE_CLIP'; clipId: string; newStart: number }
   | { type: 'SPLIT_CLIP'; clipId: string; atSeconds: number }
@@ -52,6 +54,12 @@ export type StudioAction =
       clipId: string;
       assetUrl: string;
       assetKind: StudioClip['assetKind'];
+      /**
+       * Canonical identity of the NEW asset. A new asset replaces the identity
+       * of the clip: omit it (or pass null) to drop the previous ref, because
+       * the URL that replaced it no longer describes the old object.
+       */
+      assetRef?: MediaRef | null;
     }
   | { type: 'ADD_CAPTION'; caption: StudioCaption }
   | { type: 'UPDATE_CAPTION'; captionId: string; updates: Partial<StudioCaption> }
@@ -139,6 +147,33 @@ export function studioReducer(project: StudioProject, action: StudioAction): Stu
         entry.clipId === action.clipId ? { ...entry, clipId: undefined } : entry,
       );
       return sanitizeProject({ ...project, tracks, scenePlan });
+    }
+
+    case 'DUPLICATE_CLIP': {
+      const located = findClip(project, action.clipId);
+      if (!located) return project;
+      const { track, clip } = located;
+
+      // Preserves trim / volume / fades / shot type and starts playing right
+      // after the source, so the copy never overlaps it. The beat link is
+      // dropped: a duplicate is an independent clip, not a second take of the
+      // same beat (the scene plan keeps pointing at the original).
+      const copy: StudioClip = {
+        ...clip,
+        id: crypto.randomUUID(),
+        start: snapSeconds(clip.start + clipLength(clip)),
+        beatId: undefined,
+        label: clip.label ? `${clip.label} (copy)` : 'Clip (copy)',
+      };
+
+      const ordered = [...track.clips].sort((a, b) => a.start - b.start);
+      const index = ordered.findIndex((c) => c.id === clip.id);
+      ordered.splice(index + 1, 0, copy);
+
+      return sanitizeProject({
+        ...project,
+        tracks: project.tracks.map((t) => (t.id === track.id ? { ...t, clips: ordered } : t)),
+      });
     }
 
     case 'TRIM_CLIP': {
@@ -255,10 +290,11 @@ export function studioReducer(project: StudioProject, action: StudioAction): Stu
       const located = findClip(project, action.clipId);
       if (!located) return project;
       const { clip } = located;
+      const assetRef = action.assetRef ?? undefined;
       const next = mapClip(project, action.clipId, (c) =>
-        c.assetUrl === action.assetUrl && c.assetKind === action.assetKind
+        c.assetUrl === action.assetUrl && c.assetKind === action.assetKind && c.assetRef === assetRef
           ? c
-          : { ...c, assetUrl: action.assetUrl, assetKind: action.assetKind },
+          : { ...c, assetUrl: action.assetUrl, assetKind: action.assetKind, assetRef },
       );
       if (next === project) return project;
       const scenePlan = clip.beatId

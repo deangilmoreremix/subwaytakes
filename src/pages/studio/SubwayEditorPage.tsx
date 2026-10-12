@@ -6,6 +6,7 @@ import { Loader2, Redo2, Save, Undo2, Video } from 'lucide-react';
 
 import { SubwayEditorComposition, projectDurationInFrames } from '../../studio/SubwayEditorComposition';
 import { useStudioProject, useStudioRender } from '../../hooks/useStudioProject';
+import { useMediaUrls } from '../../hooks/useMediaUrls';
 import {
   StudioTimeline,
   type StudioSelection,
@@ -42,6 +43,20 @@ const SAVE_LABEL: Record<string, string> = {
   error: 'Save failed',
 };
 
+/** Minimum gap between two media refresh passes (ms) — avoids re-sign storms. */
+const MEDIA_REFRESH_MIN_INTERVAL_MS = 30_000;
+
+/** True when the keystroke came from a text field (never hijack those). */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable
+  );
+}
+
 export function SubwayEditorPage() {
   const { projectId = '' } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -61,6 +76,34 @@ export function SubwayEditorPage() {
   } = useStudioProject(projectId);
   const render = useStudioRender(resolvedProjectId, project);
 
+  // -------------------------------------------------------------------------
+  // Media: clips store canonical refs + derived URLs. The resolver keeps the
+  // derived URLs fresh (media-sign edge function, ownership verified server
+  // side); the player always renders from `playerProject` below.
+  // -------------------------------------------------------------------------
+  const { resolvedUrls, refreshing: mediaRefreshing, refresh: refreshMedia, lastError: mediaError } =
+    useMediaUrls(project);
+
+  const lastMediaRefreshRef = useRef(0);
+  useEffect(() => {
+    const wake = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (Date.now() - lastMediaRefreshRef.current < MEDIA_REFRESH_MIN_INTERVAL_MS) return;
+      lastMediaRefreshRef.current = Date.now();
+      void refreshMedia();
+    };
+    // Warm the cache on mount ...
+    wake();
+    // ... and again whenever the tab regains focus/visibility, so a project
+    // left open across a tab switch never shows expired previews.
+    window.addEventListener('focus', wake);
+    document.addEventListener('visibilitychange', wake);
+    return () => {
+      window.removeEventListener('focus', wake);
+      document.removeEventListener('visibilitychange', wake);
+    };
+  }, [refreshMedia]);
+
   const playerRef = useRef<PlayerRef>(null);
   const [playhead, setPlayhead] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -72,13 +115,39 @@ export function SubwayEditorPage() {
   const durationInFrames = useMemo(() => projectDurationInFrames(project), [project]);
   const totalSeconds = useMemo(() => projectDurationSeconds(project), [project]);
 
+  /**
+   * The project handed to the player: every clip's derived `assetUrl`
+   * (and the branding logo URL) is replaced by the freshly resolved session
+   * URL, falling back to the stored value. Memoised so the 10fps playhead
+   * ticks and unrelated re-renders never rebuild the player subtree.
+   */
+  const playerProject = useMemo(() => {
+    const logoUrl = resolvedUrls.get('branding.logo');
+    return {
+      ...project,
+      tracks: project.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (!clip.assetUrl && !clip.assetRef) return clip;
+          const key = clip.assetUrl || clip.assetRef!.path;
+          const resolved = resolvedUrls.get(key);
+          return resolved && resolved !== clip.assetUrl ? { ...clip, assetUrl: resolved } : clip;
+        }),
+      })),
+      branding:
+        logoUrl && logoUrl !== project.branding.logoUrl
+          ? { ...project.branding, logoUrl }
+          : project.branding,
+    };
+  }, [project, resolvedUrls]);
+
   // The player subtree is memoised so playhead ticks (10fps) do not re-render it.
   const player = useMemo(
     () => (
       <Player
         ref={playerRef}
         component={SubwayEditorComposition}
-        inputProps={{ project }}
+        inputProps={{ project: playerProject }}
         durationInFrames={durationInFrames}
         compositionWidth={project.width}
         compositionHeight={project.height}
@@ -90,7 +159,7 @@ export function SubwayEditorPage() {
         style={{ width: '100%', height: '100%' }}
       />
     ),
-    [project, durationInFrames, fps],
+    [playerProject, durationInFrames, fps, project.width, project.height],
   );
 
   useEffect(() => {
@@ -147,11 +216,69 @@ export function SubwayEditorPage() {
     }
   }, [projectId, navigate, resolvedProjectId]);
 
+  // Editor-wide shortcuts: undo/redo (also the undo path for every delete,
+  // split, duplicate and trim), split at the playhead and save now.
+  const playheadRef = useRef(playhead);
+  playheadRef.current = playhead;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      const mod = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+
+      if (mod && key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (mod && key === 'y') {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (mod && key === 's') {
+        event.preventDefault();
+        void saveNow();
+        return;
+      }
+      if (key === 's' && selection?.kind === 'clip') {
+        event.preventDefault();
+        dispatch({ type: 'SPLIT_CLIP', clipId: selection.id, atSeconds: playheadRef.current });
+        return;
+      }
+      if ((key === 'delete' || key === 'backspace') && selection) {
+        event.preventDefault();
+        if (selection.kind === 'caption') {
+          dispatch({ type: 'REMOVE_CAPTION', captionId: selection.id });
+        } else {
+          dispatch({ type: 'REMOVE_CLIP', clipId: selection.id });
+        }
+        setSelection(null);
+        return;
+      }
+      if (key === 'd' && selection?.kind === 'clip') {
+        event.preventDefault();
+        dispatch({ type: 'DUPLICATE_CLIP', clipId: selection.id });
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dispatch, redo, saveNow, selection, setSelection, undo]);
+
   const startRender = render.startRender;
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     setActiveTab('export');
-    void startRender();
-  }, [startRender]);
+    // Same contract as the Export panel: re-sign media before the snapshot is
+    // taken, then enqueue. A failed refresh must not block the render — the
+    // worker re-signs server-side anyway.
+    try {
+      await refreshMedia();
+    } catch {
+      /* ignore: the worker resolves media itself */
+    }
+    await startRender();
+  }, [refreshMedia, startRender]);
 
   if (status === 'loading') {
     return (
@@ -205,6 +332,17 @@ export function SubwayEditorPage() {
             render: {renderStatus}
             {render.job ? ` · ${render.job.progress}%` : ''}
           </span>
+          <span
+            className="rounded-full border border-zinc-700 bg-zinc-800/40 px-2.5 py-1 text-[11px] font-medium text-zinc-400"
+            title={
+              mediaError ??
+              (mediaRefreshing
+                ? 'Re-signing media URLs for this session'
+                : 'Clip URLs are derived per session from canonical refs')
+            }
+          >
+            {mediaRefreshing ? 'media: signing…' : mediaError ? 'media: stale' : 'media: fresh'}
+          </span>
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -212,6 +350,7 @@ export function SubwayEditorPage() {
             type="button"
             onClick={undo}
             disabled={!canUndo}
+            title="Undo (⌘Z)"
             className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:border-amber-500/60 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Undo2 className="h-3.5 w-3.5" /> Undo
@@ -220,6 +359,7 @@ export function SubwayEditorPage() {
             type="button"
             onClick={redo}
             disabled={!canRedo}
+            title="Redo (⌘⇧Z)"
             className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:border-amber-500/60 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Redo2 className="h-3.5 w-3.5" /> Redo
@@ -227,14 +367,16 @@ export function SubwayEditorPage() {
           <button
             type="button"
             onClick={() => void saveNow()}
+            title="Save now (⌘S)"
             className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:border-zinc-500"
           >
             <Save className="h-3.5 w-3.5" /> Save
           </button>
           <button
             type="button"
-            onClick={handleExport}
+            onClick={() => void handleExport()}
             disabled={!resolvedProjectId || render.busy}
+            title="Enqueue an MP4 render in the worker (media is re-signed first)"
             className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Video className="h-3.5 w-3.5" /> Export MP4
@@ -242,9 +384,21 @@ export function SubwayEditorPage() {
         </div>
       </header>
 
-      {saveError && (
-        <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
-          <p className="text-sm text-rose-300">{saveError}</p>
+      {(saveError || mediaError) && (
+        <div className="mt-4 space-y-2">
+          {saveError && (
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
+              <p className="text-sm text-rose-300">{saveError}</p>
+            </div>
+          )}
+          {mediaError && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+              <p className="text-sm text-amber-300">
+                Media URLs could not be refreshed ({mediaError}) — previews may be stale; the render
+                still re-signs server-side.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -338,7 +492,14 @@ export function SubwayEditorPage() {
           )}
           {activeTab === 'branding' && <BrandingPanel project={project} dispatch={dispatch} />}
           {activeTab === 'export' && (
-            <ExportPanel project={project} projectId={resolvedProjectId} render={render} />
+            <ExportPanel
+              project={project}
+              projectId={resolvedProjectId}
+              render={render}
+              onRefreshMedia={refreshMedia}
+              mediaRefreshing={mediaRefreshing}
+              mediaError={mediaError}
+            />
           )}
         </aside>
       </div>

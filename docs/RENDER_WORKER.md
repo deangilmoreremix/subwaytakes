@@ -45,6 +45,53 @@ startup, which **downloads Chrome for Testing and needs network egress**.
 The Docker image pre-bakes it at build time, so this only affects
 bare-metal installs. `/health` reports `chromium: true|false`.
 
+### Remaining infrastructure actions (host deploy)
+
+Everything below is **infrastructure work** — there is no container runtime,
+Supabase project or DNS in the development sandbox, so none of it has been
+executed here. Each item is required before the worker can take real traffic:
+
+1. **Build the image on the deploy host** (repo root is the build context):
+   ```bash
+   git clone <repo> subwaytakes && cd subwaytakes
+   git checkout feat/subway-interview-studio
+   npm ci                     # repo root: remotion + @remotion/cli
+   docker build -f render-worker/Dockerfile -t render-worker .
+   ```
+   The Dockerfile already installs system ffmpeg and pre-bakes Chromium
+   (`remotion browser ensure`) — do **not** skip the browser step, it needs
+   network egress at build time.
+2. **Create the environment file** from `render-worker/.env.example` and fill
+   in, at minimum: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `WORKER_API_KEY`, `REPO_ROOT=/repo` (path of the checkout inside the
+   container), `STORAGE_BUCKET=studio-exports`.
+3. **Apply the database migration**
+   `supabase/migrations/20261011090000_studio_projects_and_render_jobs.sql`
+   (see `docs/STAGING_RUNBOOK.md` and `docs/SHARED_DB_COMPATIBILITY.md` for the
+   shared-database caveats). The worker needs the `studio_render_jobs` +
+   `studio_projects` tables and the private `studio-exports` bucket
+   (`<user_id>/<project_id>/render-<job_id>.mp4`).
+4. **Run the worker** (compose or plain docker):
+   ```bash
+   docker run --env-file render-worker/.env -p 3010:3010 --restart unless-stopped render-worker
+   ```
+5. **Point the app at it**: the `render-project` edge function enqueues rows in
+   `studio_render_jobs`; the worker polls that table with the service-role key,
+   so no inbound route to the worker is needed. Keep port 3010 private (it only
+   exposes `/health`, `/status`, `/render` behind `WORKER_API_KEY`).
+6. **Verify after boot**:
+   ```bash
+   curl -s localhost:3010/health | jq            # chromium:true, ffmpeg version, queue depth
+   curl -s -H "Authorization: Bearer $WORKER_API_KEY" localhost:3010/status | jq
+   ```
+   A missing `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (or a missing
+   ffmpeg/ffprobe binary) is logged at boot as `[worker] CONFIG INCOMPLETE —
+   <var> ...` naming every variable.
+7. **Smoke test** on the host (real ffmpeg + real render):
+   ```bash
+   cd render-worker && npx ts-node src/smoke.ts      # exit 0 = PASS
+   ```
+
 ---
 
 ## 2. Queue protocol (`studio_render_jobs`)
@@ -56,7 +103,7 @@ bare-metal installs. `/health` reports `chromium: true|false`.
 | Heartbeat | While rendering, `updated_at` is bumped every `HEARTBEAT_INTERVAL_MS` (30s); every progress update also refreshes it |
 | Stale reclaim | Any `running` job whose `updated_at` is older than `JOB_TIMEOUT_MS` (15 min) is reset to `queued` with `worker_id=NULL` (jobs in flight **in this process** are skipped) |
 | Progress | 5 → 85 → 100 on success; 0 + `error` message on failure |
-| Done | `status='done'`, `output_url=<7-day signed URL>`, `progress=100` |
+| Done | `status='done'`, `output_url=<7-day signed URL>`, `progress=100` (guarded by `WHERE id=? AND status='running'`, so a job another worker reclaimed after a stall is never overwritten by a zombie writer) |
 
 A worker crash mid-render leaves the job `running`; the next poll cycle (this
 worker after restart, or any other worker) reclaims it via the stale rule —
@@ -77,23 +124,34 @@ Notes:
 ```
 job row (queued)
   → validate project_snapshot      (render-worker/src/render.ts — mirrors
-                                     src/studio/types.ts parseProject rules;
-                                     rejects non-http(s) asset URLs, empty
-                                     timelines, bad trims)
-  → sign Supabase storage assets    (private bucket objects are re-signed for
-                                     1h so headless Chromium can fetch them)
-  → write props.json                (mkdtemp under os.tmpdir(); NEVER argv)
+                                      src/studio/types.ts parseProject rules;
+                                      rejects non-http(s) asset URLs, empty
+                                      timelines, bad trims, malformed media
+                                      refs)
+  → read the media owner            (studio_projects.user_id — read with the
+                                      service-role client, never from the
+                                      client; the job row's user_id is only a
+                                      fallback when the project row is gone)
+  → sign every clip asset           (private bucket objects and canonical
+                                      refs are re-signed for 1h so headless
+                                      Chromium can fetch them; the ref/path's
+                                      FIRST SEGMENT must equal the owner, else
+                                      the job fails — private media must never
+                                      be resolvable cross-user)
+  → write props.json                (mkdtemp under os.tmpdir(); NEVER argv;
+                                      resolved URLs live here only, they are
+                                      never written back to the DB)
   → remotion render                 (<REPO_ROOT>/node_modules/.bin/remotion render
-                                     <entry> SubwayEditor <raw.mp4>
-                                     --codec=h264 --pixel-format=yuv420p
-                                     --concurrency=2 --timeout=600000(ms)
-                                     --props=<props.json> --log=info)
+                                      <entry> SubwayEditor <raw.mp4>
+                                      --codec=h264 --pixel-format=yuv420p
+                                      --concurrency=2 --timeout=600000(ms)
+                                      --props=<props.json> --log=info)
   → ffprobe verify (raw)            (container mp4, video h264, 1080x1920,
-                                     duration within 0.5s of the timeline —
-                                     trims ARE the timeline duration)
+                                      30fps, yuv420p, duration within 0.5s of the
+                                      timeline — trims ARE the timeline duration)
   → ffmpeg normalize (encode gate)  (scale/pad to 1080x1920, libx264 crf20
-                                     medium, yuv420p, 30fps, aac 128k 48kHz,
-                                     +faststart — always runs once)
+                                      medium, yuv420p, 30fps, aac 128k 48kHz,
+                                      +faststart — always runs once)
   → ffprobe verify (final)          (+ AAC required when the timeline has audio)
   → upload studio-exports            (<user_id>/<project_id>/render-<job_id>.mp4)
   → createSignedUrl(path, 604800)
@@ -105,16 +163,16 @@ temp dir is always deleted in a `finally` block.
 
 ### Entry point note
 
-`remotion/src/Root.tsx` currently imports the studio composition with a
-wrong relative path (`../src/studio/...` resolves to
-`remotion/src/studio/...`), which breaks `remotion render
-remotion/src/index.ts` at bundle time for **every** composition. Until that
-file (owned by another agent) is fixed, the worker renders through a bridge
-entry, `render-worker/src/remotion-entry.tsx`, which registers the identical
-`SubwayEditor` composition from the correct path. Switch back with:
+`render-worker/src/remotion-entry.tsx` is a bridge entry that registers the
+identical `SubwayEditor` composition; originally it existed because
+`remotion/src/Root.tsx` imported the studio composition through a broken
+relative path, which broke `remotion render remotion/src/index.ts` for **every**
+composition. That path is fixed, so the default entry is now the repo's Remotion
+root:
 
 ```bash
-REMOTION_ENTRY=remotion/src/index.ts
+REMOTION_ENTRY=remotion/src/index.ts          # default
+# REMOTION_ENTRY=render-worker/src/remotion-entry.tsx   # explicit bridge
 ```
 
 ---
@@ -131,7 +189,33 @@ REMOTION_ENTRY=remotion/src/index.ts
 The ffmpeg normalize step runs **even when the Remotion output already
 complies** — one extra encode is cheap and guarantees the contract (mixed
 SAR/pix_fmt or missing faststart breaks the app's `<video>` playback).
-Verification failure fails the job; nothing invalid is ever marked `done`.
+`verifyDelivery()` checks container, video codec, dimensions, frame rate,
+pixel format and duration on **both** the raw and the final file, and adds the
+AAC requirement when the timeline actually has audio. Verification failure
+fails the job; nothing invalid is ever marked `done`.
+
+---
+
+## 4b. Media resolution & ownership
+
+Every clip in a snapshot carries a canonical ref (`assetRef: {bucket, path,
+kind}`) plus a derived, session-scoped `assetUrl`; legacy records only have a
+storage URL. Before rendering, `resolveProjectMedia()` re-signs all of them
+with the service-role client:
+
+- a **ref** is signed with `storage.createSignedUrl()` (1h TTL);
+- a **legacy storage URL** of ours (`<SUPABASE_URL>/storage/v1/object/...`) is
+  parsed back to bucket+path and re-signed — private objects cannot be fetched
+  by headless Chromium, which sends no Authorization header;
+- an **external CDN URL** is passed through untouched (its own identity).
+
+Every signature is gated by an ownership check: the first path segment of a
+storage path is the owner's user id, and it must equal `studio_projects.user_id`
+of the rendered project. A mismatch (`…ownership check failed for <bucket>/<path>:
+path is not owned by project owner <uid>`) fails the job **before** Remotion
+starts — no other user's footage can ever be rendered or signed by the worker.
+The signed URLs are written to the props file only; the project row keeps refs
+and is never updated with session URLs.
 
 ---
 
@@ -141,7 +225,7 @@ Verification failure fails the job; nothing invalid is ever marked `done`.
 |----------|------|---------|
 | `GET /health` | none | `status`, `version`, `workerId`, ffmpeg/ffprobe versions, `chromium`, queue depth |
 | `GET /status` | `WORKER_API_KEY` bearer (open when unset) | config + queue state |
-| `POST /render` | same as `/status` | direct render, no queue/DB. Body: `{ project, renderSettings? }`. Used by the smoke test |
+| `POST /render` | same as `/status` | direct render, no queue/DB. Body: `{ project, renderSettings?, ownerUserId? }`. Used by the smoke test. `ownerUserId` (optional) turns on the same media-ownership check the queue path uses; without a DB row there is no project owner to compare against |
 
 `WORKER_API_KEY` unset ⇒ the API runs **open** (same convention as
 thumbnail-service with no `API_KEY`) — only acceptable on a private network.
@@ -158,7 +242,7 @@ See `render-worker/.env.example`. Summary:
 | `WORKER_API_KEY` | *(empty = open)* | bearer key for `/status`, `/render` |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | — | service-role client (bypasses RLS) |
 | `REPO_ROOT` | auto (repo root) | dir with `node_modules/.bin/remotion` |
-| `REMOTION_ENTRY` | `render-worker/src/remotion-entry.tsx` | bundler entry (see §3) |
+| `REMOTION_ENTRY` | `remotion/src/index.ts` | bundler entry (see §3) |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | `/usr/bin/...` | system binaries |
 | `POLL_INTERVAL_MS` | 3000 | queue poll interval |
 | `MAX_CONCURRENCY` | 1 | concurrent renders per worker |
@@ -193,7 +277,8 @@ applied. Exit code 0 = PASS.
 
 ```bash
 cd render-worker
-npm test                       # vitest: test/queue-semantics.test.ts + test/render-pipeline.test.ts
+npm test                       # vitest: queue-semantics + render-pipeline +
+                               #        media-resolution
 ```
 
 `render-worker/STAGING_CHECKLIST.md` maps every Phase 3 item to what these tests
@@ -205,6 +290,13 @@ reclaim, terminal states, MAX_CONCURRENCY and the API auth middleware. The
 pipeline suite checks the ffmpeg encode-gate arguments and the probe
 verification rules, and runs real encode + probe assertions wherever a capable
 ffmpeg exists (it skips them, with a NOTE, when the environment has none).
+The media suite (`test/media-resolution.test.ts`) injects a fake storage client
+and proves: refs/legacy storage URLs are re-signed with the service-role
+client, CDN URLs pass through, an unowned path **fails the job** before any
+render, the resolved URLs reach the Remotion props file while the DB snapshot
+stays byte-identical, and temp dirs are removed on every injected failure path
+(media resolution, remotion exit, ffprobe failure, ffmpeg normalize failure,
+missing output).
 
 ---
 
@@ -216,7 +308,10 @@ ffmpeg exists (it skips them, with a NOTE, when the environment has none).
 | Job stuck `running` | Worker died; the stale reclaimer resets it after `JOB_TIMEOUT_MS`; check worker logs |
 | `Invalid project_snapshot` | Editor produced a project that fails the same rules as `parseProject`; check `error` text |
 | `Render verification failed` | Duration/dimension mismatch — usually a project whose timeline duration disagrees with its clips |
+| `media ownership check failed for …` | A clip ref/URL whose path is not owned by the project's `user_id` — the job fails instead of rendering another user's media. Fix the clip (re-upload through the editor) or the project's owner |
 | `storage upload failed` | Wrong service-role key, missing `studio-exports` bucket, or RLS on a service-role client (should not happen) |
+| `could not sign storage asset …` | Bucket missing, object deleted, or a path that does not start with the owner id |
+| `[worker] CONFIG INCOMPLETE — …` at boot | Missing `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`, or a missing ffmpeg/ffprobe/remotion binary; the log names every variable |
 | Multiple workers, duplicate renders | `MAX_CONCURRENCY` total across workers should match CPU budget; the claim guard prevents double-claims |
 | Hunted OOM in Chromium | Lower `REMOTION_CONCURRENCY`, or use projects with fewer simultaneous video clips |
 

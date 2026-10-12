@@ -9,7 +9,7 @@ import {
   beatTimings,
   clipForBeat,
   describeError,
-  uploadFootage,
+  uploadFootageRef,
 } from '../../lib/studioProjects';
 
 export interface UploadFootagePanelProps {
@@ -19,6 +19,11 @@ export interface UploadFootagePanelProps {
 }
 
 type UploadTarget = 'video' | StudioTrackKind;
+
+/** Storage kind of an upload target (drives the persisted media ref). */
+function refKindFor(target: UploadTarget): 'video' | 'audio' {
+  return target === 'video' ? 'video' : 'audio';
+}
 
 export function UploadFootagePanel({ project, projectId, dispatch }: UploadFootagePanelProps) {
   const projectRef = useRef(project);
@@ -41,13 +46,22 @@ export function UploadFootagePanel({ project, projectId, dispatch }: UploadFoota
     setStatus((previous) => ({ ...previous, [key]: `Uploading ${file.name}…` }));
 
     try {
-      const url = await uploadFootage(projectId, file, beatId);
+      // The ref is the identity of the asset (it never expires); the URL is
+      // only this session's derived, playable form.
+      const uploaded = await uploadFootageRef(projectId, file, beatId);
+      const assetRef = { ...uploaded.ref, kind: refKindFor(target) };
       const current = projectRef.current;
 
       if (target === 'video') {
         const clip = clipForBeat(current, beatId);
         if (clip) {
-          dispatch({ type: 'SET_CLIP_ASSET', clipId: clip.id, assetUrl: url, assetKind: 'uploaded' });
+          dispatch({
+            type: 'SET_CLIP_ASSET',
+            clipId: clip.id,
+            assetUrl: uploaded.url,
+            assetKind: 'uploaded',
+            assetRef,
+          });
         } else {
           const videoTrack = current.tracks.find((track) => track.kind === 'video');
           const beat = beats.find((entry) => entry.beatId === beatId);
@@ -59,7 +73,8 @@ export function UploadFootagePanel({ project, projectId, dispatch }: UploadFoota
             trackId: videoTrack.id,
             clip: {
               id: crypto.randomUUID(),
-              assetUrl: url,
+              assetUrl: uploaded.url,
+              assetRef,
               assetKind: 'uploaded',
               beatId,
               start: beat.start,
@@ -81,8 +96,9 @@ export function UploadFootagePanel({ project, projectId, dispatch }: UploadFoota
           dispatch({
             type: 'SET_CLIP_ASSET',
             clipId: existing.id,
-            assetUrl: url,
+            assetUrl: uploaded.url,
             assetKind: 'audio',
+            assetRef,
           });
         } else {
           dispatch({
@@ -90,7 +106,8 @@ export function UploadFootagePanel({ project, projectId, dispatch }: UploadFoota
             trackId: track.id,
             clip: {
               id: crypto.randomUUID(),
-              assetUrl: url,
+              assetUrl: uploaded.url,
+              assetRef,
               assetKind: 'audio',
               beatId,
               start: beat?.start ?? 0,
@@ -105,7 +122,10 @@ export function UploadFootagePanel({ project, projectId, dispatch }: UploadFoota
         }
       }
 
-      setStatus((previous) => ({ ...previous, [key]: 'Attached to the timeline' }));
+      setStatus((previous) => ({
+        ...previous,
+        [key]: `Attached at ${(beats.find((entry) => entry.beatId === beatId)?.start ?? 0).toFixed(2)}s on the timeline`,
+      }));
     } catch (err) {
       const message = describeError(err, 'Upload failed');
       setError(message);
@@ -121,7 +141,8 @@ export function UploadFootagePanel({ project, projectId, dispatch }: UploadFoota
         <h3 className="text-sm font-semibold text-zinc-300">Upload footage</h3>
         <p className="mt-1 text-xs text-zinc-500">
           Uploads go to the private <code className="text-zinc-400">studio-uploads</code> bucket and
-          are attached to the beat&apos;s position on the timeline as signed URLs.
+          are attached at the beat&apos;s position on the timeline — as a session URL for preview and
+          a canonical ref the project keeps.
         </p>
         {error && (
           <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2">

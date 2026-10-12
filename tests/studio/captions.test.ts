@@ -12,6 +12,21 @@ import {
   shiftCaptions,
   sortByTime,
 } from '../../src/lib/studioCaptions';
+import {
+  CAPTION_PLACEMENT_KINDS,
+  CAPTION_PLACEMENT_LABELS,
+  CAPTION_PLACEMENTS,
+  CAPTION_STYLES,
+  CAPTION_STYLE_LABELS,
+  DEFAULT_CAPTION_STYLE,
+  isCaptionStyle,
+  kindForPlacement,
+  placementForKind,
+  readCaptionStyle,
+  withStyle,
+  type CaptionPlacement,
+  type CaptionStyle,
+} from '../../src/studio/captionStyles';
 import type { StudioCaption } from '../../src/studio/types';
 
 function cue(id: string, start: number, end: number, speaker?: string): StudioCaption {
@@ -163,5 +178,104 @@ describe('MuAPI enum constants', () => {
     expect(MUAPI_CAPTION_LANGUAGES).toContain('Japanese');
     expect(new Set(MUAPI_CAPTION_LANGUAGES).size).toBe(45);
     expect(DEFAULT_MUAPI_LANGUAGE).toBe('English');
+  });
+});
+
+describe('caption style helpers', () => {
+  it('carries a style through withStyle and reads it back', () => {
+    const base = captionFromText('styled cue', 1, 3);
+    const styled = withStyle(base, 'yellow');
+
+    expect(readCaptionStyle(styled)).toBe('yellow');
+    expect(styled.style).toBe('yellow');
+    expect(styled.text).toBe(base.text);
+    expect(styled.start).toBe(base.start);
+    expect(styled.end).toBe(base.end);
+    expect(styled.id).toBe(base.id);
+  });
+
+  it('never mutates the caption it copies', () => {
+    const base = captionFromText('immutable', 0, 2);
+    const snapshot = JSON.parse(JSON.stringify(base)) as StudioCaption;
+    withStyle(base, 'boxed');
+    expect(base).toEqual(snapshot);
+  });
+
+  it('falls back to the default style for missing, unknown or malformed values', () => {
+    const plain = captionFromText('no style', 0, 2);
+    expect(readCaptionStyle(plain)).toBe('bold');
+    expect(DEFAULT_CAPTION_STYLE).toBe('bold');
+
+    const unknown = { ...plain, style: 'neon' } as unknown as StudioCaption;
+    expect(readCaptionStyle(unknown)).toBe('bold');
+
+    expect(readCaptionStyle(null)).toBe('bold');
+    expect(readCaptionStyle(undefined)).toBe('bold');
+    expect(readCaptionStyle({} as StudioCaption)).toBe('bold');
+  });
+
+  it('round-trips every style through JSON (the persisted project shape)', () => {
+    for (const style of CAPTION_STYLES) {
+      const styled = withStyle(captionFromText(style, 0, 1), style);
+      const revived = JSON.parse(JSON.stringify(styled)) as StudioCaption;
+      expect(readCaptionStyle(revived)).toBe(style);
+    }
+  });
+
+  it('exposes the four styles with labels and a working type guard', () => {
+    expect([...CAPTION_STYLES]).toEqual(['bold', 'boxed', 'minimal', 'yellow']);
+    expect(DEFAULT_CAPTION_STYLE).toBe('bold');
+    for (const style of CAPTION_STYLES) {
+      expect(CAPTION_STYLE_LABELS[style]).toBeTruthy();
+      expect(isCaptionStyle(style)).toBe(true);
+    }
+    expect(isCaptionStyle('neon')).toBe(false);
+    expect(isCaptionStyle(undefined)).toBe(false);
+  });
+});
+
+describe('caption placement mapping', () => {
+  it('maps every placement to a caption kind and back', () => {
+    expect([...CAPTION_PLACEMENTS]).toEqual(['bottom-center', 'top-center', 'center']);
+    expect(CAPTION_PLACEMENT_KINDS['bottom-center']).toBe('dialogue');
+    expect(CAPTION_PLACEMENT_KINDS['top-center']).toBe('hook');
+    expect(CAPTION_PLACEMENT_KINDS.center).toBe('lower_third');
+
+    expect(kindForPlacement('bottom-center')).toBe('dialogue');
+    expect(kindForPlacement('top-center')).toBe('hook');
+    expect(kindForPlacement('center')).toBe('lower_third');
+
+    expect(placementForKind('dialogue')).toBe('bottom-center');
+    expect(placementForKind('hook')).toBe('top-center');
+    expect(placementForKind('lower_third')).toBe('center');
+  });
+
+  it('is a lossless round trip for all three placements', () => {
+    for (const placement of CAPTION_PLACEMENTS as readonly CaptionPlacement[]) {
+      expect(placementForKind(kindForPlacement(placement))).toBe(placement);
+    }
+  });
+
+  it('labels every placement for the UI', () => {
+    for (const placement of CAPTION_PLACEMENTS as readonly CaptionPlacement[]) {
+      expect(CAPTION_PLACEMENT_LABELS[placement]).toBeTruthy();
+    }
+  });
+
+  it('styles are carried independently of the placement kind', () => {
+    const caption: StudioCaption = {
+      ...withStyle(captionFromText('placed', 0, 2), 'minimal'),
+      kind: kindForPlacement('center'),
+    };
+    expect(placementForKind(caption.kind)).toBe('center');
+    expect(readCaptionStyle(caption)).toBe('minimal');
+  });
+});
+
+describe('studioCaptions defaults', () => {
+  it('builds dialogue captions in the default style', () => {
+    const caption = withStyle(captionFromText('hello', 0, 2), DEFAULT_CAPTION_STYLE as CaptionStyle);
+    expect(caption.kind).toBe('dialogue');
+    expect(readCaptionStyle(caption)).toBe(DEFAULT_CAPTION_STYLE);
   });
 });

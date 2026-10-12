@@ -2,14 +2,17 @@ import { buildCorsHeaders, handleOptions, HttpError, jsonResponse } from "../_sh
 import { requireUser, serviceClient } from "../_shared/auth.ts";
 import { assertProjectOwnership, NotFoundError } from "../_shared/ownership.ts";
 import { muapiDownload, muapiPollResult } from "../_shared/muapi.ts";
+import { DEFAULT_SIGN_TTL_SECONDS, signRef, type MediaRef } from "../_shared/media.ts";
 
 /**
  * scene-status — poll a MuAPI scene job and store the finished clip.
  *
  * POST /functions/v1/scene-status
  * Body: { project_id, beat_id, request_id }
- * 200: { status: "done", assetUrl }   (clip stored in the private videos bucket
- *      and wired into the project's video track)
+ * 200: { status: "done", assetUrl, assetRef, clipId }   (the clip is stored
+ *      in the private videos bucket as a canonical ref and wired into the
+ *      project's video track; assetUrl is a 1-hour signed URL for immediate
+ *      playback — it is SESSION state, never the asset identity)
  * 200: { status: "processing" }       (client polls again, ~every 5s)
  * 400: validation errors, 404: project not found / not owned by caller,
  * 500: MuAPI job failed, or the output could not be downloaded/stored
@@ -115,7 +118,10 @@ Deno.serve(async (req: Request) => {
 
     const bytes = await muapiDownload(outputUrl, { timeoutMs: 120000 });
 
-    const storagePath = `studio-scenes/${userId}/${projectId}/scene-${beatId}-${requestId}.mp4`;
+    // uid-scoped path: the media-sign path-prefix rule and the render
+    // worker's ownership check both require the first path segment to be the
+    // owner's user id, so refs stay re-signable and renderable forever.
+    const storagePath = `${userId}/scenes/${projectId}/scene-${beatId}-${requestId}.mp4`;
     const { error: uploadError } = await supabase.storage
       .from("videos")
       .upload(storagePath, bytes, {
@@ -131,11 +137,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from("videos")
-      .createSignedUrl(storagePath, 604800);
-    const assetUrl = signedUrlData?.signedUrl;
-    if (signedUrlError || !assetUrl || !isHttpUrl(assetUrl)) {
+    // Canonical identity of the generated asset: a ref, never a URL. The
+    // 1-hour signed URL below is derived session state for immediate playback.
+    const assetRef: MediaRef = { bucket: "videos", path: storagePath, kind: "video" };
+    let assetUrl: string;
+    try {
+      const signed = await signRef(supabase, assetRef, DEFAULT_SIGN_TTL_SECONDS);
+      assetUrl = signed.url;
+    } catch (error) {
+      console.error("Scene signing error:", error);
       return jsonResponse({ error: "Could not sign private scene video for playback" }, 500, cors);
     }
 
@@ -159,8 +169,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // Wire the generated asset into the clip: keep trim points, mark it
-    // generated, and drop the unknown source duration.
+    // generated, drop the unknown source duration, and persist the canonical
+    // ref next to the session URL so the URL can always be re-derived.
     targetClip.assetUrl = assetUrl;
+    targetClip.assetRef = assetRef;
     targetClip.assetKind = "generated";
     targetClip.beatId = beatId;
     targetClip.portrait = true;
@@ -176,7 +188,11 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: `Failed to update project: ${updateError.message}` }, 500, cors);
     }
 
-    return jsonResponse({ status: "done", assetUrl }, 200, cors);
+    return jsonResponse(
+      { status: "done", assetUrl, assetRef, clipId: String(targetClip.id ?? "") },
+      200,
+      cors,
+    );
   } catch (error) {
     console.error("Scene status error:", error);
     if (error instanceof HttpError) {

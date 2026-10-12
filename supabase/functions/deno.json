@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "test": "deno test --allow-env --allow-net tests/",
+    "check": "deno check plan-interview/index.ts generate-scene/index.ts scene-status/index.ts muapi-captions/index.ts render-project/index.ts generate-video/index.ts process-video/index.ts compose-overlay/index.ts stitch-clips/index.ts stitch-episode/index.ts _shared/*.ts"
+  },
+  "fmt": {
+    "lineWidth": 120
+  }
+}

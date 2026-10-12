@@ -22,6 +22,9 @@ export function SettingsPage() {
     };
   }, []);
 
+  // `user_profiles` lives in a shared database and may be absent (or carry a
+  // different column set) — every read below is optional and degrades to a
+  // dash / 'Free' instead of assuming profile data exists.
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name || '');
@@ -108,7 +111,7 @@ export function SettingsPage() {
                   {profile?.subscription_tier || 'Free'}
                 </span>
                 <span className="text-sm text-zinc-500">
-                  {profile?.credits_balance ?? 0} credits remaining
+                  {profile ? `${profile.credits_balance} credits remaining` : '– credits remaining'}
                 </span>
               </div>
             </div>

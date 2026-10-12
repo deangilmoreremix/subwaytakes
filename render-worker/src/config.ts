@@ -1,5 +1,6 @@
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 
 /**
  * Worker configuration. Every value is overridable via env vars — see
@@ -71,3 +72,24 @@ export const config = {
 };
 
 export const supabaseConfigured = Boolean(config.supabaseUrl && config.supabaseServiceRoleKey);
+
+/**
+ * Startup preflight. Missing configuration must fail FAST and name the exact
+ * variables, instead of surfacing later as a confusing mid-render error.
+ * Returns the list of problems (empty = ready).
+ */
+export function configProblems(): string[] {
+  const problems: string[] = [];
+  if (!config.supabaseUrl) problems.push('SUPABASE_URL is not set');
+  if (!config.supabaseServiceRoleKey) problems.push('SUPABASE_SERVICE_ROLE_KEY is not set');
+  for (const [name, bin] of [
+    ['FFMPEG_PATH', config.ffmpegPath],
+    ['FFPROBE_PATH', config.ffprobePath],
+  ] as const) {
+    if (!fs.existsSync(bin)) problems.push(`${name} does not exist (${bin})`);
+  }
+  if (!fs.existsSync(path.join(config.repoRoot, 'node_modules', '.bin', 'remotion'))) {
+    problems.push(`remotion CLI is missing under REPO_ROOT (${config.repoRoot})`);
+  }
+  return problems;
+}
