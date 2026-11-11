@@ -3,16 +3,17 @@ import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { clsx } from '../../lib/format';
-import { Plus, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Check, AlertCircle, Loader2, Captions } from 'lucide-react';
 import type { ClipJob } from '../../lib/muapi/jobs';
 import type { Clip } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, fps }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, fps, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; fps: number;
+  captionCount: number; captionState: { busy: boolean; error: string }; onGenerateCaptions: () => void; hasKey: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('take');
   const [lastClip, setLastClip] = useState<string>();
@@ -92,6 +93,19 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
           {clip.kind === 'caption' && <div><Label>Text</Label><textarea className={inputCls} rows={3} value={clip.text ?? ''} onChange={e => onClipChange({ text: e.target.value })} /></div>}
           {clip.kind === 'video' && <div><Label hint={`${Math.round((clip.volume ?? 1) * 100)}%`}>Volume</Label>
             <input type="range" className="w-full" min={0} max={1} step={0.05} value={clip.volume ?? 1} onChange={e => onClipChange({ volume: Number(e.target.value) })} /></div>}
+          {clip.kind === 'video' && (
+            <div className="space-y-2 rounded-xl border border-line bg-ink-950 p-3">
+              <div className="flex items-center justify-between"><Label>Auto captions</Label><span className="text-[11px] text-zinc-600 tnum">~$0.01 / clip</span></div>
+              <button onClick={onGenerateCaptions} disabled={captionState.busy || !hasKey || !clip.src?.startsWith('http')}
+                className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-white/5 text-[12px] font-medium text-zinc-100 transition hover:bg-white/10 disabled:opacity-40">
+                {captionState.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Captions className="h-4 w-4" />}
+                {captionState.busy ? 'Transcribing…' : captionCount ? `Regenerate (${captionCount} captions)` : 'Generate captions'}
+              </button>
+              {!hasKey && <p className="text-[11px] text-zinc-600">Add your muapi key in Settings first.</p>}
+              {captionState.error && <p className="flex gap-1.5 text-[11px] text-red-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{captionState.error}</p>}
+              {captionCount > 0 && !captionState.error && <p className="text-[11px] text-zinc-500">Captions are on the Captions track; click one to edit its text.</p>}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3 text-[12px]">
             <div><Label>Start</Label><p className="tnum text-zinc-300">{(clip.start / fps).toFixed(2)}s</p></div>
             <div><Label>Length</Label><p className="tnum text-zinc-300">{(clip.duration / fps).toFixed(2)}s</p></div>

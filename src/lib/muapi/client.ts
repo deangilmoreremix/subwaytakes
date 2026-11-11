@@ -23,7 +23,23 @@ export interface Prediction {
   status: PredictionStatus;
   outputs?: string[];
   output?: string;
+  /** text models (e.g. whisper) */
+  text?: string;
   error?: string;
+}
+
+/** supabase-js hides the response body of non-2xx function calls; recover muapi's own message from it. */
+export async function describeError(error: { message?: string; context?: unknown }): Promise<string> {
+  const ctx = error.context as Response | undefined;
+  if (ctx && typeof ctx.clone === 'function') {
+    try {
+      const b = await ctx.clone().json() as Record<string, unknown>;
+      const d = b.error ?? b.detail ?? b.message;
+      if (typeof d === 'string' && d) return d;
+      if (d) return JSON.stringify(d);
+    } catch { /* body not JSON: fall through */ }
+  }
+  return error.message || 'muapi proxy failed';
 }
 
 /** Calls the muapi-proxy edge function, which forwards the user's key and stores nothing. */
@@ -34,7 +50,7 @@ async function proxy<T>(method: 'GET' | 'POST', path: string, body?: unknown): P
     body: { method, path, body },
     headers: { 'x-muapi-key': key },
   });
-  if (error) throw new Error(error.message || 'muapi proxy failed');
+  if (error) throw new Error(await describeError(error));
   if (data && typeof data === 'object' && 'error' in data && !('status' in data)) {
     throw new Error(String((data as { error: unknown }).error));
   }
@@ -58,7 +74,7 @@ export function outputUrl(p: Prediction): string | undefined {
 export async function runModel(
   slug: string,
   input: Record<string, unknown>,
-  opts: { onUpdate?: (p: Prediction) => void; intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
+  opts: { onUpdate?: (p: Prediction) => void; intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; /** false for text-only models */ requireUrl?: boolean } = {},
 ): Promise<{ requestId: string; url: string; prediction: Prediction }> {
   const { request_id } = await muapi.submit(slug, input);
   const started = Date.now();
@@ -69,8 +85,8 @@ export async function runModel(
     opts.onUpdate?.(p);
     if (p.status === 'completed') {
       const url = outputUrl(p);
-      if (!url) throw new Error('muapi completed without an output URL');
-      return { requestId: request_id, url, prediction: p };
+      if (!url && opts.requireUrl !== false) throw new Error('muapi completed without an output URL');
+      return { requestId: request_id, url: url ?? '', prediction: p };
     }
     if (p.status === 'failed' || p.status === 'cancelled') throw new Error(p.error || `muapi job ${p.status}`);
     if (Date.now() - started > timeout) throw new Error('Timed out waiting for muapi');

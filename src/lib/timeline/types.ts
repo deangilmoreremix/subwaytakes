@@ -19,6 +19,8 @@ export interface Clip {
   volume?: number;
   /** caption text */
   text?: string;
+  /** caption: id of the video clip it was auto-generated from (lets us regenerate cleanly) */
+  sourceClipId?: string;
 }
 
 export interface Track { id: string; kind: TrackKind; name: string }

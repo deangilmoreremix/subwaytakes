@@ -14,6 +14,8 @@ import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
 import { addClip, newId, projectDuration, updateClip } from '../lib/timeline/ops';
 import { probeDuration } from '../lib/timeline/media';
+import { transcribeClip } from '../lib/captions/transcribe';
+import { captionsToClips } from '../lib/captions/captions';
 
 export function CreateTakePage() {
   const [spec, setSpec] = useState<TakeSpec>(DEFAULT_TAKE);
@@ -23,6 +25,7 @@ export function CreateTakePage() {
   const [running, setRunning] = useState<Running | null>(null);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [captionState, setCaptionState] = useState<{ busy: boolean; error: string }>({ busy: false, error: '' });
   const hasKey = !!getMuapiKey();
 
   const { project, set: setProject, checkpoint, undo, redo } = useProject();
@@ -67,6 +70,24 @@ export function CreateTakePage() {
     setProject(addClip(project, { id, trackId: track.id, kind: 'video', label: typeof job.input?.take === 'string' ? job.input.take : job.model, start: end, duration: frames, trimStart: 0, sourceFrames: frames, src: job.output_url, volume: 1 }));
     setSelectedClip(id);
   }, [project, setProject]);
+
+  async function generateCaptions(clipId: string) {
+    const c = project.clips.find(x => x.id === clipId);
+    if (!c || c.kind !== 'video' || !c.src || captionState.busy) return;
+    setCaptionState({ busy: true, error: '' });
+    try {
+      const sourceMs = ((c.sourceFrames ?? c.trimStart + c.duration) / project.fps) * 1000;
+      const caps = await transcribeClip(c.src, sourceMs);
+      const track = project.tracks.find(t => t.kind === 'caption')!;
+      const fresh = captionsToClips(caps, c, track.id, project.fps, () => newId('cap'));
+      if (!fresh.length) throw new Error('No speech found inside the visible part of this clip.');
+      const kept = project.clips.filter(x => x.sourceClipId !== c.id); // regenerate cleanly
+      setProject({ ...project, clips: [...kept, ...fresh] });
+      setCaptionState({ busy: false, error: '' });
+    } catch (e) {
+      setCaptionState({ busy: false, error: e instanceof Error ? e.message : 'Caption generation failed' });
+    }
+  }
 
   async function generate() {
     if (running || !hasKey) return;
@@ -119,7 +140,8 @@ export function CreateTakePage() {
         </div>
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
-            clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} fps={project.fps} />
+            clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} fps={project.fps}
+            captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} captionState={captionState} onGenerateCaptions={() => clip && generateCaptions(clip.id)} hasKey={hasKey} />
         </div>
       </div>
       <TimelineEditor project={project} setProject={setProject} checkpoint={checkpoint} undo={undo} redo={redo}
