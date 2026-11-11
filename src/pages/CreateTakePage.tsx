@@ -13,7 +13,7 @@ import { getMuapiKey } from '../lib/muapi/client';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
 import { addClip, newId, projectDuration, updateClip } from '../lib/timeline/ops';
-import { probeDuration } from '../lib/timeline/media';
+import { getMediaInfo } from '../lib/timeline/media';
 import { transcribeClip } from '../lib/captions/transcribe';
 import { captionsToClips } from '../lib/captions/captions';
 import { DEFAULT_FONT } from '../lib/captions/fonts';
@@ -63,7 +63,7 @@ export function CreateTakePage() {
     if (!job.output_url) return;
     const fps = project.fps;
     const hinted = Number(job.input?.duration) || 5;
-    const secs = await probeDuration(job.output_url).catch(() => hinted);
+    const secs = await getMediaInfo(job.output_url).then(i => i.durationSec).catch(() => hinted);
     const frames = Math.max(6, Math.round(secs * fps));
     const track = project.tracks.find(t => t.kind === 'video')!;
     const end = project.clips.filter(c => c.trackId === track.id).reduce((m, c) => Math.max(m, c.start + c.duration), 0);

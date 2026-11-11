@@ -1,0 +1,27 @@
+// Add a generated clip from the Media tab and check the timeline uses the clip's REAL duration (hint deliberately wrong).
+// Usage: node scripts/add-clip-test.mjs <clip.mp4> [baseUrl]
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+const { chromium } = createRequire(import.meta.url)('playwright');
+const [clipPath, base = 'http://localhost:5173'] = process.argv.slice(2);
+const SB = 'https://stub.supabase.test';
+const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+const exp = Math.floor(Date.now() / 1000) + 86400;
+const jwt = `${b64({ alg: 'HS256' })}.${b64({ sub: 'u-1', role: 'authenticated', aud: 'authenticated', exp })}.sig`;
+const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 86400, expires_at: exp, user };
+const job = { id: 'j1', pipeline: 'native', model: 'veo3.1-fast-text-to-video', request_id: 'r', stage: 'done', status: 'completed', input: { take: 'Pineapple', duration: 8 }, output_url: 'https://stub.media.test/clip.mp4', error: null, created_at: new Date().toISOString() };
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await ctx.addInitScript(s => { localStorage.setItem('sb-stub-auth-token', JSON.stringify(s)); localStorage.setItem('subwaytakes.muapi_key', 'mu_test'); }, session);
+const page = await ctx.newPage();
+const json = (r, b) => r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(b) });
+await page.route('https://stub.media.test/**', r => { const buf = readFileSync(clipPath); const range = r.request().headers()['range']; const h = { 'access-control-allow-origin': '*', 'accept-ranges': 'bytes', 'content-type': 'video/mp4' }; if (range) { const m = /bytes=(\d+)-(\d*)/.exec(range); const a = +m[1], b = m[2] ? +m[2] : buf.length - 1; return r.fulfill({ status: 206, headers: { ...h, 'content-range': `bytes ${a}-${b}/${buf.length}`, 'content-length': String(b - a + 1) }, body: buf.subarray(a, b + 1) }); } return r.fulfill({ status: 200, headers: { ...h, 'content-length': String(buf.length) }, body: buf }); });
+await page.route(`${SB}/**`, r => { const u = r.request().url(); if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } }); if (u.includes('/auth/v1/user')) return json(r, user); if (u.includes('/auth/v1/')) return json(r, { ...session, user }); if (u.includes('clip_jobs')) return json(r, [job]); if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 1, subscription_tier: 'free' }); if (u.includes('muapi-proxy')) return json(r, { balance: 5 }); return json(r, []); });
+await page.goto(`${base}/create`);
+await page.getByRole('button', { name: 'Media', exact: true }).click();
+await page.getByRole('button', { name: 'Add', exact: true }).click();
+await page.waitForTimeout(2500);
+const clips = await page.evaluate(() => JSON.parse(localStorage.getItem('subwaytakes.project.v1')).clips.map(c => [c.kind, c.start, c.duration, c.sourceFrames]));
+console.log('CLIPS', JSON.stringify(clips), '(hint would give 240 frames; real 3.0s clip = 90)');
+await browser.close();
