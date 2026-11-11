@@ -6,7 +6,10 @@ export function getMuapiKey(): string {
   try { return localStorage.getItem(KEY_STORAGE) || ''; } catch { return ''; }
 }
 export function setMuapiKey(key: string): void {
-  try { key ? localStorage.setItem(KEY_STORAGE, key.trim()) : localStorage.removeItem(KEY_STORAGE); } catch { /* storage unavailable */ }
+  try {
+    if (key.trim()) localStorage.setItem(KEY_STORAGE, key.trim());
+    else localStorage.removeItem(KEY_STORAGE);
+  } catch { /* storage unavailable */ }
 }
 
 export class MissingKeyError extends Error {

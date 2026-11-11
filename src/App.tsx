@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
+const CreateTakePage = lazy(() => import('./pages/CreateTakePage').then(m => ({ default: m.CreateTakePage })));
 const CreateHubPage = lazy(() => import('./pages/CreateHubPage').then(m => ({ default: m.CreateHubPage })));
 const CreateSubwayPage = lazy(() => import('./pages/create/CreateSubwayPage').then(m => ({ default: m.CreateSubwayPage })));
 const CreateStreetPage = lazy(() => import('./pages/create/CreateStreetPage').then(m => ({ default: m.CreateStreetPage })));
@@ -86,7 +87,8 @@ function AppContent() {
                   <Routes>
                     <Route path="/" element={<Navigate to="/create" replace />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/create" element={<CreateHubPage />} />
+                    <Route path="/create" element={<CreateTakePage />} />
+                    <Route path="/create/legacy" element={<CreateHubPage />} />
                     <Route path="/create/subway" element={<CreateSubwayPage />} />
                     <Route path="/create/street" element={<CreateStreetPage />} />
                     <Route path="/create/motivational" element={<CreateMotivationalPage />} />
