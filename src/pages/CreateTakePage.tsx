@@ -6,6 +6,7 @@ import { PreviewCanvas, type Running } from '../components/studio/PreviewCanvas'
 import { Inspector } from '../components/studio/Inspector';
 import { TimelineEditor } from '../components/studio/TimelineEditor';
 import { Kbd } from '../components/studio/ui';
+import { ExportDialog } from '../components/studio/ExportDialog';
 import { DEFAULT_TAKE, type TakeSpec } from '../lib/muapi/prompt';
 import { NATIVE_MODELS, chooseNativeModel } from '../lib/muapi/registry';
 import { getMuapiKey } from '../lib/muapi/client';
@@ -21,6 +22,7 @@ export function CreateTakePage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<Running | null>(null);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
   const hasKey = !!getMuapiKey();
 
   const { project, set: setProject, checkpoint, undo, redo } = useProject();
@@ -122,7 +124,8 @@ export function CreateTakePage() {
       </div>
       <TimelineEditor project={project} setProject={setProject} checkpoint={checkpoint} undo={undo} redo={redo}
         frame={Math.min(frame, Math.max(0, projectDuration(project)))} playing={playing} onSeek={seek} onToggle={toggle}
-        selectedId={selectedClip} onSelect={setSelectedClip} captionDefault={spec.take} />
+        selectedId={selectedClip} onSelect={setSelectedClip} captionDefault={spec.take} onExport={() => setExporting(true)} />
+      {exporting && <ExportDialog project={project} aspect={spec.aspect} onClose={() => setExporting(false)} />}
     </div>
   );
 }

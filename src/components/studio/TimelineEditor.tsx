@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as RPE } from 'react';
-import { Play, Pause, Scissors, Trash2, Type, ZoomIn, Undo2, Redo2, Film } from 'lucide-react';
+import { Play, Pause, Scissors, Trash2, Type, ZoomIn, Undo2, Redo2, Film, Download } from 'lucide-react';
 import { clsx } from '../../lib/format';
 import { Kbd } from './ui';
 import { addClip, deleteClip, framesToTime, moveClip, newId, projectDuration, snap, splitAt, trimClip } from '../../lib/timeline/ops';
@@ -19,6 +19,7 @@ interface Props {
   onSeek: (f: number) => void; onToggle: () => void;
   selectedId?: string; onSelect: (id?: string) => void;
   captionDefault: string;
+  onExport: () => void;
 }
 
 type Drag = { kind: 'move' | 'left' | 'right'; id: string; x0: number; base: Project; origStart: number };
@@ -120,11 +121,15 @@ export function TimelineEditor(p: Props) {
         <span className="mx-1 h-4 w-px bg-line" />
         <button className={btn} onClick={p.undo} title="Undo (Ctrl+Z)" aria-label="Undo"><Undo2 className="h-4 w-4" /></button>
         <button className={btn} onClick={p.redo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><Redo2 className="h-4 w-4" /></button>
-        <div className="ml-auto hidden items-center gap-3 md:flex">
+        <div className="ml-auto hidden items-center gap-3 md:flex md:ml-auto">
           <span className="flex items-center gap-1 text-[11px] text-zinc-600"><Kbd>Space</Kbd> play <Kbd>S</Kbd> split <Kbd>Del</Kbd> delete</span>
           <ZoomIn className="h-3.5 w-3.5 text-zinc-500" />
           <input type="range" min={0.8} max={10} step={0.1} value={ppf} onChange={e => setPpf(Number(e.target.value))} className="w-24" aria-label="Zoom" />
         </div>
+        <button onClick={p.onExport} disabled={total <= 0} title={total > 0 ? 'Render the timeline to a video file' : 'Add a shot to export'}
+          className="ml-auto flex h-8 items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot px-3 text-[12px] font-semibold text-black shadow-glow transition hover:brightness-110 disabled:opacity-40 disabled:shadow-none md:ml-3">
+          <Download className="h-3.5 w-3.5" />Export
+        </button>
       </div>
 
       <div className="relative flex" style={{ height: RULER + ROW * project.tracks.length + 6 }}>

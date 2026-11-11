@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Clapperboard, Users, Repeat2, LayoutGrid, Settings, Download, Wallet, Film } from 'lucide-react';
+import { Clapperboard, Users, Repeat2, LayoutGrid, Settings, Wallet, Film } from 'lucide-react';
 import { clsx } from '../../lib/format';
 import { useAuth } from '../../lib/auth';
 import { getMuapiKey, muapi } from '../../lib/muapi/client';
@@ -90,9 +90,6 @@ export function StudioShell({ children }: { children: ReactNode }) {
               bal.kind === 'ok' ? 'border-line bg-ink-800 text-zinc-200 hover:border-white/15' : bal.kind === 'err' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-accent/40 bg-accent-soft text-accent')}>
               <Wallet className="h-3.5 w-3.5" />
               {bal.kind === 'ok' ? bal.text : bal.kind === 'loading' ? '…' : bal.kind === 'err' ? bal.text : 'Add muapi key'}
-            </button>
-            <button disabled title="Stitch & export arrives with episodes" className="hidden sm:flex h-8 items-center gap-1.5 rounded-full bg-white/5 px-3 text-[12px] font-medium text-zinc-500 cursor-not-allowed">
-              <Download className="h-3.5 w-3.5" /> Export
             </button>
             <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 text-[12px] font-semibold text-zinc-200 ring-1 ring-white/10">{initial}</div>
           </div>
