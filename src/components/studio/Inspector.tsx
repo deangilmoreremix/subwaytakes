@@ -8,13 +8,17 @@ import type { ClipJob } from '../../lib/muapi/jobs';
 import type { Clip } from '../../lib/timeline/types';
 import { FONTS, FONT_IDS, type FontId } from '../../lib/captions/fonts';
 import { SFX, type Sfx } from '../../lib/timeline/sfx';
+import { TRANSITIONS } from '../../lib/timeline/transitions';
+import type { TransitionContext } from '../../lib/timeline/ops';
+import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, onAddSfx, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, onAddSfx, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; fps: number;
+  transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
   captionCount: number; captionState: { busy: boolean; error: string }; onGenerateCaptions: () => void; hasKey: boolean;
 }) {
@@ -119,6 +123,25 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
           {clip.kind === 'caption' && <div><Label>Text</Label><textarea className={inputCls} rows={3} value={clip.text ?? ''} onChange={e => onClipChange({ text: e.target.value })} /></div>}
           {(clip.kind === 'video' || clip.kind === 'audio') && <div><Label hint={`${Math.round((clip.volume ?? 1) * 100)}%`}>Volume</Label>
             <input type="range" className="w-full" min={0} max={1} step={0.05} value={clip.volume ?? 1} onChange={e => onClipChange({ volume: Number(e.target.value) })} /></div>}
+          {clip.kind === 'video' && (
+            <div className="space-y-2.5 rounded-xl border border-line bg-ink-950 p-3">
+              <Label hint={transition.current ? `${(transition.current.frames / fps).toFixed(1)}s` : undefined}>Transition in</Label>
+              {transition.available ? (<>
+                <div className="grid grid-cols-4 gap-1.5">
+                  <button onClick={() => onTransition(null)} className={clsx('h-8 rounded-lg text-[11px] font-medium transition', !transition.current ? 'bg-ink-600 text-white' : 'bg-white/5 text-zinc-400 hover:text-white')}>None</button>
+                  {TRANSITIONS.map(t => (
+                    <button key={t.id} onClick={() => onTransition({ type: t.id, frames: transition.current?.frames ?? Math.min(15, transition.maxFrames) })}
+                      className={clsx('h-8 rounded-lg text-[11px] font-medium transition', transition.current?.type === t.id ? 'bg-accent-soft text-accent ring-1 ring-accent/50' : 'bg-white/5 text-zinc-400 hover:text-white')}>{t.label}</button>
+                  ))}
+                </div>
+                {transition.current && (
+                  <input type="range" className="w-full" aria-label="Transition length" min={2} max={Math.max(2, transition.maxFrames)} value={transition.current.frames}
+                    onChange={e => onTransition({ type: transition.current!.type, frames: Number(e.target.value) })} />
+                )}
+              </>) : <p className="text-[11px] text-zinc-600">Place this clip directly after another clip (no gap) to add a transition between them.</p>}
+              <p className="text-[10px] text-zinc-600">The two clips overlap during a transition, so the episode gets shorter by its length.</p>
+            </div>
+          )}
           {clip.kind === 'video' && (
             <div className="space-y-2 rounded-xl border border-line bg-ink-950 p-3">
               <div className="flex items-center justify-between"><Label>Auto captions</Label><span className="text-[11px] text-zinc-600 tnum">~$0.01 / clip</span></div>

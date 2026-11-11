@@ -12,7 +12,7 @@ import { NATIVE_MODELS, chooseNativeModel } from '../lib/muapi/registry';
 import { getMuapiKey } from '../lib/muapi/client';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
-import { addClip, newId, projectDuration, updateClip } from '../lib/timeline/ops';
+import { addClip, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
 import { getMediaInfo } from '../lib/timeline/media';
 import { transcribeClip } from '../lib/captions/transcribe';
 import { captionsToClips } from '../lib/captions/captions';
@@ -153,6 +153,7 @@ export function CreateTakePage() {
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} fps={project.fps}
+            transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => setProject({ ...project, style: { ...project.style, captionFont: f } })}
             captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} captionState={captionState} onGenerateCaptions={() => clip && generateCaptions(clip.id)} hasKey={hasKey} />
         </div>

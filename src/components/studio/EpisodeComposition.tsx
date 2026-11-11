@@ -1,20 +1,43 @@
-import { AbsoluteFill, Sequence } from 'remotion';
+import type React from 'react';
+import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion';
 import { Audio, Video } from '@remotion/media';
+import { TransitionSeries, linearTiming } from '@remotion/transitions';
+import { buildChains } from '../../lib/timeline/chains';
+import { transitionDef } from '../../lib/timeline/transitions';
 import type { Project } from '../../lib/timeline/types';
 import { useCaptionFont } from '../../lib/captions/fonts';
 
 export type EpisodeProps = { project: Project };
 
+function ClipVideo({ clip }: { clip: Project['clips'][number] }) {
+  return <Video src={clip.src!} trimBefore={clip.trimStart} volume={clip.volume ?? 1} objectFit="cover" style={{ width: '100%', height: '100%' }} />;
+}
+
 export function EpisodeComposition({ project }: EpisodeProps) {
-  const videos = project.clips.filter(c => c.kind === 'video' && c.src);
+  const chains = buildChains(project.clips);
+  const { width, height } = useVideoConfig();
   const sounds = project.clips.filter(c => c.kind === 'audio' && c.src);
   const captions = project.clips.filter(c => c.kind === 'caption');
   const font = useCaptionFont(project.style?.captionFont);
   return (
     <AbsoluteFill style={{ background: '#000' }}>
-      {videos.map(c => (
-        <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
-          <Video src={c.src!} trimBefore={c.trimStart} volume={c.volume ?? 1} objectFit="cover" style={{ width: '100%', height: '100%' }} />
+      {chains.map(ch => ch.clips.length === 1 ? (
+        <Sequence key={ch.clips[0].id} from={ch.start} durationInFrames={ch.end - ch.start} layout="absolute-fill">
+          <ClipVideo clip={ch.clips[0]} />
+        </Sequence>
+      ) : (
+        <Sequence key={ch.clips[0].id} from={ch.start} durationInFrames={ch.end - ch.start} layout="absolute-fill">
+          <TransitionSeries>
+            {ch.clips.flatMap((c, i) => {
+              const nodes = [] as React.ReactNode[];
+              if (i > 0 && c.transitionIn) {
+                const def = transitionDef(c.transitionIn.type);
+                if (def) nodes.push(<TransitionSeries.Transition key={`t-${c.id}`} presentation={def.make(width, height)} timing={linearTiming({ durationInFrames: c.transitionIn.frames })} />);
+              }
+              nodes.push(<TransitionSeries.Sequence key={c.id} durationInFrames={c.duration}><ClipVideo clip={c} /></TransitionSeries.Sequence>);
+              return nodes;
+            })}
+          </TransitionSeries>
         </Sequence>
       ))}
       {sounds.map(c => (

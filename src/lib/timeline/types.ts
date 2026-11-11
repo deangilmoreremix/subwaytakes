@@ -21,7 +21,14 @@ export interface Clip {
   text?: string;
   /** caption: id of the video clip it was auto-generated from (lets us regenerate cleanly) */
   sourceClipId?: string;
+  /**
+   * video: transition from the previous clip on the track. The two clips overlap by exactly `frames`
+   * (this clip starts `frames` before the previous one ends). Kept consistent by ops.normalizeTransitions.
+   */
+  transitionIn?: { type: TransitionType; frames: number };
 }
+
+export type TransitionType = 'fade' | 'slide' | 'wipe' | 'iris' | 'clock-wipe' | 'push-cut';
 
 export interface Track { id: string; kind: TrackKind; name: string }
 

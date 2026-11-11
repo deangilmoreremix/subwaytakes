@@ -153,6 +153,7 @@ export function TimelineEditor(p: Props) {
             {project.clips.map(c => {
               const row = project.tracks.findIndex(t => t.id === c.trackId);
               const sel = c.id === selectedId;
+              const z = c.transitionIn ? 5 : 1;
               const isVideo = c.kind === 'video';
               return (
                 <div key={c.id} onPointerDown={e => startDrag(e, c, 'move')} role="button" aria-label={`${c.label} clip`}
@@ -162,12 +163,16 @@ export function TimelineEditor(p: Props) {
                       : c.kind === 'effect' ? 'border-fuchsia-400/40 bg-gradient-to-b from-fuchsia-500/30 to-fuchsia-700/20'
                       : 'border-sky-400/40 bg-gradient-to-b from-sky-500/30 to-sky-700/20',
                     sel && 'ring-2 ring-white shadow-glow')}
-                  style={{ left: c.start * ppf, width: Math.max(8, c.duration * ppf), top: RULER + row * ROW + 4, height: ROW - 8 }}>
+                  style={{ left: c.start * ppf, width: Math.max(8, c.duration * ppf), top: RULER + row * ROW + 4, height: ROW - 8, zIndex: z }}>
                   {isVideo && c.src && <video src={c.src + '#t=0.1'} muted preload="metadata" className="pointer-events-none absolute inset-y-0 left-0 h-full w-10 object-cover opacity-80" />}
                   <div className={clsx('pointer-events-none relative truncate px-2 py-1 text-[11px] font-medium text-white', isVideo && 'pl-12')}>
                     {c.kind === 'caption' ? c.text : c.label}
                     <div className="text-[9px] font-normal text-white/60 tnum">{(c.duration / fps).toFixed(1)}s</div>
                   </div>
+                  {c.transitionIn && (
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center justify-center border-r border-white/40 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,.28)_0_4px,transparent_4px_8px)]"
+                      style={{ width: c.transitionIn.frames * ppf }} title={`${c.transitionIn.type} · ${(c.transitionIn.frames / fps).toFixed(1)}s`} />
+                  )}
                   <div onPointerDown={e => startDrag(e, c, 'left')} className="absolute inset-y-0 left-0 cursor-ew-resize bg-white/0 hover:bg-white/40" style={{ width: TRIM_HANDLE }} aria-label="Trim start" />
                   <div onPointerDown={e => startDrag(e, c, 'right')} className="absolute inset-y-0 right-0 cursor-ew-resize bg-white/0 hover:bg-white/40" style={{ width: TRIM_HANDLE }} aria-label="Trim end" />
                 </div>
