@@ -1,99 +1,82 @@
-import { useEffect, useState } from 'react';
-import { Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DEFAULT_TAKE, buildNativePrompt, type TakeSpec } from '../lib/muapi/prompt';
-import { NATIVE_MODELS, type Tier, type Aspect } from '../lib/muapi/registry';
+import { Loader2, Sparkles, KeyRound } from 'lucide-react';
+import { PreviewCanvas, type Running } from '../components/studio/PreviewCanvas';
+import { Inspector } from '../components/studio/Inspector';
+import { Timeline } from '../components/studio/Timeline';
+import { Kbd } from '../components/studio/ui';
+import { DEFAULT_TAKE, type TakeSpec } from '../lib/muapi/prompt';
+import { NATIVE_MODELS, chooseNativeModel } from '../lib/muapi/registry';
 import { getMuapiKey } from '../lib/muapi/client';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 
-const TIERS: Tier[] = ['best', 'balanced', 'fast', 'budget'];
-const field = 'w-full px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-amber-500/50';
-
 export function CreateTakePage() {
   const [spec, setSpec] = useState<TakeSpec>(DEFAULT_TAKE);
-  const [tier, setTier] = useState<Tier>('fast');
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
+  const [slug, setSlug] = useState('veo3.1-fast-text-to-video');
   const [jobs, setJobs] = useState<ClipJob[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string>();
+  const [running, setRunning] = useState<Running | null>(null);
+  const [error, setError] = useState('');
   const hasKey = !!getMuapiKey();
 
-  useEffect(() => { listJobs().then(setJobs).catch(() => undefined); }, []);
+  const refresh = () => listJobs().then(j => { setJobs(j); return j; }).catch(() => [] as ClipJob[]).finally(() => setLoading(false));
+  useEffect(() => { refresh().then(j => setSelectedId(s => s ?? j[0]?.id)); }, []);
 
-  const set = <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => setSpec(s => ({ ...s, [k]: v }));
+  const set = <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => setSpec(s => {
+    const next = { ...s, [k]: v };
+    if (k === 'aspect' && !NATIVE_MODELS.find(m => m.slug === slug)?.aspects.includes(v as TakeSpec['aspect'])) {
+      setSlug(chooseNativeModel('fast', 'text', v as TakeSpec['aspect']).slug);
+    }
+    return next;
+  });
 
   async function generate() {
-    setBusy(true); setError(''); setStatus('Submitting…');
+    if (running || !hasKey) return;
+    setError(''); setRunning({ status: 'queued', startedAt: Date.now() });
     try {
-      await runNativeJob({ spec, tier, onUpdate: p => setStatus(`muapi: ${p.status}`) });
-      setStatus('Done');
-      setJobs(await listJobs());
+      const job = await runNativeJob({ spec, tier: 'fast', modelSlug: slug, onUpdate: p => setRunning(r => r && { ...r, status: p.status }) });
+      await refresh(); setSelectedId(job.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Generation failed');
-      setStatus('');
-      listJobs().then(setJobs).catch(() => undefined);
-    } finally { setBusy(false); }
+      const j = await refresh(); setSelectedId(j[0]?.id);
+    } finally { setRunning(null); }
   }
 
-  const model = NATIVE_MODELS.find(m => m.tier === tier && m.mode === 'text' && m.aspects.includes(spec.aspect));
+  const selected = useMemo(() => jobs.find(j => j.id === selectedId), [jobs, selectedId]);
+  const model = NATIVE_MODELS.find(m => m.slug === slug);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); generate(); } };
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  });
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 space-y-6">
-      <h1 className="text-2xl font-bold text-white">What's ur take?</h1>
-
-      {!hasKey && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
-          <AlertCircle className="w-4 h-4" /> Add your muapi key in <Link to="/settings" className="underline">Settings</Link> to generate.
-        </div>
-      )}
-
-      <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-        <label className="block text-sm text-zinc-300">The take
-          <textarea className={field + ' mt-2'} rows={3} value={spec.take} onChange={e => set('take', e.target.value)} />
-        </label>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <label className="block text-sm text-zinc-300">Guest
-            <input className={field + ' mt-2'} value={spec.guestDescription} onChange={e => set('guestDescription', e.target.value)} />
-          </label>
-          <label className="block text-sm text-zinc-300">Setting
-            <input className={field + ' mt-2'} value={spec.setting} onChange={e => set('setting', e.target.value)} />
-          </label>
-          <label className="block text-sm text-zinc-300">Tone
-            <select className={field + ' mt-2'} value={spec.tone} onChange={e => set('tone', e.target.value as TakeSpec['tone'])}>
-              <option value="playful">Playful</option><option value="deadpan">Deadpan</option><option value="heated">Heated</option>
-            </select>
-          </label>
-          <label className="block text-sm text-zinc-300">Aspect
-            <select className={field + ' mt-2'} value={spec.aspect} onChange={e => set('aspect', e.target.value as Aspect)}>
-              <option value="9:16">9:16 vertical</option><option value="16:9">16:9</option><option value="1:1">1:1</option>
-            </select>
-          </label>
-          <label className="block text-sm text-zinc-300">Quality tier
-            <select className={field + ' mt-2'} value={tier} onChange={e => setTier(e.target.value as Tier)}>
-              {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-          <label className="block text-sm text-zinc-300">Length: {spec.durationSeconds}s
-            <input type="range" min={4} max={12} value={spec.durationSeconds} onChange={e => set('durationSeconds', Number(e.target.value))} className="w-full mt-3" />
-          </label>
-        </div>
-        <details className="text-xs text-zinc-500"><summary className="cursor-pointer">Prompt preview{model ? ` · ${model.label}` : ''}</summary><p className="mt-2 whitespace-pre-wrap">{buildNativePrompt(spec)}</p></details>
-        <button onClick={generate} disabled={busy || !hasKey} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 text-black font-semibold disabled:opacity-50">
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Generate
-        </button>
-        {status && <span className="ml-3 text-sm text-zinc-400">{status}</span>}
-        {error && <p className="text-sm text-red-400">{error}</p>}
-      </div>
-
-      <div className="space-y-3">
-        {jobs.map(j => (
-          <div key={j.id} className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <div className="flex justify-between text-xs text-zinc-500"><span>{j.model}</span><span>{j.status}</span></div>
-            {j.output_url && <video src={j.output_url} controls className="mt-3 max-h-96 rounded-lg" />}
-            {j.error && <p className="mt-2 text-sm text-red-400">{j.error}</p>}
+    <div className="flex min-h-full flex-col lg:h-full lg:overflow-hidden">
+      <div className="grid flex-1 gap-4 p-4 lg:min-h-0 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex min-h-0 flex-col gap-3">
+          <div className="h-[min(56vh,520px)] min-h-[380px] lg:h-auto lg:min-h-0 lg:flex-1"><PreviewCanvas aspect={spec.aspect} job={selected} running={running} take={spec.take} hasKey={hasKey} /></div>
+          {/* prompt bar */}
+          <div className="flex items-center gap-2 rounded-2xl border border-line bg-ink-850 p-2 shadow-panel">
+            <input value={spec.take} onChange={e => set('take', e.target.value)} placeholder="Type a hot take…" maxLength={220}
+              className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[14px] text-white placeholder:text-zinc-600 focus:outline-none" />
+            <span className="hidden xl:flex items-center gap-1 text-[11px] text-zinc-600"><Kbd>Ctrl</Kbd><Kbd>↵</Kbd></span>
+            {hasKey ? (
+              <button onClick={generate} disabled={!!running}
+                className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot px-4 text-[13px] font-semibold text-black shadow-glow transition hover:brightness-110 disabled:opacity-60">
+                {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {running ? 'Rendering' : 'Generate'}
+                {model && <span className="hidden sm:inline rounded-md bg-black/15 px-1.5 py-0.5 text-[10px] font-semibold">{model.label}</span>}
+              </button>
+            ) : (
+              <Link to="/settings" className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-4 text-[13px] font-semibold text-accent"><KeyRound className="h-4 w-4" />Add muapi key</Link>
+            )}
           </div>
-        ))}
+          {error && <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">{error}</p>}
+        </div>
+        <div className="min-w-0 lg:min-h-0"><Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} /></div>
       </div>
+      <Timeline jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} onAdd={() => document.querySelector<HTMLInputElement>('input[placeholder^="Type"]')?.focus()} running={!!running} loading={loading} />
     </div>
   );
 }

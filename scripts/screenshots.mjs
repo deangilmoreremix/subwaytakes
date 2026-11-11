@@ -17,9 +17,12 @@ const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd
 const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 86400 * 30, expires_at: exp, user };
 
 const jobs = [
-  { id: 'j1', pipeline: 'native', model: 'veo3.1-fast-text-to-video', request_id: 'r1', stage: 'done', status: 'completed', input: {}, output_url: 'data:video/mp4;base64,', error: null, created_at: new Date().toISOString() },
+  { id: 'j1', pipeline: 'native', model: 'veo3.1-fast-text-to-video', request_id: 'r1', stage: 'done', status: 'completed', input: {}, output_url: 'https://stub.media.test/clip.mp4', error: null, created_at: new Date().toISOString() },
   { id: 'j2', pipeline: 'native', model: 'kling-v3-turbo-standard-text-to-video', request_id: 'r2', stage: 'failed', status: 'failed', input: {}, output_url: null, error: 'Insufficient credits. Top up your muapi wallet.', created_at: new Date().toISOString() },
 ];
+
+import { existsSync, readFileSync } from 'node:fs';
+const PLACEHOLDER = process.env.PLACEHOLDER_MP4;
 
 async function newPage(browser, vp, { key, proxy = 'ok', withJobs = false }) {
   const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 2 });
@@ -29,12 +32,14 @@ async function newPage(browser, vp, { key, proxy = 'ok', withJobs = false }) {
   }, [key, session]);
   const page = await ctx.newPage();
   const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+  await page.route('https://stub.media.test/**', route => PLACEHOLDER && existsSync(PLACEHOLDER) ? route.fulfill({ status: 200, contentType: 'video/mp4', headers: { 'access-control-allow-origin': '*' }, body: readFileSync(PLACEHOLDER) }) : route.fulfill({ status: 404 }));
   await page.route(`${SB}/**`, route => {
     const u = route.request().url(); const m = route.request().method();
     if (m === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
     if (u.includes('/auth/v1/user')) return json(route, user);
     if (u.includes('/auth/v1/')) return json(route, { ...session, user });
     if (u.includes('/functions/v1/muapi-proxy')) {
+      if (proxy === 'processing') { const b = route.request().postData() || ''; return json(route, b.includes('predictions') ? { status: 'processing' } : { request_id: 'r9' }); }
       return proxy === 'ok' ? json(route, { balance: 42.5, currency: 'credits' }) : json(route, { error: 'Invalid API key (401 from muapi)' });
     }
     if (u.includes('/rest/v1/clip_jobs')) return json(route, m === 'GET' ? (withJobs ? jobs : []) : jobs[0]);
@@ -46,36 +51,55 @@ async function newPage(browser, vp, { key, proxy = 'ok', withJobs = false }) {
 
 const desktop = { width: 1280, height: 800 };
 const phone = { width: 390, height: 844 };
-const phoneTall = { width: 390, height: 1900 }; // page scrolls inside the shell, so use a tall viewport for long pages
+const phoneTall = { width: 390, height: 1500 }; // page scrolls inside the shell, so use a tall viewport for long pages
 const browser = await chromium.launch();
 const shot = async (page, name, full = true) => { await page.waitForTimeout(600); await page.screenshot({ path: `${out}/${name}.png`, fullPage: full }); console.log(name); };
 
-{ // Settings: empty / verified / error
+const K = 'mu_live_demo_key_123';
+const dims = { desktop, phone, phoneTall };
+{ // Settings
   let { ctx, page } = await newPage(browser, desktop, {});
   await page.goto(`${base}/settings`); await page.getByText('muapi API key').waitFor();
-  await shot(page, '1a-settings-key-empty'); await ctx.close();
-
+  await shot(page, '10-settings-no-key-desktop'); await ctx.close();
   ({ ctx, page } = await newPage(browser, desktop, {}));
-  await page.goto(`${base}/settings`); await page.getByPlaceholder('muapi key').fill('mu_live_demo_key_123');
-  await page.getByText('Save & verify').click(); await page.getByText(/Connected/).waitFor();
-  await shot(page, '1b-settings-key-verified'); await ctx.close();
-
-  ({ ctx, page } = await newPage(browser, desktop, { proxy: 'bad' }));
-  await page.goto(`${base}/settings`); await page.getByPlaceholder('muapi key').fill('bad_key');
-  await page.getByText('Save & verify').click(); await page.getByText(/Invalid API key/).waitFor();
-  await shot(page, '1c-settings-key-error'); await ctx.close();
+  await page.goto(`${base}/settings`); await page.getByPlaceholder('muapi key').fill(K);
+  await page.getByText('Save & verify').click(); await page.getByText(/Connected/).first().waitFor();
+  await shot(page, '11-settings-verified-desktop'); await ctx.close();
 }
-{ // Create: no key (phone), form + prompt preview (desktop), job history (desktop + phone)
-  let { ctx, page } = await newPage(browser, phone, {});
-  await page.goto(`${base}/create`); await page.getByText("What's ur take?").first().waitFor();
-  await shot(page, '2a-create-no-key-phone'); await ctx.close();
+{ // Studio create: empty (no key), populated, tabs, rendering, failed
+  let { ctx, page } = await newPage(browser, desktop, {});
+  await page.goto(`${base}/create`); await page.getByText('Shots').waitFor();
+  await shot(page, '20-studio-empty-no-key-desktop', false); await ctx.close();
 
-  ({ ctx, page } = await newPage(browser, desktop, { key: 'mu_live_demo_key_123', withJobs: true }));
-  await page.goto(`${base}/create`); await page.getByText('Prompt preview').click();
-  await shot(page, '2b-create-form-prompt-preview-desktop'); await ctx.close();
+  ({ ctx, page } = await newPage(browser, desktop, { key: K, withJobs: true }));
+  await page.goto(`${base}/create`); await page.locator('video').first().waitFor();
+  await shot(page, '21-studio-with-shots-desktop', false);
+  await page.getByRole('button', { name: 'Model', exact: true }).click(); await shot(page, '22-studio-model-tab-desktop', false);
+  await page.getByRole('button', { name: 'Output', exact: true }).click(); await shot(page, '23-studio-output-tab-desktop', false);
+  await ctx.close();
 
-  ({ ctx, page } = await newPage(browser, phoneTall, { key: 'mu_live_demo_key_123', withJobs: true }));
-  await page.goto(`${base}/create`); await page.getByText('Insufficient credits').waitFor();
-  await shot(page, '2c-create-jobs-completed-and-failed-phone'); await ctx.close();
+  ({ ctx, page } = await newPage(browser, desktop, { key: K, withJobs: true, proxy: 'processing' }));
+  await page.goto(`${base}/create`); await page.locator('video').first().waitFor();
+  await page.getByRole('button', { name: /Generate/ }).click(); await page.getByText('Rendering').first().waitFor(); await page.waitForTimeout(1200);
+  await shot(page, '24-studio-rendering-desktop', false); await ctx.close();
+
+  ({ ctx, page } = await newPage(browser, desktop, { key: K, withJobs: true }));
+  await page.goto(`${base}/create`); await page.locator('video').first().waitFor();
+  await page.locator('section button[title*="Insufficient"]').click();
+  await shot(page, '25-studio-failed-shot-desktop', false); await ctx.close();
+}
+{ // Phone
+  let { ctx, page } = await newPage(browser, phoneTall, { key: K, withJobs: true });
+  await page.goto(`${base}/create`); await page.locator('video').first().waitFor();
+  await shot(page, '30-studio-phone');
+  await ctx.close();
+}
+{ // Library
+  let { ctx, page } = await newPage(browser, desktop, { key: K, withJobs: true });
+  await page.goto(`${base}/library`); await page.getByText('Everything').waitFor();
+  await shot(page, '40-library-gallery-desktop', false); await ctx.close();
+  ({ ctx, page } = await newPage(browser, desktop, { key: K }));
+  await page.goto(`${base}/library`); await page.getByText('No shots yet').waitFor();
+  await shot(page, '41-library-empty-desktop', false); await ctx.close();
 }
 await browser.close();

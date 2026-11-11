@@ -23,8 +23,8 @@ export function MuapiKeyCard() {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
-      <div className="flex items-center gap-2 text-white font-semibold"><KeyRound className="w-4 h-4 text-amber-500" /> muapi API key</div>
+    <div className="rounded-2xl border border-line bg-ink-850 shadow-panel p-5 space-y-4">
+      <div className="flex items-center gap-2 text-white font-semibold"><KeyRound className="w-4 h-4 text-accent" /> muapi API key</div>
       <p className="text-sm text-zinc-500">
         Video, voice and recast generation run on your own muapi account. The key stays in this browser and is
         forwarded per request; it is never saved on our servers.
@@ -35,10 +35,10 @@ export function MuapiKeyCard() {
         onChange={(e) => setKey(e.target.value)}
         placeholder="muapi key"
         autoComplete="off"
-        className="w-full px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/50 transition"
+        className="w-full rounded-xl bg-ink-950 border border-line px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/10 transition"
       />
       <div className="flex items-center gap-3">
-        <button onClick={save} disabled={status === 'checking'} className="px-4 py-2 rounded-xl bg-amber-500 text-black font-medium text-sm disabled:opacity-50">
+        <button onClick={save} disabled={status === 'checking'} className="px-4 py-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot text-black font-semibold text-sm shadow-glow disabled:opacity-50">
           {status === 'checking' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save & verify'}
         </button>
         {status === 'ok' && <span className="flex items-center gap-1 text-sm text-emerald-400"><CheckCircle2 className="w-4 h-4" />{message}</span>}

@@ -10,3 +10,22 @@
 .animate-slide-in-right {
   animation: slide-in-right 0.25s ease-out;
 }
+
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; background: #0a0a0e; }
+* { scrollbar-width: thin; scrollbar-color: #2a2a35 transparent; }
+.tnum { font-variant-numeric: tabular-nums; }
+.bg-grid {
+  background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.skeleton { position: relative; overflow: hidden; background: #15151c; }
+.skeleton::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  animation: shimmer 1.6s infinite;
+}
+input[type='range'] { accent-color: #ffb000; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

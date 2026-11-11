@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import { runModel, type Prediction } from './client';
-import { chooseNativeModel, clampDuration, type Tier } from './registry';
+import { NATIVE_MODELS, chooseNativeModel, clampDuration, type Tier } from './registry';
 import { buildNativePrompt, type TakeSpec } from './prompt';
 
 export interface ClipJob {
@@ -48,8 +48,8 @@ export interface NativeOptions {
 /** Native-audio pipeline: one muapi call produces the speaking clip. */
 export async function runNativeJob(o: NativeOptions): Promise<ClipJob> {
   const mode = o.imageUrl ? 'image' : 'text';
-  const model = chooseNativeModel(o.tier, mode, o.spec.aspect);
-  const slug = o.modelSlug ?? model.slug;
+  const model = NATIVE_MODELS.find(m => m.slug === o.modelSlug) ?? chooseNativeModel(o.tier, mode, o.spec.aspect);
+  const slug = model.slug;
   const input: Record<string, unknown> = {
     prompt: buildNativePrompt(o.spec),
     aspect_ratio: o.spec.aspect,

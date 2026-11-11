@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/auth';
-import { AppShell } from './components/AppLayout/AppShell';
+import { StudioShell as AppShell } from './components/studio/StudioShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
@@ -15,6 +15,7 @@ const CreateWisdomPage = lazy(() => import('./pages/create/CreateWisdomPage').th
 const CreateStudioPage = lazy(() => import('./pages/create/CreateStudioPage').then(m => ({ default: m.CreateStudioPage })));
 const CreateMuapiPage = lazy(() => import('./pages/create/CreateMuapiPage').then(m => ({ default: m.CreateMuapiPage })));
 const ClipPage = lazy(() => import('./pages/ClipPage').then(m => ({ default: m.ClipPage })));
+const GalleryPage = lazy(() => import('./pages/GalleryPage').then(m => ({ default: m.GalleryPage })));
 const LibraryPage = lazy(() => import('./pages/LibraryPage').then(m => ({ default: m.LibraryPage })));
 const EpisodeBuilderPage = lazy(() => import('./pages/EpisodeBuilderPage').then(m => ({ default: m.EpisodeBuilderPage })));
 const EpisodePage = lazy(() => import('./pages/EpisodePage').then(m => ({ default: m.EpisodePage })));
@@ -95,7 +96,8 @@ function AppContent() {
                     <Route path="/create/wisdom" element={<CreateWisdomPage />} />
                     <Route path="/create/studio" element={<CreateStudioPage />} />
                     <Route path="/create/muapi" element={<CreateMuapiPage />} />
-                    <Route path="/library" element={<LibraryPage />} />
+                    <Route path="/library" element={<GalleryPage />} />
+                    <Route path="/library/legacy" element={<LibraryPage />} />
                     <Route path="/clips/:id" element={<ClipPage />} />
                     <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />
                     <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
