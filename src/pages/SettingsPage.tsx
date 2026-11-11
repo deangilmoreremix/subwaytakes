@@ -4,6 +4,7 @@ import { ArrowLeft, User, MapPin, Clock, Save, Loader2, CheckCircle2 } from 'luc
 import { useAuth } from '../lib/auth';
 import { CITY_STYLES } from '../lib/constants';
 import { clsx } from '../lib/format';
+import { MuapiKeyCard } from '../components/MuapiKeyCard';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -64,6 +65,7 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
+      <div className="max-w-2xl mx-auto mb-6"><MuapiKeyCard /></div>
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition mb-6"
