@@ -14,7 +14,8 @@ export interface TransitionDef { id: TransitionType; label: string; make: (width
 
 /**
  * Presentations from @remotion/transitions. Only ones verified to export correctly through the web renderer are listed.
- * Excluded after testing: flip/cube (3D CSS: black mid-frames, ~30x slower) and the shader-based ones (need HTML-in-canvas).
+ * Excluded after testing: flip/cube (3D CSS: black mid-frames, ~30x slower).
+ * Not tested, so not offered: the shader-based presentations (dissolve, ripple, cross-zoom, ...), which rely on HTML-in-canvas.
  */
 export const TRANSITIONS: TransitionDef[] = [
   { id: 'fade', label: 'Fade', make: () => as(fade()) },

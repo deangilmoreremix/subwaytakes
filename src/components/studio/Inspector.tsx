@@ -3,7 +3,7 @@ import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { clsx } from '../../lib/format';
-import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square } from 'lucide-react';
+import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles } from 'lucide-react';
 import type { ClipJob } from '../../lib/muapi/jobs';
 import type { Clip } from '../../lib/timeline/types';
 import { FONTS, FONT_IDS, type FontId } from '../../lib/captions/fonts';
@@ -14,10 +14,10 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, onAddSfx, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
-  clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; fps: number;
+  clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; onAddEffect: () => void; fps: number;
   transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
   captionCount: number; captionState: { busy: boolean; error: string }; onGenerateCaptions: () => void; hasKey: boolean;
@@ -102,6 +102,13 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
                 </div>
               );
             })}
+            <div className="pt-3"><Label hint="at playhead">Effects</Label>
+              <div className="flex items-center gap-2 rounded-xl border border-line bg-ink-950 px-2 py-1.5">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-amber-400/30 to-fuchsia-500/30 text-fuchsia-200"><Sparkles className="h-3.5 w-3.5" /></span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-zinc-200">Light leak</span>
+                <button onClick={onAddEffect} aria-label="Add Light leak" className="flex h-7 items-center gap-1 rounded-lg bg-white/5 px-2 text-[11px] font-medium text-zinc-200 hover:bg-white/10"><Plus className="h-3 w-3" />Add</button>
+              </div>
+            </div>
             <div className="pt-3"><Label hint="at playhead">Sound effects</Label>
               <div className="space-y-1.5">
                 {SFX.map(f => (
@@ -121,6 +128,12 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
         {tab === 'clip' && clip && (<>
           <div><Label>{clip.kind === 'caption' ? 'Caption' : clip.kind === 'audio' ? 'Sound effect' : clip.kind === 'effect' ? 'Effect' : 'Video clip'}</Label><p className="truncate text-[12px] text-zinc-400">{clip.label}</p></div>
           {clip.kind === 'caption' && <div><Label>Text</Label><textarea className={inputCls} rows={3} value={clip.text ?? ''} onChange={e => onClipChange({ text: e.target.value })} /></div>}
+          {clip.kind === 'effect' && clip.effect && (<>
+            <div><Label hint={`${clip.effect.hueShift}°`}>Color shift</Label>
+              <input type="range" className="w-full" min={0} max={360} value={clip.effect.hueShift} onChange={e => onClipChange({ effect: { ...clip.effect!, hueShift: Number(e.target.value) } })} /></div>
+            <div><Label hint={`#${clip.effect.seed}`}>Pattern</Label>
+              <input type="range" className="w-full" min={1} max={20} value={clip.effect.seed} onChange={e => onClipChange({ effect: { ...clip.effect!, seed: Number(e.target.value) } })} /></div>
+          </>)}
           {(clip.kind === 'video' || clip.kind === 'audio') && <div><Label hint={`${Math.round((clip.volume ?? 1) * 100)}%`}>Volume</Label>
             <input type="range" className="w-full" min={0} max={1} step={0.05} value={clip.volume ?? 1} onChange={e => onClipChange({ volume: Number(e.target.value) })} /></div>}
           {clip.kind === 'video' && (

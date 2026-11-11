@@ -26,6 +26,8 @@ export interface Clip {
    * (this clip starts `frames` before the previous one ends). Kept consistent by ops.normalizeTransitions.
    */
   transitionIn?: { type: TransitionType; frames: number };
+  /** effect clips: which overlay and its parameters */
+  effect?: { type: 'light-leak'; seed: number; hueShift: number };
 }
 
 export type TransitionType = 'fade' | 'slide' | 'wipe' | 'iris' | 'clock-wipe' | 'push-cut';
@@ -46,6 +48,7 @@ export const DEFAULT_PROJECT: Project = {
     { id: 'v1', kind: 'video', name: 'Video' },
     { id: 'c1', kind: 'caption', name: 'Captions' },
     { id: 'a1', kind: 'audio', name: 'Sound' },
+    { id: 'e1', kind: 'effect', name: 'Effects' },
   ],
   clips: [],
 };

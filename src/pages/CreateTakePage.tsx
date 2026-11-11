@@ -83,6 +83,13 @@ export function CreateTakePage() {
     setSelectedClip(id);
   }, [project, frame, setProject]);
 
+  const addEffect = useCallback(() => {
+    const track = project.tracks.find(t => t.kind === 'effect')!;
+    const id = newId('fx');
+    setProject(addClip(project, { id, trackId: track.id, kind: 'effect', label: 'Light leak', start: frame, duration: Math.round(project.fps * 1.5), trimStart: 0, effect: { type: 'light-leak', seed: 3, hueShift: 20 } }));
+    setSelectedClip(id);
+  }, [project, frame, setProject]);
+
   async function generateCaptions(clipId: string) {
     const c = project.clips.find(x => x.id === clipId);
     if (!c || c.kind !== 'video' || !c.src || captionState.busy) return;
@@ -152,7 +159,7 @@ export function CreateTakePage() {
         </div>
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
-            clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} fps={project.fps}
+            clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => setProject({ ...project, style: { ...project.style, captionFont: f } })}
             captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} captionState={captionState} onGenerateCaptions={() => clip && generateCaptions(clip.id)} hasKey={hasKey} />

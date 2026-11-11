@@ -70,9 +70,9 @@ describe('timeline ops', () => {
     expect(get(trimClip(p, 's', 'right', 999), 's').duration).toBe(60); // limited by source
   });
 
-  it('older saved projects gain the default Sound track', () => {
+  it('older saved projects gain the default Sound and Effects tracks', () => {
     const old: Project = { fps: 30, tracks: [{ id: 'v1', kind: 'video', name: 'Video' }, { id: 'c1', kind: 'caption', name: 'Captions' }], clips: [] };
-    expect(ensureTracks(old).tracks.map(t => t.id)).toEqual(['v1', 'c1', 'a1']);
+    expect(ensureTracks(old).tracks.map(t => t.id)).toEqual(['v1', 'c1', 'a1', 'e1']);
     expect(ensureTracks(DEFAULT_PROJECT)).toBe(DEFAULT_PROJECT);
   });
 });

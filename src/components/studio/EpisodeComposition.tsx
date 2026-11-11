@@ -2,6 +2,7 @@ import type React from 'react';
 import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion';
 import { Audio, Video } from '@remotion/media';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
+import { LightLeak } from '@remotion/light-leaks';
 import { buildChains } from '../../lib/timeline/chains';
 import { transitionDef } from '../../lib/timeline/transitions';
 import type { Project } from '../../lib/timeline/types';
@@ -16,6 +17,7 @@ function ClipVideo({ clip }: { clip: Project['clips'][number] }) {
 export function EpisodeComposition({ project }: EpisodeProps) {
   const chains = buildChains(project.clips);
   const { width, height } = useVideoConfig();
+  const overlays = project.clips.filter(c => c.kind === 'effect' && c.effect);
   const sounds = project.clips.filter(c => c.kind === 'audio' && c.src);
   const captions = project.clips.filter(c => c.kind === 'caption');
   const font = useCaptionFont(project.style?.captionFont);
@@ -38,6 +40,11 @@ export function EpisodeComposition({ project }: EpisodeProps) {
               return nodes;
             })}
           </TransitionSeries>
+        </Sequence>
+      ))}
+      {overlays.map(c => (
+        <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
+          <LightLeak seed={c.effect!.seed} hueShift={c.effect!.hueShift} />
         </Sequence>
       ))}
       {sounds.map(c => (
