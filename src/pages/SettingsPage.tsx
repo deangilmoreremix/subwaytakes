@@ -65,7 +65,6 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
-      <div className="max-w-2xl mx-auto mb-6"><MuapiKeyCard /></div>
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition mb-6"
@@ -75,6 +74,8 @@ export function SettingsPage() {
       </button>
 
       <h1 className="text-2xl font-semibold text-zinc-100 mb-8">Settings</h1>
+
+      <div className="mb-6"><MuapiKeyCard /></div>
 
       <div className="space-y-8">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">

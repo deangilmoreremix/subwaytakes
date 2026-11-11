@@ -77,7 +77,7 @@ export function AppShell({ children }: AppShellProps) {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -179,7 +179,7 @@ export function AppShell({ children }: AppShellProps) {
         )}
       </aside>
 
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-semibold text-white">{title}</h1>
