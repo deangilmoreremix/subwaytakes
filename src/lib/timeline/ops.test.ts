@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_PROJECT, type Clip, type Project } from './types';
+import { DEFAULT_PROJECT, ensureTracks, type Clip, type Project } from './types';
 import { addClip, moveClip, trimClip, splitAt, deleteClip, snap, projectDuration } from './ops';
 
 const vid = (id: string, start: number, duration: number, extra: Partial<Clip> = {}): Omit<Clip, 'id'> & { id: string } =>
@@ -56,5 +56,22 @@ describe('timeline ops', () => {
     const p = mk(vid('a', 0, 60));
     expect(snap(p, 63, 5)).toBe(60);
     expect(snap(p, 70, 5)).toBe(70);
+  });
+
+  it('audio clips trim and split like media clips (source-offset aware)', () => {
+    const base = { ...DEFAULT_PROJECT };
+    const p = addClip(base, { id: 's', trackId: 'a1', kind: 'audio', label: 'sfx', start: 0, duration: 60, trimStart: 0, sourceFrames: 60, src: 'x.wav' });
+    const t = get(trimClip(p, 's', 'left', 20), 's');
+    expect([t.start, t.duration, t.trimStart]).toEqual([20, 40, 20]);
+    const sp = splitAt(p, 30, 's');
+    const right = sp.clips.find(c => c.start === 30)!;
+    expect(right.trimStart).toBe(30);
+    expect(get(trimClip(p, 's', 'right', 999), 's').duration).toBe(60); // limited by source
+  });
+
+  it('older saved projects gain the default Sound track', () => {
+    const old: Project = { fps: 30, tracks: [{ id: 'v1', kind: 'video', name: 'Video' }, { id: 'c1', kind: 'caption', name: 'Captions' }], clips: [] };
+    expect(ensureTracks(old).tracks.map(t => t.id)).toEqual(['v1', 'c1', 'a1']);
+    expect(ensureTracks(DEFAULT_PROJECT)).toBe(DEFAULT_PROJECT);
   });
 });

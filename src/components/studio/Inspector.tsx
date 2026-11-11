@@ -1,24 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { clsx } from '../../lib/format';
-import { Plus, Check, AlertCircle, Loader2, Captions } from 'lucide-react';
+import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square } from 'lucide-react';
 import type { ClipJob } from '../../lib/muapi/jobs';
 import type { Clip } from '../../lib/timeline/types';
 import { FONTS, FONT_IDS, type FontId } from '../../lib/captions/fonts';
+import { SFX, type Sfx } from '../../lib/timeline/sfx';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, onAddSfx, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
-  clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; fps: number;
+  clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; fps: number;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
   captionCount: number; captionState: { busy: boolean; error: string }; onGenerateCaptions: () => void; hasKey: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('take');
   const [lastClip, setLastClip] = useState<string>();
+  const [playingSfx, setPlayingSfx] = useState<string>();
+  const audioEl = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => { audioEl.current?.pause(); }, []);
+  function togglePreview(f: Sfx) {
+    audioEl.current?.pause();
+    if (playingSfx === f.id) { setPlayingSfx(undefined); return; }
+    const a = new Audio(f.url); audioEl.current = a; setPlayingSfx(f.id);
+    a.onended = () => setPlayingSfx(undefined);
+    a.play().catch(() => setPlayingSfx(undefined));
+  }
   if (clip?.id !== lastClip) { setLastClip(clip?.id); if (clip) setTab('clip'); else if (tab === 'clip') setTab('take'); }
   const [pipeline, setPipeline] = useState<Pipeline>('native');
   const models = NATIVE_MODELS.filter(m => m.mode === 'text' && m.aspects.includes(spec.aspect));
@@ -87,13 +98,26 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
                 </div>
               );
             })}
+            <div className="pt-3"><Label hint="at playhead">Sound effects</Label>
+              <div className="space-y-1.5">
+                {SFX.map(f => (
+                  <div key={f.id} className="flex items-center gap-2 rounded-xl border border-line bg-ink-950 px-2 py-1.5">
+                    <button onClick={() => togglePreview(f)} aria-label={`Preview ${f.label}`} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/5 text-zinc-300 hover:bg-white/10">
+                      {playingSfx === f.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                    </button>
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-zinc-200">{f.label}</span>
+                    <button onClick={() => onAddSfx(f)} aria-label={`Add ${f.label}`} className="flex h-7 items-center gap-1 rounded-lg bg-white/5 px-2 text-[11px] font-medium text-zinc-200 hover:bg-white/10"><Plus className="h-3 w-3" />Add</button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
         {tab === 'clip' && clip && (<>
-          <div><Label>{clip.kind === 'caption' ? 'Caption' : 'Video clip'}</Label><p className="truncate text-[12px] text-zinc-400">{clip.label}</p></div>
+          <div><Label>{clip.kind === 'caption' ? 'Caption' : clip.kind === 'audio' ? 'Sound effect' : clip.kind === 'effect' ? 'Effect' : 'Video clip'}</Label><p className="truncate text-[12px] text-zinc-400">{clip.label}</p></div>
           {clip.kind === 'caption' && <div><Label>Text</Label><textarea className={inputCls} rows={3} value={clip.text ?? ''} onChange={e => onClipChange({ text: e.target.value })} /></div>}
-          {clip.kind === 'video' && <div><Label hint={`${Math.round((clip.volume ?? 1) * 100)}%`}>Volume</Label>
+          {(clip.kind === 'video' || clip.kind === 'audio') && <div><Label hint={`${Math.round((clip.volume ?? 1) * 100)}%`}>Volume</Label>
             <input type="range" className="w-full" min={0} max={1} step={0.05} value={clip.volume ?? 1} onChange={e => onClipChange({ volume: Number(e.target.value) })} /></div>}
           {clip.kind === 'video' && (
             <div className="space-y-2 rounded-xl border border-line bg-ink-950 p-3">

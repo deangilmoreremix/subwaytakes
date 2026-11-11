@@ -17,6 +17,7 @@ import { getMediaInfo } from '../lib/timeline/media';
 import { transcribeClip } from '../lib/captions/transcribe';
 import { captionsToClips } from '../lib/captions/captions';
 import { DEFAULT_FONT } from '../lib/captions/fonts';
+import type { Sfx } from '../lib/timeline/sfx';
 
 export function CreateTakePage() {
   const [spec, setSpec] = useState<TakeSpec>(DEFAULT_TAKE);
@@ -71,6 +72,16 @@ export function CreateTakePage() {
     setProject(addClip(project, { id, trackId: track.id, kind: 'video', label: typeof job.input?.take === 'string' ? job.input.take : job.model, start: end, duration: frames, trimStart: 0, sourceFrames: frames, src: job.output_url, volume: 1 }));
     setSelectedClip(id);
   }, [project, setProject]);
+
+  const addSfx = useCallback(async (sfx: Sfx) => {
+    const fps = project.fps;
+    const secs = await getMediaInfo(sfx.url).then(i => i.durationSec).catch(() => 1.5);
+    const frames = Math.max(6, Math.round(secs * fps));
+    const track = project.tracks.find(t => t.kind === 'audio')!;
+    const id = newId('sfx');
+    setProject(addClip(project, { id, trackId: track.id, kind: 'audio', label: sfx.label, start: frame, duration: frames, trimStart: 0, sourceFrames: frames, src: sfx.url, volume: 1 }));
+    setSelectedClip(id);
+  }, [project, frame, setProject]);
 
   async function generateCaptions(clipId: string) {
     const c = project.clips.find(x => x.id === clipId);
@@ -141,7 +152,7 @@ export function CreateTakePage() {
         </div>
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
-            clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} fps={project.fps}
+            clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} fps={project.fps}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => setProject({ ...project, style: { ...project.style, captionFont: f } })}
             captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} captionState={captionState} onGenerateCaptions={() => clip && generateCaptions(clip.id)} hasKey={hasKey} />
         </div>

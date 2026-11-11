@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as RPE } from 'react';
-import { Play, Pause, Scissors, Trash2, Type, ZoomIn, Undo2, Redo2, Film, Download } from 'lucide-react';
+import { Play, Pause, Scissors, Trash2, Type, ZoomIn, Undo2, Redo2, Film, Download, Volume2, Sparkles } from 'lucide-react';
 import { clsx } from '../../lib/format';
 import { Kbd } from './ui';
 import { addClip, deleteClip, framesToTime, moveClip, newId, projectDuration, snap, splitAt, trimClip } from '../../lib/timeline/ops';
@@ -136,7 +136,7 @@ export function TimelineEditor(p: Props) {
         <div className="shrink-0 border-r border-line bg-ink-950" style={{ width: GUTTER, paddingTop: RULER }}>
           {project.tracks.map(t => (
             <div key={t.id} className="flex items-center gap-1.5 px-3 text-[11px] font-medium text-zinc-500" style={{ height: ROW }}>
-              {t.kind === 'video' ? <Film className="h-3.5 w-3.5" /> : <Type className="h-3.5 w-3.5" />}{t.name}
+              {t.kind === 'video' ? <Film className="h-3.5 w-3.5" /> : t.kind === 'audio' ? <Volume2 className="h-3.5 w-3.5" /> : t.kind === 'effect' ? <Sparkles className="h-3.5 w-3.5" /> : <Type className="h-3.5 w-3.5" />}{t.name}
             </div>
           ))}
         </div>
@@ -157,7 +157,10 @@ export function TimelineEditor(p: Props) {
               return (
                 <div key={c.id} onPointerDown={e => startDrag(e, c, 'move')} role="button" aria-label={`${c.label} clip`}
                   className={clsx('absolute cursor-grab overflow-hidden rounded-lg border active:cursor-grabbing',
-                    isVideo ? 'border-amber-400/40 bg-gradient-to-b from-amber-500/30 to-amber-700/20' : 'border-sky-400/40 bg-gradient-to-b from-sky-500/30 to-sky-700/20',
+                    isVideo ? 'border-amber-400/40 bg-gradient-to-b from-amber-500/30 to-amber-700/20'
+                      : c.kind === 'audio' ? 'border-emerald-400/40 bg-gradient-to-b from-emerald-500/30 to-emerald-700/20'
+                      : c.kind === 'effect' ? 'border-fuchsia-400/40 bg-gradient-to-b from-fuchsia-500/30 to-fuchsia-700/20'
+                      : 'border-sky-400/40 bg-gradient-to-b from-sky-500/30 to-sky-700/20',
                     sel && 'ring-2 ring-white shadow-glow')}
                   style={{ left: c.start * ppf, width: Math.max(8, c.duration * ppf), top: RULER + row * ROW + 4, height: ROW - 8 }}>
                   {isVideo && c.src && <video src={c.src + '#t=0.1'} muted preload="metadata" className="pointer-events-none absolute inset-y-0 left-0 h-full w-10 object-cover opacity-80" />}

@@ -1,5 +1,5 @@
 import { AbsoluteFill, Sequence } from 'remotion';
-import { Video } from '@remotion/media';
+import { Audio, Video } from '@remotion/media';
 import type { Project } from '../../lib/timeline/types';
 import { useCaptionFont } from '../../lib/captions/fonts';
 
@@ -7,6 +7,7 @@ export type EpisodeProps = { project: Project };
 
 export function EpisodeComposition({ project }: EpisodeProps) {
   const videos = project.clips.filter(c => c.kind === 'video' && c.src);
+  const sounds = project.clips.filter(c => c.kind === 'audio' && c.src);
   const captions = project.clips.filter(c => c.kind === 'caption');
   const font = useCaptionFont(project.style?.captionFont);
   return (
@@ -14,6 +15,11 @@ export function EpisodeComposition({ project }: EpisodeProps) {
       {videos.map(c => (
         <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
           <Video src={c.src!} trimBefore={c.trimStart} volume={c.volume ?? 1} objectFit="cover" style={{ width: '100%', height: '100%' }} />
+        </Sequence>
+      ))}
+      {sounds.map(c => (
+        <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="none">
+          <Audio src={c.src!} trimBefore={c.trimStart} volume={c.volume ?? 1} />
         </Sequence>
       ))}
       {captions.map(c => (

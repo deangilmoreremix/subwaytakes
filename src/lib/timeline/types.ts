@@ -1,6 +1,6 @@
 export const FPS = 30;
 
-export type TrackKind = 'video' | 'caption';
+export type TrackKind = 'video' | 'caption' | 'audio' | 'effect';
 
 export interface Clip {
   id: string;
@@ -38,8 +38,15 @@ export const DEFAULT_PROJECT: Project = {
   tracks: [
     { id: 'v1', kind: 'video', name: 'Video' },
     { id: 'c1', kind: 'caption', name: 'Captions' },
+    { id: 'a1', kind: 'audio', name: 'Sound' },
   ],
   clips: [],
 };
+
+/** Add any default tracks a saved project predates (keeps old localStorage projects working). */
+export function ensureTracks(p: Project): Project {
+  const missing = DEFAULT_PROJECT.tracks.filter(d => !p.tracks.some(t => t.id === d.id));
+  return missing.length ? { ...p, tracks: [...p.tracks, ...missing] } : p;
+}
 
 export const MIN_CLIP = 6; // frames (0.2s)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DEFAULT_PROJECT, type Project } from './types';
+import { DEFAULT_PROJECT, ensureTracks, type Project } from './types';
 
 const KEY = 'subwaytakes.project.v1';
 
@@ -8,7 +8,7 @@ function load(): Project {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const p = JSON.parse(raw) as Project;
-      if (p && Array.isArray(p.clips) && Array.isArray(p.tracks)) return p;
+      if (p && Array.isArray(p.clips) && Array.isArray(p.tracks)) return ensureTracks(p);
     }
   } catch { /* unavailable or corrupt: start fresh */ }
   return DEFAULT_PROJECT;

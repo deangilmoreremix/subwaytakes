@@ -49,7 +49,7 @@ export function trimClip(p: Project, id: string, edge: 'left' | 'right', delta: 
   const siblings = onTrack(p, c.trackId, id);
   const prevEnd = Math.max(0, ...siblings.filter(s => clipEnd(s) <= c.start).map(clipEnd));
   const next = siblings.find(s => s.start >= clipEnd(c));
-  const isVideo = c.kind === 'video';
+  const isVideo = c.kind === 'video' || c.kind === 'audio'; // clips backed by source media
   let { start, duration, trimStart } = c;
   if (edge === 'left') {
     let d = delta;
@@ -73,7 +73,7 @@ export function splitAt(p: Project, frame: number, id?: string): Project {
             p.clips.find(x => x.start < frame && frame < clipEnd(x));
   if (!c || frame <= c.start + MIN_CLIP - 1 || frame >= clipEnd(c) - MIN_CLIP + 1) return p;
   const leftDur = frame - c.start;
-  const right: Clip = { ...c, id: newId(), start: frame, duration: c.duration - leftDur, trimStart: c.kind === 'video' ? c.trimStart + leftDur : c.trimStart };
+  const right: Clip = { ...c, id: newId(), start: frame, duration: c.duration - leftDur, trimStart: c.kind === 'video' || c.kind === 'audio' ? c.trimStart + leftDur : c.trimStart };
   return { ...p, clips: p.clips.flatMap(x => (x.id === c.id ? [{ ...x, duration: leftDur }, right] : [x])) };
 }
 
