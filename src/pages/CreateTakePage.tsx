@@ -16,6 +16,7 @@ import { addClip, newId, projectDuration, updateClip } from '../lib/timeline/ops
 import { probeDuration } from '../lib/timeline/media';
 import { transcribeClip } from '../lib/captions/transcribe';
 import { captionsToClips } from '../lib/captions/captions';
+import { DEFAULT_FONT } from '../lib/captions/fonts';
 
 export function CreateTakePage() {
   const [spec, setSpec] = useState<TakeSpec>(DEFAULT_TAKE);
@@ -141,6 +142,7 @@ export function CreateTakePage() {
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} fps={project.fps}
+            captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => setProject({ ...project, style: { ...project.style, captionFont: f } })}
             captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} captionState={captionState} onGenerateCaptions={() => clip && generateCaptions(clip.id)} hasKey={hasKey} />
         </div>
       </div>

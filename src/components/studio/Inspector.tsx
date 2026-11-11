@@ -6,13 +6,15 @@ import { clsx } from '../../lib/format';
 import { Plus, Check, AlertCircle, Loader2, Captions } from 'lucide-react';
 import type { ClipJob } from '../../lib/muapi/jobs';
 import type { Clip } from '../../lib/timeline/types';
+import { FONTS, FONT_IDS, type FontId } from '../../lib/captions/fonts';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, fps, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; fps: number;
+  captionFont: FontId; onCaptionFont: (f: FontId) => void;
   captionCount: number; captionState: { busy: boolean; error: string }; onGenerateCaptions: () => void; hasKey: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('take');
@@ -114,6 +116,9 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
         </>)}
 
         {tab === 'output' && (<>
+          <div><Label>Caption font</Label>
+            <Segmented value={captionFont} onChange={onCaptionFont} options={FONT_IDS.map(id => ({ value: id, label: FONTS[id].label, hint: FONTS[id].blurb }))} />
+            <p className="mt-1.5 text-[11px] text-zinc-600" style={{ fontFamily: 'inherit' }}>Applies to every caption in the preview and the export.</p></div>
           <div><Label>Aspect ratio</Label>
             <Segmented value={spec.aspect} onChange={(v: Aspect) => set('aspect', v)} options={[{ value: '9:16', label: '9:16' }, { value: '16:9', label: '16:9' }, { value: '1:1', label: '1:1' }]} /></div>
           <div><Label hint={`${spec.durationSeconds}s`}>Length</Label>

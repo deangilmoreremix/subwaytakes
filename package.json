@@ -17,8 +17,12 @@
   "dependencies": {
     "@remotion/captions": "4.0.542",
     "@remotion/google-fonts": "4.0.542",
+    "@remotion/light-leaks": "4.0.542",
     "@remotion/media": "4.0.542",
+    "@remotion/media-parser": "4.0.542",
     "@remotion/player": "4.0.542",
+    "@remotion/sfx": "4.0.542",
+    "@remotion/transitions": "4.0.542",
     "@remotion/web-renderer": "4.0.542",
     "@supabase/supabase-js": "^2.57.4",
     "@types/dompurify": "^3.0.5",
