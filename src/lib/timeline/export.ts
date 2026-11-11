@@ -37,8 +37,9 @@ export async function exportEpisode(project: Project, o: ExportOptions): Promise
     scale: c.scale,
     onProgress: o.onProgress ?? undefined,
     signal: o.signal,
-    // Remotion licensing: set VITE_REMOTION_LICENSE_KEY ("free-license" only if you qualify for the Free License, see remotion.dev/license).
-    licenseKey: (import.meta.env.VITE_REMOTION_LICENSE_KEY as string | undefined) || undefined,
+    // Remotion Free License (individuals / companies up to 3 people, remotion.dev/license). If the team grows past 3,
+    // set VITE_REMOTION_LICENSE_KEY to your Company License key instead.
+    licenseKey: (import.meta.env.VITE_REMOTION_LICENSE_KEY as string | undefined) || 'free-license',
   });
   return getBlob();
 }
