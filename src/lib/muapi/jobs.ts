@@ -16,7 +16,7 @@ export interface ClipJob {
   created_at: string;
 }
 
-async function createJob(pipeline: ClipJob['pipeline'], model: string, input: Record<string, unknown>): Promise<ClipJob> {
+export async function createJob(pipeline: ClipJob['pipeline'], model: string, input: Record<string, unknown>): Promise<ClipJob> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not signed in');
   const { data, error } = await supabase.from('clip_jobs').insert({ user_id: user.id, pipeline, model, input, status: 'processing', stage: 'generating' }).select().single();
@@ -24,7 +24,7 @@ async function createJob(pipeline: ClipJob['pipeline'], model: string, input: Re
   return data as ClipJob;
 }
 
-async function patchJob(id: string, patch: Partial<ClipJob>) {
+export async function patchJob(id: string, patch: Partial<ClipJob>) {
   await supabase.from('clip_jobs').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
 }
 

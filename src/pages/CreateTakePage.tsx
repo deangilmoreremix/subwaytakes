@@ -8,7 +8,11 @@ import { TimelineEditor } from '../components/studio/TimelineEditor';
 import { Kbd } from '../components/studio/ui';
 import { ExportDialog } from '../components/studio/ExportDialog';
 import { DEFAULT_TAKE, type TakeSpec } from '../lib/muapi/prompt';
-import { NATIVE_MODELS, chooseNativeModel } from '../lib/muapi/registry';
+import { NATIVE_MODELS, chooseNativeModel, type Pipeline } from '../lib/muapi/registry';
+import { LipsyncPanel } from '../components/studio/LipsyncPanel';
+import { LIPSYNC_MODELS, estimateLipsync, runLipsyncJob, validateLipsync, type LipsyncModel } from '../lib/muapi/lipsync';
+import { listCharacters } from '../lib/characters';
+import type { CharacterBible } from '../lib/types';
 import { getMuapiKey } from '../lib/muapi/client';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
@@ -29,6 +33,12 @@ export function CreateTakePage() {
   const [exporting, setExporting] = useState(false);
   const [captionState, setCaptionState] = useState<{ busy: boolean; error: string }>({ busy: false, error: '' });
   const hasKey = !!getMuapiKey();
+
+  const [pipeline, setPipeline] = useState<Pipeline>('native');
+  const [characters, setCharacters] = useState<CharacterBible[]>([]);
+  const [speakerId, setSpeakerId] = useState<string>();
+  const [lipModel, setLipModel] = useState<LipsyncModel>('omnihuman-2-0');
+  useEffect(() => { listCharacters().then(l => { setCharacters(l); setSpeakerId(id => id ?? (l.find(c => c.role === 'guest' && c.portrait_url && c.voice_id) ?? l[0])?.id); }).catch(() => undefined); }, []);
 
   const { project, set: setProject, checkpoint, undo, redo } = useProject();
   const [selectedClip, setSelectedClip] = useState<string>();
@@ -108,8 +118,31 @@ export function CreateTakePage() {
     }
   }
 
+  const LIPSYNC_STAGES = ['Writing the voice', 'Preparing audio', 'Rendering the video'];
+  const COST_CONFIRM_USD = 1;
+
+  async function generateLipsync() {
+    const speaker = characters.find(c => c.id === speakerId);
+    if (!speaker) { setError('Choose who speaks in the Model tab.'); return; }
+    const problem = validateLipsync({ speaker, script: spec.take, model: lipModel });
+    if (problem) { setError(problem); return; }
+    const cost = await estimateLipsync(speaker, spec.take, lipModel).catch(() => null);
+    if (cost !== null && cost > COST_CONFIRM_USD && !window.confirm(`This will cost about $${cost.toFixed(2)}. Continue?`)) return;
+    setError(''); setRunning({ status: 'processing', startedAt: Date.now(), stages: LIPSYNC_STAGES, stageIdx: 0 });
+    try {
+      const job = await runLipsyncJob({ speaker, script: spec.take, model: lipModel, scene: `${spec.setting}. ${spec.tone} tone, natural expressions.`, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'voice' ? 0 : s === 'prepare' ? 1 : 2 }) });
+      await refresh();
+      setRunning(null);
+      await addJobToTimeline(job);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Lipsync generation failed');
+      await refresh();
+    } finally { setRunning(null); }
+  }
+
   async function generate() {
     if (running || !hasKey) return;
+    if (pipeline === 'lipsync') { await generateLipsync(); return; }
     setError(''); setRunning({ status: 'queued', startedAt: Date.now() });
     try {
       const job = await runNativeJob({ spec, tier: 'fast', modelSlug: slug, onUpdate: p => setRunning(r => r && { ...r, status: p.status }) });
@@ -127,7 +160,7 @@ export function CreateTakePage() {
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   });
 
-  const model = NATIVE_MODELS.find(m => m.slug === slug);
+  const model = pipeline === 'lipsync' ? LIPSYNC_MODELS.find(m => m.slug === lipModel) : NATIVE_MODELS.find(m => m.slug === slug);
   const clip = useMemo(() => project.clips.find(c => c.id === selectedClip), [project, selectedClip]);
   const usedUrls = useMemo(() => new Set(project.clips.map(c => c.src).filter((s): s is string => !!s)), [project]);
   const latestFailed = !hasClips ? jobs.find(j => j.status === 'failed') : undefined;
@@ -159,6 +192,8 @@ export function CreateTakePage() {
         </div>
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
+            pipeline={pipeline} onPipeline={setPipeline}
+            lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} hasKey={hasKey} />}
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => setProject({ ...project, style: { ...project.style, captionFont: f } })}

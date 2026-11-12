@@ -1672,6 +1672,11 @@ export interface CharacterBible {
   voice_style: string;
   is_default: boolean;
   created_at: string;
+  /** Phase 3: portrait + speaking voice */
+  portrait_url?: string | null;
+  voice_provider?: 'elevenlabs' | 'minimax' | null;
+  voice_id?: string | null;
+  voice_speed?: number;
 }
 
 export interface EpisodeScript {

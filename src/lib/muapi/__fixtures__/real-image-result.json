@@ -1,0 +1,15 @@
+{
+ "id": "730e9d92-e44f-47cd-813d-2085bc9d2204",
+ "status": "completed",
+ "outputs": [
+  "https://cdn.muapi.ai/outputs/generated/730e9d92-e44f-47cd-813d-2085bc9d2204_31d3a21f.png"
+ ],
+ "error": "",
+ "cost": {
+  "amount_usd": 0.025,
+  "amount_credits": 2,
+  "bonus_credits_used": 0,
+  "refunded": false
+ },
+ "executionTime": 33616.801
+}

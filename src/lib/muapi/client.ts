@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { extractError, extractMediaUrl, normalizeStatus } from './result';
 
 const KEY_STORAGE = 'subwaytakes.muapi_key';
 
@@ -62,12 +63,13 @@ export const muapi = {
     proxy<{ request_id: string }>('POST', `/api/v1/${slug}`, input),
   result: (requestId: string) => proxy<Prediction>('GET', `/api/v1/predictions/${requestId}/result`),
   balance: () => proxy<Record<string, unknown>>('GET', '/api/v1/account/balance'),
+  model: (slug: string) => proxy<Record<string, unknown>>('GET', `/api/v1/models/${slug}`),
   estimate: (slug: string, input: Record<string, unknown>) =>
     proxy<Record<string, unknown>>('POST', `/api/v1/models/${slug}/estimate-cost`, input),
 };
 
 export function outputUrl(p: Prediction): string | undefined {
-  return p.outputs?.[0] ?? p.output;
+  return extractMediaUrl(p);
 }
 
 /** Submit then poll until terminal. Surfaces muapi errors; never fabricates output. */
@@ -83,12 +85,13 @@ export async function runModel(
     if (opts.signal?.aborted) throw new Error('Cancelled');
     const p = await muapi.result(request_id);
     opts.onUpdate?.(p);
-    if (p.status === 'completed') {
+    const status = normalizeStatus(p);
+    if (status === 'completed') {
       const url = outputUrl(p);
       if (!url && opts.requireUrl !== false) throw new Error('muapi completed without an output URL');
       return { requestId: request_id, url: url ?? '', prediction: p };
     }
-    if (p.status === 'failed' || p.status === 'cancelled') throw new Error(p.error || `muapi job ${p.status}`);
+    if (status === 'failed' || status === 'cancelled') throw new Error(extractError(p) || `muapi job ${status}`);
     if (Date.now() - started > timeout) throw new Error('Timed out waiting for muapi');
     await new Promise(r => setTimeout(r, opts.intervalMs ?? 4000));
   }

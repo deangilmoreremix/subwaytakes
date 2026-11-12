@@ -9,7 +9,7 @@ import { clsx } from '../../lib/format';
 import type { Aspect } from '../../lib/muapi/registry';
 import type { ClipJob } from '../../lib/muapi/jobs';
 
-export interface Running { status: string; startedAt: number }
+export interface Running { status: string; startedAt: number; /** custom stage labels (lipsync) and the active index */ stages?: string[]; stageIdx?: number }
 
 const STAGES = ['Queued', 'Rendering', 'Finishing'];
 function stageIndex(status: string) { return status === 'completed' ? 3 : status === 'processing' ? 1 : 0; }
@@ -27,7 +27,8 @@ export function PreviewCanvas({ aspect, job, running, take, hasKey, project, pla
   const duration = projectDuration(project);
   const showPlayer = duration > 0 && !running;
   const [w, h] = COMP_SIZE[aspect];
-  const idx = running ? stageIndex(running.status) : 0;
+  const idx = running ? (running.stageIdx ?? stageIndex(running.status)) : 0;
+  const stageNames = running?.stages ?? STAGES;
   return (
     <div className="bg-grid relative flex h-full items-center justify-center overflow-hidden rounded-2xl border border-line bg-ink-950 p-4">
       <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-accent/10 blur-3xl" />
@@ -55,7 +56,7 @@ export function PreviewCanvas({ aspect, job, running, take, hasKey, project, pla
                     <Loader2 className="h-8 w-8 animate-spin text-accent" />
                   </div>
                   <div className="space-y-1.5">
-                    {STAGES.map((s, i) => (
+                    {stageNames.map((s, i) => (
                       <div key={s} className={clsx('flex items-center justify-center gap-2 text-[12px]', i < idx ? 'text-zinc-500' : i === idx ? 'text-white' : 'text-zinc-600')}>
                         <span className={clsx('h-1.5 w-1.5 rounded-full', i < idx ? 'bg-emerald-400' : i === idx ? 'bg-accent' : 'bg-zinc-700')} />{s}
                       </div>

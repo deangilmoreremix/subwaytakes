@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
@@ -14,9 +14,10 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
+  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; onAddEffect: () => void; fps: number;
   transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
@@ -35,7 +36,6 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
     a.play().catch(() => setPlayingSfx(undefined));
   }
   if (clip?.id !== lastClip) { setLastClip(clip?.id); if (clip) setTab('clip'); else if (tab === 'clip') setTab('take'); }
-  const [pipeline, setPipeline] = useState<Pipeline>('native');
   const models = NATIVE_MODELS.filter(m => m.mode === 'text' && m.aspects.includes(spec.aspect));
   const active = models.find(m => m.slug === slug);
 
@@ -62,18 +62,20 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
 
         {tab === 'model' && (<>
           <div><Label>Pipeline</Label>
-            <Segmented value={pipeline} onChange={setPipeline} options={[
+            <Segmented value={pipeline} onChange={onPipeline} options={[
               { value: 'native', label: 'Native audio' },
-              { value: 'lipsync', label: 'Voice + lipsync', disabled: true, hint: 'Next phase' },
-              { value: 'recast', label: 'Recast', disabled: true, hint: 'Phase after next' },
+              { value: 'lipsync', label: 'Voice + lipsync', hint: 'Portrait + voice becomes a talking video' },
+              { value: 'recast', label: 'Recast', disabled: true, hint: 'Coming next' },
             ]} />
-            <p className="mt-2 text-[11px] text-zinc-600">The model generates the speech in-shot. Voice + lipsync and Recast are coming next.</p>
+            <p className="mt-2 text-[11px] text-zinc-600">{pipeline === 'native' ? 'The video model generates the speech in-shot.' : "A character's portrait and voice become a talking video. Recast is coming next."}</p>
           </div>
-          <div><Label hint={active ? active.label : ''}>Model</Label>
-            <div className="grid gap-2">
-              {models.map(m => <ModelChip key={m.slug} label={m.label} tier={m.tier} audio={m.nativeAudio} active={m.slug === slug} onClick={() => setSlug(m.slug)} />)}
+          {pipeline === 'lipsync' ? lipsyncSlot : (
+            <div><Label hint={active ? active.label : ''}>Model</Label>
+              <div className="grid gap-2">
+                {models.map(m => <ModelChip key={m.slug} label={m.label} tier={m.tier} audio={m.nativeAudio} active={m.slug === slug} onClick={() => setSlug(m.slug)} />)}
+              </div>
             </div>
-          </div>
+          )}
         </>)}
 
 
@@ -92,7 +94,7 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12px] font-medium text-zinc-200">{typeof j.input?.take === 'string' ? j.input.take : 'Untitled take'}</p>
-                    <p className="truncate text-[10px] text-zinc-500">{j.status === 'failed' ? j.error : j.model}</p>
+                    <p className="truncate text-[10px] text-zinc-500">{j.pipeline === 'lipsync' && <span className="mr-1 rounded bg-fuchsia-500/15 px-1 text-fuchsia-300">Lipsync</span>}{j.status === 'failed' ? j.error : j.model}</p>
                   </div>
                   {j.output_url && (
                     <button onClick={() => onAddJob(j)} className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2.5 text-[11px] font-medium text-zinc-200 hover:bg-white/10">
