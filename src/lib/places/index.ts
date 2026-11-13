@@ -141,7 +141,7 @@ export function cardFor(city: CityId): string {
 export function cardMicPhrase(city: CityId): string {
   const c = cityOf(city);
   const look = c.cardLook.replace(/,? no logo( detail)?$/, '');
-  return `${look}, a ${c.card}, held up to the mouth like a microphone`;
+  return `${look} (the ${c.card}) held up to the mouth like a microphone`;
 }
 
 const find = <T extends { id: string }>(list: T[], id: string | undefined) => list.find(x => x.id === id);
