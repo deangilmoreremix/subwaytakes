@@ -1,17 +1,24 @@
 import * as client from '../muapi/client';
 import * as jobs from '../muapi/jobs';
 import { extractText } from '../muapi/result';
+import { TTS_SLUG, buildTtsInput } from '../muapi/voices';
+import { UTILITY } from '../muapi/registry';
+import { buildVoiceLipsyncInput, fitSpeech, plainSpeech, type VoiceOptions } from './voice';
 import type { ClipJob } from '../muapi/jobs';
 import { uploadMedia } from '../storage';
+import { prepareAudio } from '../audio/prepare';
 import { MAX_PLATES, RECAST_MODELS, imageBudget, outputSeconds, validateRefs, type RecastMode, type RecastModel } from './limits';
 import { parsePlanJson, selectTimestamps } from './plan';
 import { MAX_RENDER_PROMPT, PLATE_PROMPT, WRITER_SYSTEM, buildSheetPrompt, buildWriterPrompt, ensureReferenceKey, normalizeLabels } from './prompts';
 
-export type RecastStage = 'depth' | 'plan' | 'frames' | 'plates' | 'sheets' | 'prompt' | 'render';
+export type RecastStage = 'depth' | 'plan' | 'frames' | 'plates' | 'sheets' | 'prompt' | 'render' | 'voice';
 export const RECAST_STAGES: Array<{ id: RecastStage; label: string }> = [
   { id: 'depth', label: 'Reading the motion' }, { id: 'plan', label: 'Finding clean backgrounds' }, { id: 'frames', label: 'Grabbing frames' },
   { id: 'plates', label: 'Removing the people' }, { id: 'sheets', label: 'Building character sheets' }, { id: 'prompt', label: 'Writing the render prompt' }, { id: 'render', label: 'Rendering the new performer' },
 ];
+
+/** Optional last step: new voice + lipsync (only runs when voice options are given). */
+export const VOICE_STAGE = { id: 'voice' as RecastStage, label: 'Giving them a new voice' };
 
 export type StageStatus = 'running' | 'done' | 'skipped' | 'failed';
 export interface StageEvent { stage: RecastStage; status: StageStatus; detail?: string }
@@ -19,7 +26,7 @@ export interface StageEvent { stage: RecastStage; status: StageStatus; detail?: 
 /** Everything we persist (in clip_jobs.input.recast) so a reload can resume. */
 export interface RecastState {
   sourceUrl: string; sourceSeconds: number; refs: string[];
-  mode: RecastMode; model: RecastModel; outfit?: string; brief?: string;
+  mode: RecastMode; model: RecastModel; outfit?: string; brief?: string; voice?: VoiceOptions;
   stages: {
     depth?: { requestId?: string; url?: string };
     plan?: { summary: string; timestamps: number[] };
@@ -28,6 +35,8 @@ export interface RecastState {
     sheets?: { urls: string[] };
     prompt?: { text: string; contactSheetUrl?: string };
     render?: { requestId?: string; url?: string };
+    /** new voice + lipsync: any failure here keeps the silent render */
+    voice?: { words?: string; audioUrl?: string; lipsyncUrl?: string; failed?: string };
     /** in-flight request ids for per-item calls (backgrounds, sheets) so a reload re-polls instead of paying again */
     requests?: Record<string, string>;
   };
@@ -36,7 +45,7 @@ export interface RecastState {
 
 export interface RecastOptions {
   sourceUrl: string; sourceSeconds: number; refs: string[];
-  mode: RecastMode; model: RecastModel; outfit?: string; brief?: string;
+  mode: RecastMode; model: RecastModel; outfit?: string; brief?: string; voice?: VoiceOptions;
   /** resume an interrupted job */ resume?: { job: ClipJob; state: RecastState };
   onStage?: (e: StageEvent) => void; onWarning?: (w: string) => void; signal?: AbortSignal;
 }
@@ -48,11 +57,13 @@ export interface RecastDeps {
   extractFrames: (videoUrl: string, seconds: number[]) => Promise<Blob[]>;
   /** labelled contact sheet (JPEG) of hosted images */
   buildContactSheet: (items: Array<{ url: string; label: string }>) => Promise<Blob>;
+  /** optional: pad a TTS audio URL with silence to at least `seconds` and host it (browser only) */
+  fitAudio?: (url: string, seconds: number) => Promise<string>;
   createJob: typeof jobs.createJob;
   patchJob: typeof jobs.patchJob;
 }
 
-export interface RecastResult { job: ClipJob; url: string; seconds: number; warnings: string[]; state: RecastState }
+export interface RecastResult { job: ClipJob; url: string; /** the lip-synced version with the new voice, when that stage succeeded */ voicedUrl?: string; seconds: number; warnings: string[]; state: RecastState }
 
 /**
  * Prompt-writer models, tried in order. Providers retire models without notice (live test: gemini-2-5-flash and
@@ -98,7 +109,7 @@ export async function runRecastJob(o: RecastOptions, deps: RecastDeps): Promise<
   if (!/^https:\/\//.test(o.sourceUrl)) throw new Error('The source clip must be hosted at an https URL.');
 
   const def = RECAST_MODELS[o.model];
-  const state: RecastState = o.resume?.state ?? { sourceUrl: o.sourceUrl, sourceSeconds: o.sourceSeconds, refs: o.refs, mode: o.mode, model: o.model, outfit: o.outfit, brief: o.brief, stages: {}, warnings: [] };
+  const state: RecastState = o.resume?.state ?? { sourceUrl: o.sourceUrl, sourceSeconds: o.sourceSeconds, refs: o.refs, mode: o.mode, model: o.model, outfit: o.outfit, brief: o.brief, voice: o.voice, stages: {}, warnings: [] };
   const job = o.resume?.job ?? await deps.createJob('recast', def.slug, { take: 'Recast', recast: state });
 
   // serialise persistence so concurrent stages cannot overwrite each other with stale copies
@@ -221,9 +232,45 @@ export async function runRecastJob(o: RecastOptions, deps: RecastDeps): Promise<
       url = r.url; state.stages.render = { requestId: r.requestId, url }; emit('render', 'done');
     }
 
-    const done: Partial<ClipJob> = { request_id: state.stages.render?.requestId ?? null, status: 'completed', stage: 'done', output_url: url };
+    abortCheck();
+
+    // 8. voice (optional, never loses the paid render) ----------------------------
+    const voice = state.voice;
+    let voicedUrl: string | undefined;
+    if (voice) {
+      current = 'voice';
+      const vs = (state.stages.voice ??= {});
+      if (vs.lipsyncUrl) { emit('voice', 'skipped'); voicedUrl = vs.lipsyncUrl; }
+      else {
+        emit('voice', 'running');
+        try {
+          let words = (voice.script ?? vs.words ?? '').trim();
+          if (!words) {
+            const w = await deps.runModel(UTILITY.whisper, { audio_url: state.sourceUrl, response_format: 'text' }, { ...keyed('whisper', 2500), requireUrl: false, timeoutMs: 5 * 60_000 });
+            words = plainSpeech(extractText(w.prediction));
+            if (!words) throw new Error('No speech was found in the source clip, so there is nothing to say in the new voice.');
+          }
+          vs.words = words; await persist();
+          const fit = fitSpeech(voice.provider, words, out.seconds, voice.speed);
+          if (fit.trimmed) warn('The line was too long for the clip, so it was shortened.');
+          if (!vs.audioUrl) {
+            const tts = await deps.runModel(TTS_SLUG[voice.provider], buildTtsInput(voice.provider, fit.text, voice.voiceId, fit.speed), { ...keyed('tts', 2500), timeoutMs: 5 * 60_000 });
+            vs.audioUrl = deps.fitAudio ? await deps.fitAudio(tts.url, out.seconds) : tts.url; await persist();
+          }
+          const sync = await deps.runModel(voice.lipsync, buildVoiceLipsyncInput(voice.lipsync, url!, vs.audioUrl), { ...keyed('voice-lipsync', 5000), timeoutMs: 15 * 60_000 });
+          vs.lipsyncUrl = sync.url; voicedUrl = sync.url; await persist(); emit('voice', 'done');
+        } catch (e) {
+          if (errText(e, '') === 'Cancelled') throw e;
+          vs.failed = errText(e, 'error');
+          warn(`The new voice could not be added (${vs.failed}). The silent recast is kept, so you can add the original soundtrack instead.`);
+          await persist(); emit('voice', 'failed', vs.failed);
+        }
+      }
+    }
+
+    const done: Partial<ClipJob> = { request_id: state.stages.render?.requestId ?? null, status: 'completed', stage: 'done', output_url: voicedUrl ?? url };
     await persist(done); await chain;
-    return { job: { ...job, ...done } as ClipJob, url: url!, seconds: out.seconds, warnings: state.warnings, state };
+    return { job: { ...job, ...done } as ClipJob, url: url!, voicedUrl, seconds: out.seconds, warnings: state.warnings, state };
   } catch (e) {
     const error = errText(e, 'Recast failed');
     emit(current, 'failed', error);
@@ -243,5 +290,7 @@ export async function listResumableRecasts(): Promise<Array<{ job: ClipJob; stat
 }
 
 export const realRecastDeps = (extra: Pick<RecastDeps, 'extractFrames' | 'buildContactSheet'>): RecastDeps => ({
-  runModel: client.runModel, uploadMedia, createJob: jobs.createJob, patchJob: jobs.patchJob, ...extra,
+  runModel: client.runModel, uploadMedia, createJob: jobs.createJob, patchJob: jobs.patchJob,
+  fitAudio: async (url, seconds) => { const a = await prepareAudio(url, seconds); return uploadMedia(a.blob, 'voice.wav'); },
+  ...extra,
 });

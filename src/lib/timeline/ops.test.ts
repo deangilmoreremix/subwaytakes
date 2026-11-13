@@ -138,3 +138,17 @@ describe('buildChains', () => {
     expect(buildChains(mk(vid('a', 0, 60), vid('b', 60, 60)).clips)).toHaveLength(2);
   });
 });
+
+describe('addRecastClips voiced variant', () => {
+  it('keeps the lip-synced clip audible and adds no original-audio clip', async () => {
+    const { addRecastClips } = await import('./ops');
+    const { DEFAULT_PROJECT } = await import('./types');
+    const voiced = addRecastClips(DEFAULT_PROJECT, { generatedUrl: 'https://x/g.mp4', sourceUrl: 'https://x/s.mp4', generatedFrames: 150, sourceFrames: 150, label: 'Recast', voiced: true });
+    expect(voiced.audioId).toBeUndefined();
+    expect(voiced.project.clips).toHaveLength(1);
+    expect(voiced.project.clips[0].volume).toBe(1);
+    const silent = addRecastClips(DEFAULT_PROJECT, { generatedUrl: 'https://x/g.mp4', sourceUrl: 'https://x/s.mp4', generatedFrames: 150, sourceFrames: 150, label: 'Recast' });
+    expect(silent.project.clips.find(c => c.id === silent.videoId)!.volume).toBe(0);
+    expect(silent.audioId).toBeTruthy();
+  });
+});

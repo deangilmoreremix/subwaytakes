@@ -19,7 +19,7 @@ function makeDeps(over: Partial<RecastDeps> & { fail?: (slug: string, n: number)
       const f = failFn?.(slug, counts[slug]); if (f) throw new Error(f);
       const id = opts?.resumeId ?? `req-${slug}-${counts[slug]}`;
       if (!opts?.resumeId) opts?.onSubmitted?.(id);
-      const text = slug === 'gemini-video-vision' ? '```json\n{"summary":"subway talk","timestamps":[0.8,1.5,2.5,3.2]}\n```' : slug.startsWith('gemini-') && slug !== 'gemini-video-vision' ? 'WRITER PROMPT using Image1' : '';
+      const text = slug === 'openai-whisper' ? 'Pineapple belongs on pizza, fight me.' : slug === 'gemini-video-vision' ? '```json\n{"summary":"subway talk","timestamps":[0.8,1.5,2.5,3.2]}\n```' : slug.startsWith('gemini-') && slug !== 'gemini-video-vision' ? 'WRITER PROMPT using Image1' : '';
       const prediction = text ? { status: 'completed', outputs: [text] } : { status: 'completed', outputs: [`https://cdn.example/${slug}-${counts[slug]}.out`] };
       return { requestId: id, url: text ? '' : `https://cdn.example/${slug}-${counts[slug]}.out`, prediction } as never;
     }) as unknown as RecastDeps['runModel'],
@@ -193,5 +193,67 @@ describe('pure builders', () => {
     const p = buildFallbackPrompt({ model: 'wan', sheets: 2, plates: 1, seconds: 5 });
     for (const s of ['REFERENCE KEY', 'SCENE AND CAST', 'MOTION REFERENCE', 'CAMERA', 'CONSISTENCY AND PHYSICS', 'PRIORITY ORDER']) expect(p).toContain(s);
     expect(p).toContain('Image1, Image2'); expect(p).toContain('Image3'); expect(p).toContain('Video1');
+  });
+});
+
+
+describe('voice stage (new voice + lipsync)', () => {
+  const voice = { provider: 'elevenlabs' as const, voiceId: 'v-1', lipsync: 'veed-lipsync' as const };
+  it('does nothing when no voice is requested', async () => {
+    const { deps, calls } = makeDeps();
+    const r = await run(deps);
+    expect(calls.some(c => c.slug === 'openai-whisper' || c.slug === 'veed-lipsync')).toBe(false);
+    expect(r.voicedUrl).toBeUndefined();
+  });
+  it('transcribes, speaks in the character voice, then lip-syncs the recast in order', async () => {
+    const { deps, calls } = makeDeps({ fitAudio: vi.fn(async () => 'https://storage.example/voice.wav') });
+    const events: StageEvent[] = [];
+    const r = await run(deps, { voice, onStage: e => events.push(e) });
+    const slugs = calls.map(c => c.slug);
+    const tail = slugs.slice(slugs.indexOf('wan3.0-reference-to-video'));
+    expect(tail).toEqual(['wan3.0-reference-to-video', 'openai-whisper', 'elevenlabs-tts-turbo-2-5', 'veed-lipsync']);
+    expect(calls.find(c => c.slug === 'openai-whisper')!.input).toMatchObject({ audio_url: SRC });
+    expect(calls.find(c => c.slug === 'elevenlabs-tts-turbo-2-5')!.input).toMatchObject({ voice_id: 'v-1', prompt: 'Pineapple belongs on pizza, fight me.' });
+    const sync = calls.find(c => c.slug === 'veed-lipsync')!.input;
+    expect(sync).toEqual({ video_url: r.url, audio_url: 'https://storage.example/voice.wav' });
+    expect(deps.fitAudio).toHaveBeenCalledWith(expect.stringContaining('elevenlabs-tts'), 5);
+    expect(r.voicedUrl).toMatch(/veed-lipsync/);
+    expect(r.job.output_url).toBe(r.voicedUrl);
+    expect(events.filter(e => e.status === 'done').map(e => e.stage).pop()).toBe('voice');
+  });
+  it('an explicit script skips Whisper', async () => {
+    const { deps, calls } = makeDeps();
+    await run(deps, { voice: { ...voice, script: 'Say this instead' } });
+    expect(calls.some(c => c.slug === 'openai-whisper')).toBe(false);
+    expect(calls.find(c => c.slug === 'elevenlabs-tts-turbo-2-5')!.input.prompt).toBe('Say this instead');
+  });
+  it('a failing lipsync keeps the paid silent render, warns, and still completes', async () => {
+    const { deps } = makeDeps({ fail: s => (s === 'veed-lipsync' ? 'lipsync unavailable' : null) });
+    const events: StageEvent[] = [];
+    const r = await run(deps, { voice, onStage: e => events.push(e) });
+    expect(r.voicedUrl).toBeUndefined();
+    expect(r.url).toMatch(/wan3\.0/);
+    expect(r.job.status).toBe('completed');
+    expect(r.job.output_url).toBe(r.url);
+    expect(r.warnings.some(w => /new voice could not be added.*lipsync unavailable/.test(w))).toBe(true);
+    expect(events.find(e => e.stage === 'voice' && e.status === 'failed')).toBeTruthy();
+  });
+  it('no speech in the source fails the voice stage only', async () => {
+    const { deps } = makeDeps();
+    const base = deps.runModel;
+    deps.runModel = vi.fn(async (slug: string, input: Record<string, unknown>, opts?: never) => (slug === 'openai-whisper' ? ({ requestId: 'w', url: '', prediction: { status: 'completed', outputs: [''] } } as never) : base(slug, input, opts))) as never;
+    const r = await run(deps, { voice });
+    expect(r.voicedUrl).toBeUndefined();
+    expect(r.warnings.some(w => /No speech was found/.test(w))).toBe(true);
+  });
+  it('resume skips a finished voice stage', async () => {
+    const first = makeDeps();
+    const full = await run(first.deps, { voice });
+    const second = makeDeps();
+    const events: StageEvent[] = [];
+    const r = await run(second.deps, { resume: { job: { ...baseJob } as never, state: JSON.parse(JSON.stringify(full.state)) }, onStage: e => events.push(e) });
+    expect(second.calls).toHaveLength(0);
+    expect(events.filter(e => e.stage === 'voice').map(e => e.status)).toEqual(['skipped']);
+    expect(r.voicedUrl).toBe(full.voicedUrl);
   });
 });
