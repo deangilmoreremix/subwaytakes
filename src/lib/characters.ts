@@ -10,7 +10,7 @@ export const DEFAULT_HOST: Omit<CharacterBible, 'id' | 'user_id' | 'created_at'>
   ethnicity: 'mixed-race',
   clothing_style: 'casual streetwear, dark hoodie, confident stance',
   hair_description: 'short fade, well-groomed',
-  distinguishing_features: 'warm smile, expressive eyebrows, microphone in hand',
+  distinguishing_features: 'warm smile, expressive eyebrows, holds a transit card up like a microphone',
   energy_persona: 'confident, charismatic, quick-witted street interviewer',
   voice_style: 'energetic and engaging, slight NYC accent',
   is_default: true,

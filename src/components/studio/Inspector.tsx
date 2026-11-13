@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
+import { FORMATS } from '../../lib/interview';
+import { PlacePanel } from './PlacePanel';
 import { clsx } from '../../lib/format';
 import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles } from 'lucide-react';
 import type { ClipJob } from '../../lib/muapi/jobs';
@@ -15,10 +17,10 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
-  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode;
+  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; onAddEffect: () => void; fps: number;
   transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
@@ -52,7 +54,8 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
           <div><Label hint={`${spec.take.length}/220`}>The take</Label>
             <textarea className={inputCls} rows={4} maxLength={220} value={spec.take} onChange={e => set('take', e.target.value)} /></div>
           <div><Label>Guest</Label><input className={inputCls} value={spec.guestDescription} onChange={e => set('guestDescription', e.target.value)} /></div>
-          <div><Label>Setting</Label><input className={inputCls} value={spec.setting} onChange={e => set('setting', e.target.value)} /></div>
+          <div><Label>Host</Label><input className={inputCls} value={spec.hostDescription} onChange={e => set('hostDescription', e.target.value)} /></div>
+          <PlacePanel place={spec.place} onChange={p => set('place', p)} />
           <div><Label>Tone</Label>
             <Segmented value={spec.tone} onChange={v => set('tone', v)} options={[{ value: 'playful', label: 'Playful' }, { value: 'deadpan', label: 'Deadpan' }, { value: 'heated', label: 'Heated' }]} /></div>
           <details className="rounded-xl border border-line bg-ink-950 p-3 text-[12px] text-zinc-500">
@@ -62,6 +65,11 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
         </>)}
 
         {tab === 'model' && (<>
+          <div><Label>Interview format</Label>
+            <Segmented value={spec.format} onChange={v => set('format', v)} options={FORMATS.map(f => ({ value: f.id, label: f.label, hint: f.hint }))} />
+            <p className="mt-2 text-[11px] text-zinc-600">{FORMATS.find(f => f.id === spec.format)?.hint}. Both people hold a transit card as the microphone.</p>
+          </div>
+          {spec.format === 'cuts' ? cutsSlot : (<>
           <div><Label>Pipeline</Label>
             <Segmented value={pipeline} onChange={onPipeline} options={[
               { value: 'native', label: 'Native audio' },
@@ -79,6 +87,7 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
               </div>
             </div>
           )}
+          </>)}
         </>)}
 
 
