@@ -140,7 +140,8 @@ export function cardFor(city: CityId): string {
 /** Phrase for the card used as a microphone in this city. */
 export function cardMicPhrase(city: CityId): string {
   const c = cityOf(city);
-  return `${c.cardLook} (a ${c.card}) held up to the mouth like a microphone`;
+  const look = c.cardLook.replace(/,? no logo( detail)?$/, '');
+  return `${look}, a ${c.card}, held up to the mouth like a microphone`;
 }
 
 const find = <T extends { id: string }>(list: T[], id: string | undefined) => list.find(x => x.id === id);

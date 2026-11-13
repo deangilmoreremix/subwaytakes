@@ -32,7 +32,7 @@ const OPENER_SECONDS = 1.8;
 
 export const DEFAULT_TAKE: TakeSpec = {
   take: 'Pineapple belongs on pizza and anyone who disagrees is scared of joy.',
-  guestDescription: 'a New Yorker in their 30s in a puffer jacket',
+  guestDescription: 'a local commuter in their 30s in a winter jacket',
   hostDescription: 'a young host with big curly hair and round sunglasses, wearing a bright bomber jacket',
   place: DEFAULT_PLACE,
   tone: 'playful',
@@ -66,7 +66,7 @@ const TONE_TEXT: Record<Tone, string> = {
   heated: 'heated and passionate',
 };
 
-export const NO_MIC_RULE = 'The transit card is the only microphone. There is no real microphone, no lavalier, no boom, no phone held as a mic, and no visible audio gear.';
+export const NO_MIC_RULE = 'The transit card is the only microphone. There is no real microphone, no lavalier, no boom, no phone held as a mic, and no visible audio gear. The card shows no brand logos or readable text.';
 
 function sceneText(t: TakeSpec): string {
   return placePrompt(t.place);
@@ -80,7 +80,7 @@ export function buildNativePrompt(t: TakeSpec): string {
   const noText = 'No subtitles, no on-screen text, no logos or watermarks.';
   if (t.format === 'solo') {
     return [
-      `Handheld vertical documentary close-up of ${t.guestDescription}, ${sceneText(t)}.`,
+      `Handheld vertical documentary close-up of ${t.guestDescription}. Setting: ${sceneText(t)}.`,
       `Out of frame, the host's hand holds ${card} toward the guest as the microphone.`,
       NO_MIC_RULE,
       `The host asks off-screen: "${host}" The guest answers to camera, ${tone}: "${guest}"`,
@@ -90,9 +90,10 @@ export function buildNativePrompt(t: TakeSpec): string {
   // twoshot (cuts also uses this wording for a single combined fallback)
   const sitting = t.place.mode === 'transit' && t.place.scene === 'train_seated';
   return [
-    `Handheld vertical documentary two-shot: the host (${t.hostDescription}) and the guest (${t.guestDescription}) ${sitting ? '' : 'together, '}${sceneText(t)}.`,
+    `Handheld vertical documentary two-shot of two people: the host (${t.hostDescription}) and the guest (${t.guestDescription}).`,
+    `Setting: ${sceneText(t)}.`,
     sitting ? 'They sit shoulder to shoulder, close together, framed from the chest up.' : 'They stand shoulder to shoulder, close together, framed from the chest up.',
-    `Both hold ${card} so the card is clearly visible near their mouths, like a microphone, passing it between them as they talk.`,
+    `Both hold ${card}, so the card is clearly visible near their mouths, passing it between them as they talk.`,
     NO_MIC_RULE,
     `The host, card at their mouth, asks the guest: "${host}" The guest, ${tone}, takes the card and answers: "${guest}" The host reacts, laughing.`,
     `Visible lip movement matches each speaker's words and each voice is distinct. Slight camera sway, natural ambient sound of the place. ${noText}`,
@@ -105,7 +106,7 @@ export type Role = 'host' | 'guest';
 export function buildStillPrompt(t: TakeSpec, role: Role): string {
   const who = role === 'host' ? t.hostDescription : t.guestDescription;
   const card = cardMicPhrase(t.place.city);
-  return `Close-up portrait photo of ${who}, ${sceneText(t)}. They hold ${card} up near their mouth, looking at the camera mid-sentence. ${NO_MIC_RULE} Handheld documentary framing, natural light, photorealistic, ${t.aspect} framing.`;
+  return `Close-up portrait photo of ${who}. Setting: ${sceneText(t)}. They hold ${card} up near their mouth, looking at the camera mid-sentence. ${NO_MIC_RULE} Handheld documentary framing, natural light, photorealistic, ${t.aspect} framing.`;
 }
 
 export interface CutShot { role: Role; text: string; portraitPrompt: string }

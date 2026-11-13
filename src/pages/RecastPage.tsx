@@ -11,8 +11,9 @@ import { getMediaInfo, readMediaInfo } from '../lib/timeline/media';
 import { addRecastClips } from '../lib/timeline/ops';
 import { loadProject, saveProject } from '../lib/timeline/useProject';
 import { RECAST_MODELS, REF_LIMITS, estimateRecast, imageBudget, outputSeconds, validateRefs, validateSource, type RecastMode, type RecastModel } from '../lib/recast/limits';
-import { RECAST_STAGES, listResumableRecasts, realRecastDeps, runRecastJob, type RecastState, type StageEvent, type StageStatus, type RecastResult } from '../lib/recast/pipeline';
+import { RECAST_STAGES, VOICE_STAGE, listResumableRecasts, realRecastDeps, runRecastJob, type RecastState, type StageEvent, type StageStatus, type RecastResult } from '../lib/recast/pipeline';
 import { buildContactSheet, extractFrames } from '../lib/recast/frames';
+import { VOICE_LIPSYNC_MODELS, estimateVoice, type VoiceLipsyncModel } from '../lib/recast/voice';
 import type { CharacterBible } from '../lib/types';
 import type { ClipJob } from '../lib/muapi/jobs';
 
@@ -36,6 +37,9 @@ export function RecastPage() {
   const [outfit, setOutfit] = useState('');
   const [brief, setBrief] = useState('');
   const [liveRender, setLiveRender] = useState<number | null>(null);
+  const [voiceMode, setVoiceMode] = useState<'new' | 'keep'>('new');
+  const [voiceLipsync, setVoiceLipsync] = useState<VoiceLipsyncModel>('veed-lipsync');
+  const [voiceScript, setVoiceScript] = useState('');
 
   const [stages, setStages] = useState<Record<string, { status: StageStatus; detail?: string }>>({});
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -92,11 +96,20 @@ export function RecastPage() {
     } catch (e) { setRefErr(e instanceof Error ? e.message : 'Upload failed'); } finally { setRefBusy(false); }
   }
 
+  // the performer's voice comes from the first chosen Cast character that has one
+  const performer = refs.map(r => characters.find(c => c.id === r.id)).find(c => c?.voice_provider && c.voice_id);
+  const useNewVoice = voiceMode === 'new' && !!performer;
+
   // ---------------------------------------------------------------- cost
   const out = source ? outputSeconds(model, source.seconds) : null;
   const outSeconds = out?.seconds, outError = out?.error;
   const plates = imageBudget(model, Math.max(1, refs.length), 4).plates;
-  const plan = useMemo(() => estimateRecast(model, Math.max(1, refs.length), plates, liveRender != null ? { render: liveRender } : {}, outSeconds ?? 5), [model, refs.length, plates, liveRender, outSeconds]);
+  const base = useMemo(() => estimateRecast(model, Math.max(1, refs.length), plates, liveRender != null ? { render: liveRender } : {}, outSeconds ?? 5), [model, refs.length, plates, liveRender, outSeconds]);
+  const plan = useMemo(() => {
+    if (!useNewVoice) return base;
+    const extra = estimateVoice(voiceLipsync);
+    return { total: Math.round((base.total + extra.reduce((n, [, v]) => n + v, 0)) * 10000) / 10000, lines: [...base.lines, ...extra] };
+  }, [base, useNewVoice, voiceLipsync]);
   useEffect(() => {
     setLiveRender(null);
     if (!hasKey || !source || outSeconds === undefined || outError) return;
@@ -127,6 +140,7 @@ export function RecastPage() {
       const r = await runRecastJob({
         sourceUrl: src.url, sourceSeconds: src.seconds, refs: st ? st.refs : refs.map(x => x.url),
         mode: st?.mode ?? mode, model: st?.model ?? model, outfit: st?.outfit ?? outfit, brief: st?.brief ?? brief,
+        voice: st ? st.voice : useNewVoice && performer ? { provider: performer.voice_provider!, voiceId: performer.voice_id!, speed: performer.voice_speed ?? undefined, lipsync: voiceLipsync, script: voiceScript.trim() || undefined } : undefined,
         resume, onStage, onWarning: w => setWarnings(x => [...x, w]), signal: abort.current.signal,
       }, realRecastDeps({ extractFrames: (u, s) => extractFrames(u, s), buildContactSheet }));
       setResult(r); setResumable(await listResumableRecasts().catch(() => []));
@@ -142,7 +156,8 @@ export function RecastPage() {
     const fps = loadProject().fps;
     const [gen, srcInfo] = await Promise.all([getMediaInfo(result.url).catch(() => null), getMediaInfo(result.state.sourceUrl).catch(() => null)]);
     const { project } = addRecastClips(loadProject(), {
-      generatedUrl: result.url, sourceUrl: result.state.sourceUrl, label: 'Recast',
+      voiced: !!result.voicedUrl,
+      generatedUrl: result.voicedUrl ?? result.url, sourceUrl: result.state.sourceUrl, label: 'Recast',
       generatedFrames: Math.max(6, Math.round((gen?.durationSec ?? result.seconds) * fps)),
       sourceFrames: Math.max(6, Math.round((srcInfo?.durationSec ?? result.state.sourceSeconds) * fps)),
       hasSourceAudio: srcInfo?.hasAudio ?? true,
@@ -159,7 +174,7 @@ export function RecastPage() {
     <div className="mx-auto max-w-6xl p-4 md:p-6">
       <div className="mb-5">
         <h1 className="font-display text-2xl font-semibold tracking-tight text-white">Recast</h1>
-        <p className="text-[13px] text-zinc-500">Replace the performer in a clip with someone new. The motion, camera and original soundtrack stay.</p>
+        <p className="text-[13px] text-zinc-500">Replace the performer in a clip with someone new. The motion and camera stay. Give them their own voice, or keep the original soundtrack.</p>
       </div>
       {!hasKey && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />Add your muapi key in <Link to="/settings" className="underline">Settings</Link> to run a recast.</div>}
 
@@ -240,12 +255,30 @@ export function RecastPage() {
             <div className="mt-4"><Label>Creative brief (optional)</Label><textarea className={inputCls} rows={2} value={brief} onChange={e => setBrief(e.target.value)} placeholder="Anything about the mood, lighting or details to keep" /></div>
           </section>
 
+          {/* 3 voice */}
+          <section className="rounded-2xl border border-line bg-ink-850 p-5 shadow-panel" aria-label="Voice">
+            <h2 className="mb-3 flex items-center gap-2 font-display text-[15px] font-semibold text-white"><span className="grid h-5 w-5 place-items-center rounded-full bg-accent-soft text-[11px] text-accent">3</span>Voice</h2>
+            <Segmented value={performer ? voiceMode : 'keep'} onChange={setVoiceMode} options={[{ value: 'new', label: 'New voice', disabled: !performer, hint: 'Speak the same words in the character voice and re-animate the mouth' }, { value: 'keep', label: 'Keep original voice', hint: 'Restore the source soundtrack; the mouth is not re-synced' }]} />
+            {!performer && <p className="mt-2 text-[11px] text-zinc-600">To give the new performer their own voice, pick a Cast character that has a voice in step 2. Uploaded photos have no voice, so the original soundtrack is kept.</p>}
+            {useNewVoice && performer && (
+              <div className="mt-3 space-y-3">
+                <p className="text-[12px] text-zinc-400">{performer.name} will say the words from the original clip in their own voice, then the mouth is re-animated to match. This is an extra step after the render and can be skipped without losing the recast if it fails.</p>
+                <div><Label>Lipsync model</Label>
+                  <div className="grid gap-1.5 sm:grid-cols-2">{VOICE_LIPSYNC_MODELS.map(m => (
+                    <button key={m.slug} onClick={() => setVoiceLipsync(m.slug)} aria-pressed={m.slug === voiceLipsync} className={clsx('rounded-xl border px-3 py-2 text-left text-[12px] transition', m.slug === voiceLipsync ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-950 text-zinc-300 hover:border-white/15')}>
+                      <span className="block font-medium">{m.label}</span><span className="text-[10px] text-zinc-500">~{money(m.approxUsd)}{m.note ? ` · ${m.note}` : ''}</span></button>
+                  ))}</div></div>
+                <div><Label>What they say (optional)</Label><textarea className={inputCls} rows={2} value={voiceScript} onChange={e => setVoiceScript(e.target.value)} placeholder="Leave empty to transcribe the original clip" /></div>
+              </div>
+            )}
+          </section>
+
           {/* progress */}
           {(started || runError || warnings.length > 0) && (
             <section className="rounded-2xl border border-line bg-ink-850 p-5 shadow-panel" aria-label="Recast progress">
               <div className="mb-3 flex items-center justify-between"><h2 className="font-display text-[15px] font-semibold text-white">Progress</h2>{running && <span className="tnum text-[12px] text-zinc-500">{mmss}</span>}</div>
               <ol className="space-y-2">
-                {RECAST_STAGES.map(s => {
+                {[...RECAST_STAGES, ...(useNewVoice || result?.state.voice ? [VOICE_STAGE] : [])].map(s => {
                   const st = stages[s.id];
                   return (
                     <li key={s.id} className="flex items-start gap-2.5 text-[13px]" data-stage={s.id} data-status={st?.status ?? 'waiting'}>
@@ -267,8 +300,8 @@ export function RecastPage() {
             <section className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-5" aria-label="Recast result">
               <h2 className="mb-3 flex items-center gap-2 font-display text-[15px] font-semibold text-white"><Check className="h-4 w-4 text-emerald-400" />Done</h2>
               <div className="flex flex-wrap gap-4">
-                <video src={result.url} controls playsInline loop className="h-72 rounded-xl bg-black object-cover" />
-                <div className="space-y-3 text-[12px] text-zinc-400"><p>The new clip is silent. Adding it to the timeline also adds the original soundtrack so the voice stays in sync.</p>
+                <video src={result.voicedUrl ?? result.url} controls playsInline loop className="h-72 rounded-xl bg-black object-cover" />
+                <div className="space-y-3 text-[12px] text-zinc-400"><p>{result.voicedUrl ? 'This clip has the new voice with the mouth re-animated to match. Lip-sync quality varies on generated faces, so check it before using it.' : 'The new clip is silent. Adding it to the timeline also adds the original soundtrack so the voice stays in sync.'}</p>
                   <button onClick={addToTimeline} className="flex h-10 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot px-4 text-[13px] font-semibold text-black shadow-glow"><Play className="h-4 w-4" />Add to timeline</button></div>
               </div>
             </section>

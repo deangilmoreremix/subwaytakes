@@ -48,7 +48,7 @@ describe('solo and stills', () => {
     expect(out).toMatch(/only microphone/);
   });
   it('stills show a card at the mouth', () => {
-    expect(buildStillPrompt(spec(), 'host')).toMatch(/up near their mouth/);
+    expect(buildStillPrompt(spec(), 'host')).toMatch(/held up to the mouth/);
     expect(buildStillPrompt(spec(), 'guest')).toContain(DEFAULT_TAKE.guestDescription);
   });
 });
