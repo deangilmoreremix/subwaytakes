@@ -9,13 +9,15 @@ import { Kbd } from '../components/studio/ui';
 import { ExportDialog } from '../components/studio/ExportDialog';
 import { DEFAULT_TAKE, cutsPlan, cutsProblem, type TakeSpec } from '../lib/muapi/prompt';
 import { placePrompt } from '../lib/places';
+import { twoShotRoute, describeCharacter } from '../lib/interview';
+import { runTwoShotImageJob, STILL_APPROX_USD, STILL_MODEL, buildStillInput, buildAnimateInput } from '../lib/interview/twoshot';
 import { CutsPanel } from '../components/studio/CutsPanel';
 import { NATIVE_MODELS, chooseNativeModel, type Pipeline } from '../lib/muapi/registry';
 import { LipsyncPanel } from '../components/studio/LipsyncPanel';
 import { LIPSYNC_MODELS, estimateLipsync, runLipsyncJob, validateLipsync, type LipsyncModel } from '../lib/muapi/lipsync';
 import { listCharacters } from '../lib/characters';
 import type { CharacterBible } from '../lib/types';
-import { getMuapiKey } from '../lib/muapi/client';
+import { getMuapiKey, muapi } from '../lib/muapi/client';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
 import { addClip, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
@@ -50,6 +52,15 @@ export function CreateTakePage() {
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef<PlayerRef>(null);
   const hasClips = project.clips.length > 0;
+  const hostChar = characters.find(c => c.id === spec.hostCharacterId);
+  const route = twoShotRoute(spec, hostChar);
+  const imageRoute = route.route === 'image';
+  // keep the model on the right kind (image-to-video vs text-to-video) as the route changes
+  useEffect(() => {
+    const cur = NATIVE_MODELS.find(m => m.slug === slug);
+    if (imageRoute && cur?.mode !== 'image') setSlug('veo3.1-fast-image-to-video');
+    if (!imageRoute && cur?.mode === 'image') setSlug('veo3.1-fast-text-to-video');
+  }, [imageRoute, slug]);
   useEffect(() => { const t = project.style?.title; if (t && t.take !== spec.take) setProject({ ...project, style: { ...project.style, title: { ...t, take: spec.take } } }, false); }, [spec.take, project, setProject]);
 
   // bind to the Remotion Player (mounted only once the timeline has clips)
@@ -173,11 +184,34 @@ export function CreateTakePage() {
     } finally { setRunning(null); }
   }
 
+  const TWOSHOT_STAGES = ['Making the starting image', 'Animating the interview'];
+  async function generateTwoShotImage(host: NonNullable<typeof hostChar> & { portrait_url: string }) {
+    const guest = characters.find(c => c.id === speakerId && c.role === 'guest' && c.portrait_url);
+    const estimates = await Promise.all([
+      muapi.estimate(STILL_MODEL, buildStillInput(spec, host.portrait_url, guest?.portrait_url ?? undefined)).catch(() => null),
+      muapi.estimate(slug, buildAnimateInput(spec, slug, 'https://example.com/still.png', host)).catch(() => null),
+    ]);
+    const val = (r: Record<string, unknown> | null) => (r && typeof r.cost === 'number' ? r.cost : null);
+    const total = (val(estimates[0]) ?? STILL_APPROX_USD) + (val(estimates[1]) ?? 0);
+    if (total > COST_CONFIRM_USD && !window.confirm(`The starting image and the video will cost about $${total.toFixed(2)}. Continue?`)) return;
+    setError(''); setRunning({ status: 'processing', startedAt: Date.now(), stages: TWOSHOT_STAGES, stageIdx: 0 });
+    try {
+      const job = await runTwoShotImageJob({ spec: { ...spec, hostDescription: describeCharacter(host) }, host, guestPortraitUrl: guest?.portrait_url ?? undefined, modelSlug: slug, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'still' ? 0 : 1 }) });
+      await refresh();
+      setRunning(null);
+      await addJobToTimeline(job);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Two-shot generation failed');
+      await refresh();
+    } finally { setRunning(null); }
+  }
+
   async function generate() {
     if (running || !hasKey) return;
     if (spec.format === 'cuts') { await generateCuts(); return; }
     if (pipeline === 'recast') { nav('/recast'); return; }
     if (pipeline === 'lipsync') { await generateLipsync(); return; }
+    if (imageRoute && hostChar?.portrait_url) { await generateTwoShotImage({ ...hostChar, portrait_url: hostChar.portrait_url }); return; }
     setError(''); setRunning({ status: 'queued', startedAt: Date.now() });
     try {
       const job = await runNativeJob({ spec, tier: 'fast', modelSlug: slug, onUpdate: p => setRunning(r => r && { ...r, status: p.status }) });
@@ -229,6 +263,7 @@ export function CreateTakePage() {
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={project.style?.title ? { ...project.style.title, take: spec.take } : undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
+            characters={characters} hostHint={route.hint} imageRoute={imageRoute}
             cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} />}
             lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} hasKey={hasKey} />}
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}

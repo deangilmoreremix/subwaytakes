@@ -6,7 +6,8 @@ import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { FORMATS } from '../../lib/interview';
 import { PlacePanel } from './PlacePanel';
 import { clsx } from '../../lib/format';
-import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles } from 'lucide-react';
+import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles, UserRound } from 'lucide-react';
+import type { CharacterBible } from '../../lib/types';
 import type { ClipJob } from '../../lib/muapi/jobs';
 import type { Clip } from '../../lib/timeline/types';
 import { FONTS, FONT_IDS, type FontId } from '../../lib/captions/fonts';
@@ -17,10 +18,10 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, title, onTitle, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
-  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; title?: { take: string; guest?: string; badge?: boolean }; onTitle: (t: { take: string; guest?: string; badge?: boolean } | undefined) => void;
+  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; characters: CharacterBible[]; hostHint?: string; imageRoute: boolean; title?: { take: string; guest?: string; badge?: boolean }; onTitle: (t: { take: string; guest?: string; badge?: boolean } | undefined) => void;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; onAddEffect: () => void; fps: number;
   transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
@@ -39,7 +40,7 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
     a.play().catch(() => setPlayingSfx(undefined));
   }
   if (clip?.id !== lastClip) { setLastClip(clip?.id); if (clip) setTab('clip'); else if (tab === 'clip') setTab('take'); }
-  const models = NATIVE_MODELS.filter(m => m.mode === 'text' && m.aspects.includes(spec.aspect));
+  const models = NATIVE_MODELS.filter(m => m.mode === (imageRoute ? 'image' : 'text') && m.aspects.includes(spec.aspect));
   const active = models.find(m => m.slug === slug);
 
   return (
@@ -54,7 +55,23 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
           <div><Label hint={`${spec.take.length}/220`}>The take</Label>
             <textarea className={inputCls} rows={4} maxLength={220} value={spec.take} onChange={e => set('take', e.target.value)} /></div>
           <div><Label>Guest</Label><input className={inputCls} value={spec.guestDescription} onChange={e => set('guestDescription', e.target.value)} /></div>
-          <div><Label>Host</Label><input className={inputCls} value={spec.hostDescription} onChange={e => set('hostDescription', e.target.value)} /></div>
+          {spec.format === 'twoshot' && (
+            <div><Label>Host</Label>
+              <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Host source">
+                <button onClick={() => set('hostCharacterId', undefined)} aria-pressed={!spec.hostCharacterId} className={clsx('rounded-lg border px-2.5 py-1.5 text-[12px] transition', !spec.hostCharacterId ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-850 text-zinc-400 hover:text-zinc-200')}>Describe</button>
+                {characters.map(c => (
+                  <button key={c.id} onClick={() => set('hostCharacterId', c.id)} aria-pressed={spec.hostCharacterId === c.id} className={clsx('flex items-center gap-1.5 rounded-lg border py-1 pl-1 pr-2.5 text-[12px] transition', spec.hostCharacterId === c.id ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-850 text-zinc-400 hover:text-zinc-200')}>
+                    {c.portrait_url ? <img src={c.portrait_url} alt="" className="h-6 w-5 rounded object-cover" /> : <span className="grid h-6 w-5 place-items-center rounded bg-ink-800 text-zinc-600"><UserRound className="h-3 w-3" /></span>}{c.name}
+                  </button>
+                ))}
+                <Link to="/cast" className="rounded-lg border border-dashed border-white/15 px-2.5 py-1.5 text-[12px] text-zinc-500 hover:text-accent">+ New in Cast</Link>
+              </div>
+              {spec.hostCharacterId ? (
+                <p className={clsx('text-[11px]', hostHint ? 'text-amber-300/90' : 'text-zinc-500')}>{hostHint ?? 'Uses their portrait: a starting image of both of you is made first, so the host keeps the same face.'}</p>
+              ) : <input className={inputCls} value={spec.hostDescription} onChange={e => set('hostDescription', e.target.value)} />}
+            </div>
+          )}
+          {spec.format !== 'twoshot' && <div><Label>Host</Label><input className={inputCls} value={spec.hostDescription} onChange={e => set('hostDescription', e.target.value)} /></div>}
           <PlacePanel place={spec.place} onChange={p => set('place', p)} />
           <div><Label>Tone</Label>
             <Segmented value={spec.tone} onChange={v => set('tone', v)} options={[{ value: 'playful', label: 'Playful' }, { value: 'deadpan', label: 'Deadpan' }, { value: 'heated', label: 'Heated' }]} /></div>

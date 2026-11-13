@@ -19,6 +19,8 @@ export interface TakeSpec {
   take: string;
   guestDescription: string;
   hostDescription: string;
+  /** Cast character used as the host (its portrait enables the starting-image route). */
+  hostCharacterId?: string;
   place: PlaceSpec;
   tone: Tone;
   durationSeconds: number;
@@ -142,4 +144,49 @@ export function titleLines(take: string, maxChars = 18): string[] {
 
 export function cardNameFor(t: Pick<TakeSpec, 'place'>): string {
   return cityOf(t.place.city).card;
+}
+
+// ---- Host from Cast ---------------------------------------------------------------
+
+export interface HostCharacter {
+  id?: string; name?: string; age_range?: string; gender?: string; ethnicity?: string;
+  hair_description?: string; clothing_style?: string; distinguishing_features?: string | null;
+  portrait_url?: string | null;
+}
+
+/** One-line text description of a Cast character (used for the text route and as a fallback). */
+export function describeCharacter(c: HostCharacter): string {
+  const bits = [
+    `a ${[c.gender, c.ethnicity].filter(Boolean).join(' ')} person`.replace('a  person', 'a person'),
+    c.age_range, c.hair_description, c.clothing_style ? `wearing ${c.clothing_style}` : '', c.distinguishing_features ?? '',
+  ].map(x => (x ?? '').trim()).filter(Boolean);
+  return bits.join(', ');
+}
+
+/** The host description to use: the Cast character's text if one is chosen, else the typed description. */
+export function effectiveHostDescription(t: Pick<TakeSpec, 'hostDescription'>, host?: HostCharacter): string {
+  return host ? describeCharacter(host) || t.hostDescription : t.hostDescription;
+}
+
+export type TwoShotRoute = 'text' | 'image';
+
+/** Image route needs a hosted https portrait on the chosen Cast host; otherwise the text route is used. */
+export function twoShotRoute(t: Pick<TakeSpec, 'format'>, host?: HostCharacter): { route: TwoShotRoute; hint?: string } {
+  if (t.format !== 'twoshot' || !host) return { route: 'text' };
+  if (host.portrait_url && /^https:\/\//.test(host.portrait_url)) return { route: 'image' };
+  return { route: 'text', hint: `${host.name ?? 'This host'} has no portrait yet, so their text description is used. Add a portrait in Cast to keep their face.` };
+}
+
+/** Prompt for the ONE starting still of host and guest side by side (image-to-image from the host's portrait). */
+export function buildTwoShotStillPrompt(t: TakeSpec, opts: { guestHasReference?: boolean } = {}): string {
+  const card = cardMicPhrase(t.place.city);
+  const sitting = t.place.mode === 'transit' && t.place.scene === 'train_seated';
+  return [
+    `Photo of two people, ${sitting ? 'seated shoulder to shoulder' : 'standing shoulder to shoulder'}, framed from the chest up, ${t.aspect} vertical framing.`,
+    `The host is the person in the first reference image: keep their face, hair and look exactly the same.`,
+    opts.guestHasReference ? 'The guest is the person in the second reference image: keep their face exactly the same.' : `The guest is ${t.guestDescription}.`,
+    `Setting: ${sceneText(t)}.`,
+    `Both hold ${card}, near their mouths like a microphone, and are mid-conversation. ${NO_MIC_RULE}`,
+    'Handheld documentary look, natural light, photorealistic, no text or watermarks.',
+  ].join(' ');
 }

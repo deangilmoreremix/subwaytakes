@@ -10,13 +10,14 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_TAKE, buildNativePrompt } from '../src/lib/interview';
+import { STILL_MODEL, buildAnimateInput, buildStillInput } from '../src/lib/interview/twoshot';
 import { DEFAULT_PLACE } from '../src/lib/places';
 import { NATIVE_MODELS } from '../src/lib/muapi/registry';
 import { extractError, extractMediaUrl, normalizeStatus } from '../src/lib/muapi/result';
 
 const argv = process.argv.slice(2).filter(a => a !== '--');
 const opt = (n: string) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const outDir = argv.find(a => !a.startsWith('--') && ![opt('--city'), opt('--scene'), opt('--model'), opt('--cap')].includes(a));
+const outDir = argv.find(a => !a.startsWith('--') && ![opt('--city'), opt('--scene'), opt('--model'), opt('--cap'), opt('--host-image')].includes(a));
 if (!outDir) { console.error('usage: live-interview.ts <outDir> [--city id] [--scene id] [--run --model slug --cap USD]'); process.exit(2); }
 mkdirSync(outDir, { recursive: true });
 const RUN = argv.includes('--run');
@@ -42,6 +43,22 @@ const costs: Record<string, number | null> = {};
 for (const m of candidates) {
   costs[m.slug] = await estimate(m.slug);
   console.log(`${m.label.padEnd(18)} ${m.slug.padEnd(40)} ${costs[m.slug] == null ? 'estimate unavailable' : '$' + costs[m.slug]!.toFixed(2)}`);
+}
+
+const hostImage = opt('--host-image');
+if (hostImage) {
+  // Host-image route: one starting still, then image-to-video. Prices only (a real run is done from the app).
+  const stillBody = buildStillInput(spec, hostImage);
+  const sr = await fetch(`${API}/api/v1/models/${STILL_MODEL}/estimate-cost`, { method: 'POST', headers, body: JSON.stringify(stillBody) });
+  const stillCost = sr.ok ? ((await sr.json()) as { cost?: number }).cost ?? null : null;
+  console.log(`\nHOST IMAGE ROUTE\nStarting still (${STILL_MODEL}): ${stillCost == null ? 'estimate unavailable' : '$' + stillCost.toFixed(2)}`);
+  for (const m of NATIVE_MODELS.filter(x => x.mode === 'image' && x.nativeAudio && x.aspects.includes('9:16') && ['fast', 'budget'].includes(x.tier))) {
+    const r = await fetch(`${API}/api/v1/models/${m.slug}/estimate-cost`, { method: 'POST', headers, body: JSON.stringify(buildAnimateInput(spec, m.slug, hostImage, {})) });
+    const c = r.ok ? ((await r.json()) as { cost?: number }).cost ?? null : null;
+    console.log(`${m.label.padEnd(22)} ${m.slug.padEnd(42)} ${c == null ? 'estimate unavailable' : '$' + c.toFixed(2)}${c != null && stillCost != null ? `  (total with still $${(c + stillCost).toFixed(2)})` : ''}`);
+  }
+  console.log('Host-image route is prices-only here. Run it from the app (Create > Take > Host > pick a Cast host).');
+  process.exit(0);
 }
 
 if (!RUN) { console.log('\nDRY RUN: nothing was generated or charged. Add --run --model <slug> --cap <usd> to render one clip.'); process.exit(0); }
