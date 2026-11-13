@@ -164,6 +164,25 @@ describe('resume', () => {
   });
 });
 
+describe('resume of per-item calls', () => {
+  it('saves every in-flight request id and re-polls them after a reload instead of submitting again', async () => {
+    const first = makeDeps();
+    const full = await run(first.deps);
+    const reqs = full.state.stages.requests!;
+    expect(Object.keys(reqs).sort()).toEqual(['plate-0', 'plate-1', 'plate-2', 'plate-3', 'sheet-0']);   // ids saved the moment they were submitted
+    // simulate: tab closed while the background and sheet calls were still running
+    const state: RecastState = JSON.parse(JSON.stringify(full.state));
+    delete state.stages.plates; delete state.stages.sheets; delete state.stages.prompt; delete state.stages.render;
+    const second = makeDeps();
+    await run(second.deps, { resume: { job: { ...baseJob } as never, state } });
+    const calls = (second.deps.runModel as ReturnType<typeof vi.fn>).mock.calls as Array<[string, unknown, { resumeId?: string }]>;
+    for (const key of ['plate-0', 'plate-1', 'plate-2', 'plate-3', 'sheet-0']) {
+      const slug = key.startsWith('plate') ? 'nano-banana-2-edit' : 'gpt-image-2-image-to-image';
+      expect(calls.some(c => c[0] === slug && c[2].resumeId === reqs[key])).toBe(true);
+    }
+  });
+});
+
 describe('pure builders', () => {
   it('buildRenderInput is model specific and clips the prompt', () => {
     expect(buildRenderInput('wan', 'x'.repeat(5000), ['a'], 'd', 6).prompt).toHaveLength(4000);

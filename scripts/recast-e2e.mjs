@@ -97,7 +97,7 @@ const projectClips = () => page.evaluate(() => JSON.parse(localStorage.getItem('
 
 // ---------------------------------------------------------------- empty state + validation
 await page.goto(`${base}/recast`);
-await page.getByText('Source clip').waitFor();
+await page.getByRole('heading', { name: 'Source clip' }).waitFor();
 await page.screenshot({ path: `${out}/110-recast-empty.png`, fullPage: true });
 console.log('EMPTY: run button disabled =', await page.getByRole('button', { name: /^Recast ·/ }).isDisabled(), '| hint:', await page.locator('text=Choose a source clip.').count() ? 'Choose a source clip.' : '(none)');
 
@@ -129,7 +129,7 @@ await page.screenshot({ path: `${out}/113-recast-result.png`, fullPage: true });
 
 const slugs = muapiCalls.filter(c => c.method === 'POST' && !c.path.includes('estimate')).map(c => c.path.replace('/api/v1/', ''));
 console.log('SUBMITTED ORDER', JSON.stringify(slugs));
-const render = muapiCalls.find(c => c.path.includes('wan3.0') && c.method === 'POST')?.body;
+const render = muapiCalls.find(c => c.path === '/api/v1/wan3.0-reference-to-video' && c.method === 'POST')?.body;
 console.log('RENDER BODY', JSON.stringify({ ...render, prompt: String(render?.prompt).slice(0, 60) + '…', images_list: render?.images_list?.map(u => u.slice(-30)), videos_list: render?.videos_list?.map(u => u.slice(-30)) }));
 
 // real canvas outputs captured from the upload requests

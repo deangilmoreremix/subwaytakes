@@ -19,7 +19,7 @@ import type { ClipJob } from '../lib/muapi/jobs';
 interface Source { url: string; seconds: number; bytes: number; hasAudio: boolean; name: string }
 interface Ref { id: string; url: string; label: string; origin: 'cast' | 'upload' }
 
-const money = (n: number) => `$${n.toFixed(2)}`;
+const money = (n: number) => (n > 0 && n < 0.005 ? '<$0.01' : `$${n.toFixed(2)}`);
 
 export function RecastPage() {
   const nav = useNavigate();

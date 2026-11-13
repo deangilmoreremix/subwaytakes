@@ -28,6 +28,8 @@ export interface RecastState {
     sheets?: { urls: string[] };
     prompt?: { text: string; contactSheetUrl?: string };
     render?: { requestId?: string; url?: string };
+    /** in-flight request ids for per-item calls (backgrounds, sheets) so a reload re-polls instead of paying again */
+    requests?: Record<string, string>;
   };
   warnings: string[];
 }
@@ -107,6 +109,8 @@ export async function runRecastJob(o: RecastOptions, deps: RecastDeps): Promise<
   const abortCheck = () => { if (o.signal?.aborted) throw new Error('Cancelled'); };
   let current: RecastStage = 'depth';
   const opts = { signal: o.signal };
+  /** run options for a keyed per-item call: re-poll a saved request id after a reload, and save new ones as soon as they exist */
+  const keyed = (key: string, intervalMs: number) => ({ ...opts, intervalMs, resumeId: state.stages.requests?.[key], onSubmitted: (id: string) => { (state.stages.requests ??= {})[key] = id; void persist(); } });
 
   try {
     // 1. depth ---------------------------------------------------------------
@@ -154,9 +158,9 @@ export async function runRecastJob(o: RecastOptions, deps: RecastDeps): Promise<
       emit('plates', 'running');
       const frames = state.stages.frames!.urls;
       const cleaned = await Promise.all(frames.map(async (f, i) => {
-        try { return (await deps.runModel('nano-banana-2-edit', { prompt: PLATE_PROMPT, images_list: [f], aspect_ratio: 'Auto', resolution: '1k', output_format: 'jpg' }, { ...opts, intervalMs: 3000 })).url; }
+        try { return (await deps.runModel('nano-banana-2-edit', { prompt: PLATE_PROMPT, images_list: [f], aspect_ratio: 'Auto', resolution: '1k', output_format: 'jpg' }, keyed(`plate-${i}`, 3000))).url; }
         catch (e1) {
-          try { return (await deps.runModel('gpt-image-2-image-to-image', { prompt: PLATE_PROMPT, images_list: [f], aspect_ratio: 'auto', resolution: '1K', quality: 'medium' }, { ...opts, intervalMs: 3000 })).url; }
+          try { return (await deps.runModel('gpt-image-2-image-to-image', { prompt: PLATE_PROMPT, images_list: [f], aspect_ratio: 'auto', resolution: '1K', quality: 'medium' }, keyed(`plate-${i}-retry`, 3000))).url; }
           catch (e2) { warn(`Background ${i + 1} could not be cleaned (${errText(e1, 'error')}; retry: ${errText(e2, 'error')}) and was skipped.`); return null; }
         }
       }));
@@ -166,7 +170,7 @@ export async function runRecastJob(o: RecastOptions, deps: RecastDeps): Promise<
       if (state.stages.sheets) { emit('sheets', 'skipped'); return; }
       emit('sheets', 'running');
       const urls = await Promise.all(state.refs.map(async (ref, i) => {
-        try { return (await deps.runModel('gpt-image-2-image-to-image', { prompt: buildSheetPrompt(state.outfit), images_list: [ref], aspect_ratio: '16:9', resolution: '2K', quality: 'high' }, { ...opts, intervalMs: 4000 })).url; }
+        try { return (await deps.runModel('gpt-image-2-image-to-image', { prompt: buildSheetPrompt(state.outfit), images_list: [ref], aspect_ratio: '16:9', resolution: '2K', quality: 'high' }, keyed(`sheet-${i}`, 4000))).url; }
         catch (e) { warn(`Character sheet ${i + 1} failed (${errText(e, 'error')}), so the original photo is used instead.`); return ref; }
       }));
       state.stages.sheets = { urls }; await persist(); emit('sheets', 'done');
