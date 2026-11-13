@@ -7,28 +7,10 @@ import { Loader2 } from 'lucide-react';
 
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
 const CreateTakePage = lazy(() => import('./pages/CreateTakePage').then(m => ({ default: m.CreateTakePage })));
-const CreateHubPage = lazy(() => import('./pages/CreateHubPage').then(m => ({ default: m.CreateHubPage })));
-const CreateSubwayPage = lazy(() => import('./pages/create/CreateSubwayPage').then(m => ({ default: m.CreateSubwayPage })));
-const CreateStreetPage = lazy(() => import('./pages/create/CreateStreetPage').then(m => ({ default: m.CreateStreetPage })));
-const CreateMotivationalPage = lazy(() => import('./pages/create/CreateMotivationalPage').then(m => ({ default: m.CreateMotivationalPage })));
-const CreateWisdomPage = lazy(() => import('./pages/create/CreateWisdomPage').then(m => ({ default: m.CreateWisdomPage })));
-const CreateStudioPage = lazy(() => import('./pages/create/CreateStudioPage').then(m => ({ default: m.CreateStudioPage })));
-const CreateMuapiPage = lazy(() => import('./pages/create/CreateMuapiPage').then(m => ({ default: m.CreateMuapiPage })));
-const ClipPage = lazy(() => import('./pages/ClipPage').then(m => ({ default: m.ClipPage })));
 const CastPage = lazy(() => import('./pages/CastPage').then(m => ({ default: m.CastPage })));
 const RecastPage = lazy(() => import('./pages/RecastPage').then(m => ({ default: m.RecastPage })));
 const GalleryPage = lazy(() => import('./pages/GalleryPage').then(m => ({ default: m.GalleryPage })));
-const LibraryPage = lazy(() => import('./pages/LibraryPage').then(m => ({ default: m.LibraryPage })));
-const EpisodeBuilderPage = lazy(() => import('./pages/EpisodeBuilderPage').then(m => ({ default: m.EpisodeBuilderPage })));
-const EpisodePage = lazy(() => import('./pages/EpisodePage').then(m => ({ default: m.EpisodePage })));
-const QuestionBankPage = lazy(() => import('./pages/QuestionBankPage').then(m => ({ default: m.QuestionBankPage })));
-const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
-const TemplateManagerPage = lazy(() => import('./pages/TemplateManagerPage').then(m => ({ default: m.TemplateManagerPage })));
-const EnhancePage = lazy(() => import('./pages/EnhancePage').then(m => ({ default: m.EnhancePage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
-const CompilationBuilderPage = lazy(() => import('./pages/CompilationBuilderPage'));
-const CompilationPage = lazy(() => import('./pages/CompilationPage'));
 
 function PageLoader() {
   return (
@@ -46,10 +28,16 @@ function FullScreenLoader() {
   );
 }
 
+/** Signed-out visitors go to /login and come back to where they were headed. */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) return <FullScreenLoader />;
+  if (!isAuthenticated) {
+    const returnTo = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?returnTo=${returnTo}`} replace />;
+  }
 
   return <>{children}</>;
 }
@@ -89,31 +77,11 @@ function AppContent() {
                 <Suspense fallback={<PageLoader />}>
                   <Routes>
                     <Route path="/" element={<Navigate to="/create" replace />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/create" element={<CreateTakePage />} />
-                    <Route path="/create/legacy" element={<CreateHubPage />} />
-                    <Route path="/create/subway" element={<CreateSubwayPage />} />
-                    <Route path="/create/street" element={<CreateStreetPage />} />
-                    <Route path="/create/motivational" element={<CreateMotivationalPage />} />
-                    <Route path="/create/wisdom" element={<CreateWisdomPage />} />
-                    <Route path="/create/studio" element={<CreateStudioPage />} />
-                    <Route path="/create/muapi" element={<CreateMuapiPage />} />
                     <Route path="/cast" element={<CastPage />} />
                     <Route path="/recast" element={<RecastPage />} />
                     <Route path="/library" element={<GalleryPage />} />
-                    <Route path="/library/legacy" element={<LibraryPage />} />
-                    <Route path="/clips/:id" element={<ClipPage />} />
-                    <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />
-                    <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
-                    <Route path="/episodes/:id" element={<EpisodePage />} />
-                    <Route path="/episodes/:id/enhance" element={<EnhancePage contentType="episode" />} />
-                    <Route path="/compilations/new" element={<CompilationBuilderPage />} />
-                    <Route path="/compilations/:id" element={<CompilationPage />} />
-                    <Route path="/compilations/:id/enhance" element={<EnhancePage contentType="compilation" />} />
-                    <Route path="/questions" element={<QuestionBankPage />} />
-                    <Route path="/templates" element={<TemplateManagerPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/analytics" element={<AnalyticsPage />} />
                     <Route path="*" element={<Navigate to="/create" replace />} />
                   </Routes>
                 </Suspense>

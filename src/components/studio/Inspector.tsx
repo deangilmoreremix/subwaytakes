@@ -5,6 +5,7 @@ import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/regis
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { FORMATS } from '../../lib/interview';
 import { PlacePanel } from './PlacePanel';
+import { IdeasButton } from './IdeasButton';
 import { clsx } from '../../lib/format';
 import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles, UserRound } from 'lucide-react';
 import type { CharacterBible } from '../../lib/types';
@@ -52,7 +53,7 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {tab === 'take' && (<>
-          <div><Label hint={`${spec.take.length}/220`}>The take</Label>
+          <div><Label hint={<span className="flex items-center gap-3"><IdeasButton onPick={t => set('take', t.slice(0, 220))} />{spec.take.length}/220</span>}>The take</Label>
             <textarea className={inputCls} rows={4} maxLength={220} value={spec.take} onChange={e => set('take', e.target.value)} /></div>
           <div><Label>Guest</Label><input className={inputCls} value={spec.guestDescription} onChange={e => set('guestDescription', e.target.value)} /></div>
           {spec.format === 'twoshot' && (
