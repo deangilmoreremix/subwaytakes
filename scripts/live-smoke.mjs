@@ -4,7 +4,7 @@
 //   node scripts/live-smoke.mjs <outDir> --run      SPENDS MONEY (~$0.53 at last check): TTS -> portrait -> pad audio -> OmniHuman
 //   node scripts/live-smoke.mjs <outDir> --run --cap 1.00   change the hard spend cap in USD (default 1.00)
 //
-// Auth: uses MUAPI_KEY if set, otherwise assumes the environment injects credentials for api.muapi.ai.
+// Auth: uses MUAPI_KEY if set. In a sandbox whose proxy injects credentials, run with NODE_USE_ENV_PROXY=1 so Node's fetch uses the proxy (without it, requests are unauthenticated and paid calls return 403).
 // Needs ffmpeg + ffprobe on PATH (used to pad audio to 4s and to inspect the result).
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';

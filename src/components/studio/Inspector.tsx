@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
@@ -65,11 +66,13 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
             <Segmented value={pipeline} onChange={onPipeline} options={[
               { value: 'native', label: 'Native audio' },
               { value: 'lipsync', label: 'Voice + lipsync', hint: 'Portrait + voice becomes a talking video' },
-              { value: 'recast', label: 'Recast', disabled: true, hint: 'Coming next' },
+              { value: 'recast', label: 'Recast', hint: 'Swap the performer in a clip' },
             ]} />
-            <p className="mt-2 text-[11px] text-zinc-600">{pipeline === 'native' ? 'The video model generates the speech in-shot.' : "A character's portrait and voice become a talking video. Recast is coming next."}</p>
+            <p className="mt-2 text-[11px] text-zinc-600">{pipeline === 'native' ? 'The video model generates the speech in-shot.' : pipeline === 'lipsync' ? "A character's portrait and voice become a talking video." : 'Replace the performer in an existing clip while keeping its motion and soundtrack.'}</p>
           </div>
-          {pipeline === 'lipsync' ? lipsyncSlot : (
+          {pipeline === 'recast' ? (
+            <Link to="/recast" className="flex items-center justify-between rounded-xl border border-accent/40 bg-accent-soft px-3 py-3 text-[13px] font-semibold text-accent">Open Recast <span aria-hidden>→</span></Link>
+          ) : pipeline === 'lipsync' ? lipsyncSlot : (
             <div><Label hint={active ? active.label : ''}>Model</Label>
               <div className="grid gap-2">
                 {models.map(m => <ModelChip key={m.slug} label={m.label} tier={m.tier} audio={m.nativeAudio} active={m.slug === slug} onClick={() => setSlug(m.slug)} />)}

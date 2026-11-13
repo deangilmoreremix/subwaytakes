@@ -3,7 +3,8 @@ import { DEFAULT_PROJECT, ensureTracks, type Project } from './types';
 
 const KEY = 'subwaytakes.project.v1';
 
-function load(): Project {
+/** Read the saved project (or a fresh one). */
+export function loadProject(): Project {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
@@ -14,9 +15,14 @@ function load(): Project {
   return DEFAULT_PROJECT;
 }
 
+/** Save immediately (used when navigating away right after a change, where the debounced save would be cancelled). */
+export function saveProject(p: Project): void {
+  try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* storage unavailable */ }
+}
+
 /** Project state with undo/redo. `set(next, false)` updates without recording history (use during drags after `checkpoint`). */
 export function useProject() {
-  const [project, setProject] = useState<Project>(load);
+  const [project, setProject] = useState<Project>(loadProject);
   const past = useRef<Project[]>([]);
   const future = useRef<Project[]>([]);
   const latest = useRef(project);

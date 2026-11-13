@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Sparkles, KeyRound } from 'lucide-react';
 import type { PlayerRef } from '@remotion/player';
 import { PreviewCanvas, type Running } from '../components/studio/PreviewCanvas';
@@ -24,6 +24,7 @@ import { DEFAULT_FONT } from '../lib/captions/fonts';
 import type { Sfx } from '../lib/timeline/sfx';
 
 export function CreateTakePage() {
+  const nav = useNavigate();
   const [spec, setSpec] = useState<TakeSpec>(DEFAULT_TAKE);
   const [slug, setSlug] = useState('veo3.1-fast-text-to-video');
   const [jobs, setJobs] = useState<ClipJob[]>([]);
@@ -142,6 +143,7 @@ export function CreateTakePage() {
 
   async function generate() {
     if (running || !hasKey) return;
+    if (pipeline === 'recast') { nav('/recast'); return; }
     if (pipeline === 'lipsync') { await generateLipsync(); return; }
     setError(''); setRunning({ status: 'queued', startedAt: Date.now() });
     try {

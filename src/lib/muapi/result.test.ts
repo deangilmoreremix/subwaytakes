@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { extractError, extractMediaUrl, isSafeMediaUrl, normalizeStatus } from './result';
+import { extractError, extractMediaUrl, extractText, isSafeMediaUrl, normalizeStatus } from './result';
+import vision from './__fixtures__/real-vision-result.json';
 import tts from './__fixtures__/real-tts-result.json';
 import image from './__fixtures__/real-image-result.json';
 
@@ -50,5 +51,22 @@ describe('status and error normalisation', () => {
     expect(extractError({ error: 'Insufficient credits' })).toBe('Insufficient credits');
     expect(extractError({ output: { error: 'bad audio' } })).toBe('bad audio');
     expect(extractError({ detail: { message: 'nope' } })).toBe('nope');
+  });
+});
+
+describe('extractText', () => {
+  it('reads the real gemini-video-vision response (text lives in outputs[0], not a URL)', () => {
+    const t = extractText(vision);
+    expect(t).toContain('"timestamps"');
+    expect(extractMediaUrl(vision)).toBeUndefined(); // must not mistake text for media
+    expect(normalizeStatus(vision)).toBe('completed');
+  });
+  it('accepts other shapes and returns empty for none', () => {
+    expect(extractText({ text: 'a' })).toBe('a');
+    expect(extractText({ output: 'b' })).toBe('b');
+    expect(extractText({ output: { text: 'c' } })).toBe('c');
+    expect(extractText({ outputs: [{ text: 'd' }] })).toBe('d');
+    expect(extractText({ outputs: [] })).toBe('');
+    expect(extractText(null)).toBe('');
   });
 });

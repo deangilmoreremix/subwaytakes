@@ -64,3 +64,30 @@ export function extractError(p: unknown): string {
   }
   return '';
 }
+
+/**
+ * Text produced by language models. Confirmed live (gemini-video-vision): the text is `outputs[0]`, a plain string
+ * (often wrapped in a ```json fence). Also accepts `text`, `output` (string) and `output.text` for other gateways.
+ */
+export function extractText(p: unknown): string {
+  if (!isObj(p)) return '';
+  const first = Array.isArray(p.outputs) ? p.outputs[0] : undefined;
+  for (const c of [first, p.text, typeof p.output === 'string' ? p.output : undefined, isObj(p.output) ? p.output.text : undefined, isObj(p.data) ? p.data.text : undefined]) {
+    if (typeof c === 'string' && c.trim()) return c;
+    if (isObj(c) && typeof c.text === 'string' && c.text.trim()) return c.text;
+  }
+  return '';
+}
+
+/** muapi errors arrive as a string, `{error}`, `{error:{code,message}}`, or a failed prediction `{id,status,error}`. */
+export function pickMessage(v: unknown, depth = 0): string {
+  if (depth > 3 || v == null) return '';
+  if (typeof v === 'string') return v.trim();
+  if (Array.isArray(v)) return v.map(x => pickMessage(x, depth + 1)).filter(Boolean).join('; ');
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    return pickMessage(o.message, depth + 1) || pickMessage(o.error, depth + 1) || pickMessage(o.detail, depth + 1) || pickMessage(o.msg, depth + 1);
+  }
+  return '';
+}
+

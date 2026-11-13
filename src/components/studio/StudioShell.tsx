@@ -9,7 +9,7 @@ interface Item { to: string; label: string; icon: ComponentType<{ className?: st
 const ITEMS: Item[] = [
   { to: '/create', label: 'Create', icon: Clapperboard },
   { to: '/cast', label: 'Cast', icon: Users },
-  { to: '/recast', label: 'Recast', icon: Repeat2, soon: 'Swap performers in a clip (next phase)' },
+  { to: '/recast', label: 'Recast', icon: Repeat2 },
   { to: '/library', label: 'Library', icon: LayoutGrid },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
@@ -57,7 +57,7 @@ function Rail() {
 
 function TabBar() {
   return (
-    <nav className="md:hidden grid grid-cols-4 border-t border-line bg-ink-950/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+    <nav className="md:hidden grid grid-cols-5 border-t border-line bg-ink-950/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
       {ITEMS.filter(i => !i.soon).map(it => {
         const Icon = it.icon;
         return (

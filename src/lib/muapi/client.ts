@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
-import { extractError, extractMediaUrl, normalizeStatus } from './result';
+import { extractError, extractMediaUrl, normalizeStatus, pickMessage } from './result';
+export { pickMessage };
 
 const KEY_STORAGE = 'subwaytakes.muapi_key';
 
@@ -35,9 +36,8 @@ export async function describeError(error: { message?: string; context?: unknown
   if (ctx && typeof ctx.clone === 'function') {
     try {
       const b = await ctx.clone().json() as Record<string, unknown>;
-      const d = b.error ?? b.detail ?? b.message;
-      if (typeof d === 'string' && d) return d;
-      if (d) return JSON.stringify(d);
+      const m = pickMessage(b.error) || pickMessage(b.detail) || pickMessage(b.message);
+      if (m) return m;
     } catch { /* body not JSON: fall through */ }
   }
   return error.message || 'muapi proxy failed';
@@ -76,20 +76,27 @@ export function outputUrl(p: Prediction): string | undefined {
 export async function runModel(
   slug: string,
   input: Record<string, unknown>,
-  opts: { onUpdate?: (p: Prediction) => void; intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; /** false for text-only models */ requireUrl?: boolean } = {},
+  opts: { onUpdate?: (p: Prediction) => void; intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; /** false for text-only models */ requireUrl?: boolean;
+    /** called right after submit so callers can persist the id (lets a reload resume polling) */ onSubmitted?: (requestId: string) => void;
+    /** skip submitting and poll this existing request instead */ resumeId?: string } = {},
 ): Promise<{ requestId: string; url: string; prediction: Prediction }> {
-  const { request_id } = await muapi.submit(slug, input);
+  let request_id = opts.resumeId;
+  if (!request_id) {
+    ({ request_id } = await muapi.submit(slug, input));
+    opts.onSubmitted?.(request_id);
+  }
+  const requestId = request_id;
   const started = Date.now();
   const timeout = opts.timeoutMs ?? 15 * 60_000;
   for (;;) {
     if (opts.signal?.aborted) throw new Error('Cancelled');
-    const p = await muapi.result(request_id);
+    const p = await muapi.result(requestId);
     opts.onUpdate?.(p);
     const status = normalizeStatus(p);
     if (status === 'completed') {
       const url = outputUrl(p);
       if (!url && opts.requireUrl !== false) throw new Error('muapi completed without an output URL');
-      return { requestId: request_id, url: url ?? '', prediction: p };
+      return { requestId, url: url ?? '', prediction: p };
     }
     if (status === 'failed' || status === 'cancelled') throw new Error(extractError(p) || `muapi job ${status}`);
     if (Date.now() - started > timeout) throw new Error('Timed out waiting for muapi');

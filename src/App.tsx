@@ -16,6 +16,7 @@ const CreateStudioPage = lazy(() => import('./pages/create/CreateStudioPage').th
 const CreateMuapiPage = lazy(() => import('./pages/create/CreateMuapiPage').then(m => ({ default: m.CreateMuapiPage })));
 const ClipPage = lazy(() => import('./pages/ClipPage').then(m => ({ default: m.ClipPage })));
 const CastPage = lazy(() => import('./pages/CastPage').then(m => ({ default: m.CastPage })));
+const RecastPage = lazy(() => import('./pages/RecastPage').then(m => ({ default: m.RecastPage })));
 const GalleryPage = lazy(() => import('./pages/GalleryPage').then(m => ({ default: m.GalleryPage })));
 const LibraryPage = lazy(() => import('./pages/LibraryPage').then(m => ({ default: m.LibraryPage })));
 const EpisodeBuilderPage = lazy(() => import('./pages/EpisodeBuilderPage').then(m => ({ default: m.EpisodeBuilderPage })));
@@ -98,6 +99,7 @@ function AppContent() {
                     <Route path="/create/studio" element={<CreateStudioPage />} />
                     <Route path="/create/muapi" element={<CreateMuapiPage />} />
                     <Route path="/cast" element={<CastPage />} />
+                    <Route path="/recast" element={<RecastPage />} />
                     <Route path="/library" element={<GalleryPage />} />
                     <Route path="/library/legacy" element={<LibraryPage />} />
                     <Route path="/clips/:id" element={<ClipPage />} />

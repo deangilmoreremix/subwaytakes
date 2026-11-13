@@ -173,3 +173,25 @@ export function setTransition(p: Project, id: string, tr: { type: TransitionType
   });
   return normalizeTransitions({ ...p, clips });
 }
+
+// ---------------------------------------------------------------- recast
+
+/**
+ * Put a recast result on the timeline: the generated video MUTED on the video track, and the ORIGINAL clip as a
+ * sound clip at the same start, so the source soundtrack is restored without any re-encoding. If the source audio is
+ * longer than the generated video it is trimmed to match.
+ */
+export function addRecastClips(p: Project, a: { generatedUrl: string; sourceUrl: string; generatedFrames: number; sourceFrames: number; label: string; hasSourceAudio?: boolean }): { project: Project; videoId: string; audioId?: string } {
+  const video = p.tracks.find(t => t.kind === 'video');
+  if (!video) return { project: p, videoId: '' };
+  const start = p.clips.filter(c => c.trackId === video.id).reduce((m, c) => Math.max(m, clipEnd(c)), 0);
+  const videoId = newId('recast');
+  let next = addClip(p, { id: videoId, trackId: video.id, kind: 'video', label: a.label, start, duration: a.generatedFrames, trimStart: 0, sourceFrames: a.generatedFrames, src: a.generatedUrl, volume: 0 });
+  const placed = next.clips.find(c => c.id === videoId)!;
+  const sound = next.tracks.find(t => t.kind === 'audio');
+  if (!sound || a.hasSourceAudio === false) return { project: next, videoId };
+  const audioId = newId('src-audio');
+  const duration = Math.max(MIN_CLIP, Math.min(a.sourceFrames, a.generatedFrames));
+  next = addClip(next, { id: audioId, trackId: sound.id, kind: 'audio', label: 'Original audio', start: placed.start, duration, trimStart: 0, sourceFrames: a.sourceFrames, src: a.sourceUrl, volume: 1 });
+  return { project: next, videoId, audioId };
+}

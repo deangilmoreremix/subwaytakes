@@ -18,3 +18,17 @@ describe('describeError', () => {
     expect(await describeError({})).toBe('muapi proxy failed');
   });
 });
+
+describe('describeError with real muapi failure shapes', () => {
+  it('failed prediction: {detail:{id,status,error}} (seen live from gemini-3-5-flash)', async () => {
+    const body = { detail: { id: 'x', status: 'failed', error: "provider error: no candidates in response: {'code': 410, 'msg': 'Gemini 3.5 Flash has been deprecated'}" } };
+    expect(await describeError({ message: 'Edge Function returned a non-2xx status code', context: res(body, 400) })).toMatch(/deprecated/);
+  });
+  it('unknown model: {detail:{error:{code,message}}}', async () => {
+    expect(await describeError({ context: res({ detail: { error: { code: 'MODEL_NOT_FOUND', message: 'Unknown model: nope' } } }, 404) })).toBe('Unknown model: nope');
+  });
+  it('plain and validation-list shapes still work', async () => {
+    expect(await describeError({ context: res({ error: 'Insufficient credits' }) })).toBe('Insufficient credits');
+    expect(await describeError({ context: res({ detail: [{ msg: 'field required' }] }, 422) })).toBe('field required');
+  });
+});
