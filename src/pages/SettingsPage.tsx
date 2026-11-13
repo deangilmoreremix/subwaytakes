@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, MapPin, Clock, Save, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { CITY_STYLES } from '../lib/constants';
+import { CITIES } from '../lib/places';
 import { clsx } from '../lib/format';
 import { MuapiKeyCard } from '../components/MuapiKeyCard';
 
@@ -128,15 +128,15 @@ export function SettingsPage() {
 
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-2">Default City Style</label>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                {CITY_STYLES.map(city => (
+              <label className="block text-sm font-medium text-zinc-300 mb-2">Default City</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {CITIES.filter(c => c.id !== 'custom').map(city => (
                   <button
-                    key={city.value}
-                    onClick={() => setDefaultCity(city.value)}
+                    key={city.id}
+                    onClick={() => setDefaultCity(city.id)}
                     className={clsx(
                       'px-3 py-2 rounded-xl text-sm font-medium border transition',
-                      defaultCity === city.value
+                      defaultCity === city.id
                         ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
                         : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600'
                     )}
