@@ -149,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, [user, fetchProfile]);
 
-  const deductCredits = useCallback(async (amount: number, _description: string): Promise<boolean> => {
+  const deductCredits = useCallback(async (amount: number): Promise<boolean> => {
     if (!profile || profile.credits_balance < amount) return false;
     const { data, error } = await supabase
       .rpc('deduct_credits', { p_user_id: profile.id, p_amount: amount });
@@ -180,12 +180,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// The provider and its hook live together by design.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getUserId(): string {
   if (!_currentAuthUserId) {
     throw new Error('Not authenticated');

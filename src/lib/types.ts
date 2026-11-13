@@ -2,11 +2,6 @@
 
 export type CharacterRole = 'host' | 'guest';
 
-// === AGE-APPROPRIATE CONTENT TYPES ===
-
-// Age groups for content filtering
-export type AgeGroup = 'kids' | 'teens' | 'adults' | 'older_adults' | 'all_ages';
-
 export interface CharacterBible {
   id: string;
   user_id: string;

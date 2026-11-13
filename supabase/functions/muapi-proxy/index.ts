@@ -16,9 +16,9 @@ const ALLOWED = [
   /^\/api\/v1\/account\/balance$/,
   /^\/api\/v1\/upload_file$/,
   /^\/api\/v1\/get_upload_url$/,
-  /^\/api\/v1\/models\/[\w.\-]+\/estimate-cost$/,
-  /^\/api\/v1\/models\/[\w.\-]+$/, // model metadata (voice lists, schemas)
-  /^\/api\/v1\/[\w.\-]+$/, // model endpoints
+  /^\/api\/v1\/models\/[\w.-]+\/estimate-cost$/,
+  /^\/api\/v1\/models\/[\w.-]+$/, // model metadata (voice lists, schemas)
+  /^\/api\/v1\/[\w.-]+$/, // model endpoints
 ];
 
 function json(body: unknown, status = 200) {
