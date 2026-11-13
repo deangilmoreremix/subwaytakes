@@ -50,6 +50,7 @@ export function CreateTakePage() {
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef<PlayerRef>(null);
   const hasClips = project.clips.length > 0;
+  useEffect(() => { const t = project.style?.title; if (t && t.take !== spec.take) setProject({ ...project, style: { ...project.style, title: { ...t, take: spec.take } } }, false); }, [spec.take, project, setProject]);
 
   // bind to the Remotion Player (mounted only once the timeline has clips)
   useEffect(() => {
@@ -227,6 +228,7 @@ export function CreateTakePage() {
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
+            title={project.style?.title ? { ...project.style.title, take: spec.take } : undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
             cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} />}
             lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} hasKey={hasKey} />}
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}

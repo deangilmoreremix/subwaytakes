@@ -37,7 +37,7 @@ export interface Track { id: string; kind: TrackKind; name: string }
 export interface Project {
   fps: number;
   /** project-wide look */
-  style?: { captionFont?: 'inter' | 'anton' | 'bangers' };
+  style?: { captionFont?: 'inter' | 'anton' | 'bangers'; title?: { take: string; guest?: string; badge?: boolean } };
   tracks: Track[];
   clips: Clip[];
 }

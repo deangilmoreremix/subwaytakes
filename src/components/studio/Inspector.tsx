@@ -17,10 +17,10 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, title, onTitle, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
-  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode;
+  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; title?: { take: string; guest?: string; badge?: boolean }; onTitle: (t: { take: string; guest?: string; badge?: boolean } | undefined) => void;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; onAddEffect: () => void; fps: number;
   transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
@@ -190,6 +190,13 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
         </>)}
 
         {tab === 'output' && (<>
+          <div><Label>On-screen title</Label>
+            <label className="flex items-center gap-2 text-[12px] text-zinc-300"><input type="checkbox" checked={!!title} onChange={e => onTitle(e.target.checked ? { take: spec.take, badge: true } : undefined)} />Show the take as a title (top-left)</label>
+            {title && (<div className="mt-2 space-y-2">
+              <input className={inputCls} value={title.guest ?? ''} placeholder="Guest name sticker (optional)" onChange={e => onTitle({ ...title, guest: e.target.value || undefined })} />
+              <label className="flex items-center gap-2 text-[12px] text-zinc-400"><input type="checkbox" checked={title.badge !== false} onChange={e => onTitle({ ...title, badge: e.target.checked })} />HOT TAKE badge</label>
+            </div>)}
+          </div>
           <div><Label>Caption font</Label>
             <Segmented value={captionFont} onChange={onCaptionFont} options={FONT_IDS.map(id => ({ value: id, label: FONTS[id].label, hint: FONTS[id].blurb }))} />
             <p className="mt-1.5 text-[11px] text-zinc-600" style={{ fontFamily: 'inherit' }}>Applies to every caption in the preview and the export.</p></div>
