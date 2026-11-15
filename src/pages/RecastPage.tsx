@@ -4,13 +4,15 @@ import { AlertCircle, Check, CircleDashed, Film, Loader2, Play, Plus, RotateCcw,
 import { BlobSource } from 'mediabunny';
 import { Label, Segmented, inputCls } from '../components/studio/ui';
 import { clsx } from '../lib/format';
-import { getMuapiKey, muapi } from '../lib/muapi/client';
+import { muapi } from '../lib/muapi/client';
+import { useAuth } from '../lib/auth';
+import { BLOCK_TEXT, CONFIRM_CREDITS, formatCredits, usdToCredits } from '../lib/credits';
 import { uploadMedia } from '../lib/storage';
 import { listCharacters } from '../lib/characters';
 import { getMediaInfo, readMediaInfo } from '../lib/timeline/media';
 import { addRecastClips } from '../lib/timeline/ops';
 import { loadProject, saveProject } from '../lib/timeline/useProject';
-import { RECAST_MODELS, REF_LIMITS, estimateRecast, imageBudget, outputSeconds, validateRefs, validateSource, type RecastMode, type RecastModel } from '../lib/recast/limits';
+import { RECAST_MODELS, REF_LIMITS, estimateRecastCredits, imageBudget, outputSeconds, validateRefs, validateSource, type RecastMode, type RecastModel } from '../lib/recast/limits';
 import { RECAST_STAGES, VOICE_STAGE, listResumableRecasts, realRecastDeps, runRecastJob, type RecastState, type StageEvent, type StageStatus, type RecastResult } from '../lib/recast/pipeline';
 import { buildContactSheet, extractFrames } from '../lib/recast/frames';
 import { VOICE_LIPSYNC_MODELS, estimateVoice, type VoiceLipsyncModel } from '../lib/recast/voice';
@@ -20,11 +22,12 @@ import type { ClipJob } from '../lib/muapi/jobs';
 interface Source { url: string; seconds: number; bytes: number; hasAudio: boolean; name: string }
 interface Ref { id: string; url: string; label: string; origin: 'cast' | 'upload' }
 
-const money = (n: number) => (n > 0 && n < 0.005 ? '<$0.01' : `$${n.toFixed(2)}`);
+const credits = (n: number) => formatCredits(n);
 
 export function RecastPage() {
   const nav = useNavigate();
-  const hasKey = !!getMuapiKey();
+  const { generationBlock: block } = useAuth();
+  const canGenerate = !block; // can this account generate (signed in, email confirmed)
   const [source, setSource] = useState<Source | null>(null);
   const [sourceBusy, setSourceBusy] = useState(false);
   const [sourceErr, setSourceErr] = useState('');
@@ -104,15 +107,15 @@ export function RecastPage() {
   const out = source ? outputSeconds(model, source.seconds) : null;
   const outSeconds = out?.seconds, outError = out?.error;
   const plates = imageBudget(model, Math.max(1, refs.length), 4).plates;
-  const base = useMemo(() => estimateRecast(model, Math.max(1, refs.length), plates, liveRender != null ? { render: liveRender } : {}, outSeconds ?? 5), [model, refs.length, plates, liveRender, outSeconds]);
+  const base = useMemo(() => estimateRecastCredits(model, Math.max(1, refs.length), plates, liveRender, outSeconds ?? 5), [model, refs.length, plates, liveRender, outSeconds]);
   const plan = useMemo(() => {
     if (!useNewVoice) return base;
-    const extra = estimateVoice(voiceLipsync);
-    return { total: Math.round((base.total + extra.reduce((n, [, v]) => n + v, 0)) * 10000) / 10000, lines: [...base.lines, ...extra] };
+    const extra = estimateVoice(voiceLipsync).map(([k, usd]) => [k, usdToCredits(usd)] as [string, number]);
+    return { total: base.total + extra.reduce((n, [, v]) => n + v, 0), lines: [...base.lines, ...extra] };
   }, [base, useNewVoice, voiceLipsync]);
   useEffect(() => {
     setLiveRender(null);
-    if (!hasKey || !source || outSeconds === undefined || outError) return;
+    if (!canGenerate || !source || outSeconds === undefined || outError) return;
     let on = true;
     const t = setTimeout(() => {
       const base = { prompt: 'x', images_list: ['https://example.com/x.png'], videos_list: ['https://example.com/x.mp4'], aspect_ratio: 'adaptive', duration: outSeconds, resolution: '720p' };
@@ -120,10 +123,10 @@ export function RecastPage() {
         .then(r => { if (on && typeof r.cost === 'number') setLiveRender(r.cost); }).catch(() => undefined);
     }, 400);
     return () => { on = false; clearTimeout(t); };
-  }, [hasKey, source, model, outSeconds, outError]);
+  }, [canGenerate, source, model, outSeconds, outError]);
 
   const refProblem = refs.length ? validateRefs(refs.length) : null;
-  const blocking = !hasKey ? 'Add your muapi key in Settings first.' : !source ? 'Choose a source clip.' : out?.error ? out.error : refs.length === 0 ? 'Choose at least one performer.' : refProblem;
+  const blocking = block ? BLOCK_TEXT[block] : !source ? 'Choose a source clip.' : out?.error ? out.error : refs.length === 0 ? 'Choose at least one performer.' : refProblem;
 
   // ---------------------------------------------------------------- run
   const onStage = useCallback((e: StageEvent) => setStages(s => ({ ...s, [e.stage]: { status: e.status, detail: e.detail } })), []);
@@ -133,7 +136,7 @@ export function RecastPage() {
     if (!src) return;
     if (!st && blocking) { setRunError(blocking); return; }
     const total = plan.total;
-    if (!st && total > 1 && !window.confirm(`This recast will cost about ${money(total)}. Continue?`)) return;
+    if (!st && total > CONFIRM_CREDITS && !window.confirm(`This recast will cost about ${credits(total)}. Continue?`)) return;
     setRunError(''); setWarnings([]); setStages({}); setResult(null); setRunning(true); setStartedAt(Date.now());
     abort.current = new AbortController();
     try {
@@ -176,7 +179,7 @@ export function RecastPage() {
         <h1 className="font-display text-2xl font-semibold tracking-tight text-white">Recast</h1>
         <p className="text-[13px] text-zinc-500">Replace the performer in a clip with someone new. The motion and camera stay. Give them their own voice, or keep the original soundtrack.</p>
       </div>
-      {!hasKey && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />Add your muapi key in <Link to="/settings" className="underline">Settings</Link> to run a recast.</div>}
+      {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} {block === 'guest' && <Link to="/login" className="underline">Sign up or sign in</Link>}</div>}
 
       {resumable.length > 0 && !running && (
         <div className="mb-4 space-y-2">
@@ -266,7 +269,7 @@ export function RecastPage() {
                 <div><Label>Lipsync model</Label>
                   <div className="grid gap-1.5 sm:grid-cols-2">{VOICE_LIPSYNC_MODELS.map(m => (
                     <button key={m.slug} onClick={() => setVoiceLipsync(m.slug)} aria-pressed={m.slug === voiceLipsync} className={clsx('rounded-xl border px-3 py-2 text-left text-[12px] transition', m.slug === voiceLipsync ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-950 text-zinc-300 hover:border-white/15')}>
-                      <span className="block font-medium">{m.label}</span><span className="text-[10px] text-zinc-500">~{money(m.approxUsd)}{m.note ? ` · ${m.note}` : ''}</span></button>
+                      <span className="block font-medium">{m.label}</span><span className="text-[10px] text-zinc-500">~{credits(usdToCredits(m.approxUsd))}{m.note ? ` · ${m.note}` : ''}</span></button>
                   ))}</div></div>
                 <div><Label>What they say (optional)</Label><textarea className={inputCls} rows={2} value={voiceScript} onChange={e => setVoiceScript(e.target.value)} placeholder="Leave empty to transcribe the original clip" /></div>
               </div>
@@ -323,16 +326,16 @@ export function RecastPage() {
 
             <div className="mt-4 space-y-1.5 text-[12px]" aria-label="Cost breakdown">
               <div className="mb-1 flex items-center justify-between"><span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Estimated cost</span>{out && !out.error && <span className="tnum text-[11px] text-zinc-600">{out.seconds}s render</span>}</div>
-              {plan.lines.map(([k, v]) => <div key={k} className="flex justify-between text-zinc-500"><span>{k}</span><span className="tnum">{money(v)}</span></div>)}
-              <div className="flex justify-between border-t border-line pt-2 text-[13px] font-semibold text-white"><span>Total</span><span className="tnum" data-testid="recast-total">{money(plan.total)}</span></div>
-              <p className="text-[10px] text-zinc-600">{liveRender != null ? 'Render price is live from muapi; the other steps are typical prices.' : 'Typical prices until your key loads a live render price.'} The render is billed per second of output.</p>
+              {plan.lines.map(([k, v]) => <div key={k} className="flex justify-between text-zinc-500"><span>{k}</span><span className="tnum">{credits(v)}</span></div>)}
+              <div className="flex justify-between border-t border-line pt-2 text-[13px] font-semibold text-white"><span>Total</span><span className="tnum" data-testid="recast-total">{credits(plan.total)}</span></div>
+              <p className="text-[10px] text-zinc-600">{liveRender != null ? 'The render price is live; the other steps are typical prices.' : 'Typical prices until the live render price loads.'} The render is priced per second of output. Credits for a failed step are refunded.</p>
             </div>
 
             {blocking && !running && <p className="mt-3 flex gap-1.5 text-[11px] text-amber-300/90"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{blocking}</p>}
             {running ? (
               <button onClick={() => abort.current?.abort()} className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/5 text-[13px] font-medium text-zinc-200 hover:bg-white/10">Pause</button>
             ) : (
-              <button onClick={() => run()} disabled={!!blocking} className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot text-[13px] font-semibold text-black shadow-glow transition hover:brightness-110 disabled:opacity-40 disabled:shadow-none"><Sparkles className="h-4 w-4" />Recast · {money(plan.total)}</button>
+              <button onClick={() => run()} disabled={!!blocking} className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot text-[13px] font-semibold text-black shadow-glow transition hover:brightness-110 disabled:opacity-40 disabled:shadow-none"><Sparkles className="h-4 w-4" />Recast · {credits(plan.total)}</button>
             )}
           </section>
         </aside>

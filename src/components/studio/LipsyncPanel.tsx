@@ -8,23 +8,23 @@ import type { CharacterBible } from '../../lib/types';
 
 const TIER_STYLE: Record<string, string> = { best: 'text-fuchsia-300 bg-fuchsia-500/10', balanced: 'text-sky-300 bg-sky-500/10' };
 
-export function LipsyncPanel({ characters, speakerId, onSpeaker, model, onModel, script, hasKey }: {
+export function LipsyncPanel({ characters, speakerId, onSpeaker, model, onModel, script, canGenerate }: {
   characters: CharacterBible[]; speakerId?: string; onSpeaker: (id: string) => void;
-  model: LipsyncModel; onModel: (m: LipsyncModel) => void; script: string; hasKey: boolean;
+  model: LipsyncModel; onModel: (m: LipsyncModel) => void; script: string; canGenerate: boolean;
 }) {
   const speaker = characters.find(c => c.id === speakerId);
   const problem = speaker ? validateLipsync({ speaker, script, model }) : 'Choose who speaks.';
   const [cost, setCost] = useState<{ value: number | null; loading: boolean }>({ value: null, loading: false });
 
   useEffect(() => {
-    if (!speaker || problem || !hasKey) { setCost({ value: null, loading: false }); return; }
+    if (!speaker || problem || !canGenerate) { setCost({ value: null, loading: false }); return; }
     let live = true;
     setCost(c => ({ ...c, loading: true }));
     const t = setTimeout(() => {
       estimateLipsync(speaker, script, model).then(v => live && setCost({ value: v, loading: false })).catch(() => live && setCost({ value: null, loading: false }));
     }, 500);
     return () => { live = false; clearTimeout(t); };
-  }, [speaker, script, model, problem, hasKey]);
+  }, [speaker, script, model, problem, canGenerate]);
 
   if (characters.length === 0) {
     return (
@@ -69,7 +69,7 @@ export function LipsyncPanel({ characters, speakerId, onSpeaker, model, onModel,
 
       <div className="space-y-1.5 rounded-xl border border-line bg-ink-950 p-3 text-[12px]">
         <div className="flex items-center justify-between"><span className="text-zinc-500">Estimated cost</span>
-          <span className="tnum font-medium text-zinc-100">{!hasKey ? '—' : cost.loading ? '…' : cost.value !== null ? `$${cost.value.toFixed(2)}` : '—'}</span></div>
+          <span className="tnum font-medium text-zinc-100">{!canGenerate ? '—' : cost.loading ? '…' : cost.value !== null ? `${cost.value.toLocaleString("en-US")} credits` : '—'}</span></div>
         <p className="flex items-center gap-1 text-[10px] text-zinc-600"><Clock className="h-3 w-3" />Rendering typically takes a few minutes (about 4 in testing).</p>
       </div>
       {problem && speaker && <p className="flex gap-1.5 text-[11px] text-amber-300/90"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{problem}</p>}

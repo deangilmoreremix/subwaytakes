@@ -22,14 +22,14 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, canGenerate }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
   pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; characters: CharacterBible[]; hostHint?: string; imageRoute: boolean; title?: StoredTitle; onTitle: (t: StoredTitle | undefined) => void; onBestOf: () => void; videoClipCount: number; onBatch: (lines: string[]) => void; batch: { running: boolean; done: number; total: number; failed: string[] } | null;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; onAddEffect: () => void; fps: number;
   transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
-  captionCount: number; captionState: { busy: boolean; error: string }; onGenerateCaptions: () => void; hasKey: boolean;
+  captionCount: number; captionState: { busy: boolean; error: string }; onGenerateCaptions: () => void; canGenerate: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('take');
   const [lastClip, setLastClip] = useState<string>();
@@ -212,13 +212,13 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
           )}
           {clip.kind === 'video' && (
             <div className="space-y-2 rounded-xl border border-line bg-ink-950 p-3">
-              <div className="flex items-center justify-between"><Label>Auto captions</Label><span className="text-[11px] text-zinc-600 tnum">~$0.01 / clip</span></div>
-              <button onClick={onGenerateCaptions} disabled={captionState.busy || !hasKey || !clip.src?.startsWith('http')}
+              <div className="flex items-center justify-between"><Label>Auto captions</Label><span className="text-[11px] text-zinc-600 tnum">~3 credits / clip</span></div>
+              <button onClick={onGenerateCaptions} disabled={captionState.busy || !canGenerate || !clip.src?.startsWith('http')}
                 className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-white/5 text-[12px] font-medium text-zinc-100 transition hover:bg-white/10 disabled:opacity-40">
                 {captionState.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Captions className="h-4 w-4" />}
                 {captionState.busy ? 'Transcribing…' : captionCount ? `Regenerate (${captionCount} captions)` : 'Generate captions'}
               </button>
-              {!hasKey && <p className="text-[11px] text-zinc-600">Add your muapi key in Settings first.</p>}
+              {!canGenerate && <p className="text-[11px] text-zinc-600">Create an account and confirm your email to caption.</p>}
               {captionState.error && <p className="flex gap-1.5 text-[11px] text-red-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{captionState.error}</p>}
               {captionCount > 0 && !captionState.error && <p className="text-[11px] text-zinc-500">Captions are on the Captions track; click one to edit its text.</p>}
             </div>

@@ -113,3 +113,17 @@ describe('prompts', () => {
     expect(buildSheetPrompt('red coat')).toMatch(/red coat/);
   });
 });
+
+describe('estimateRecastCredits (what the gateway will actually charge, per call)', () => {
+  it('rounds each call up on its own, like the server', async () => {
+    const { estimateRecastCredits } = await import('./limits');
+    const { lines, total } = estimateRecastCredits('wan', 2, 3, 175, 5);
+    expect(Object.fromEntries(lines.map(([k, v]) => [k.replace(/ ×\d+/, ''), v]))).toMatchObject({ 'Depth map': 50, 'Scene analysis': 1, 'Clean backgrounds': 45, 'Character sheets': 46, 'Prompt writer': 1, 'Render (Wan 3.0)': 175 });
+    expect(total).toBe(50 + 1 + 45 + 46 + 1 + 175);
+  });
+  it('uses the gateway quote for the render when known and a built-in guess otherwise', async () => {
+    const { estimateRecastCredits } = await import('./limits');
+    expect(estimateRecastCredits('wan', 1, 1, 400, 5).lines[estimateRecastCredits('wan', 1, 1).lines.length - 1][1]).toBe(400);
+    expect(estimateRecastCredits('wan', 1, 1, null, 6).lines[estimateRecastCredits('wan', 1, 1).lines.length - 1][1]).toBe(275); // 1.1 USD x 250
+  });
+});

@@ -7,7 +7,9 @@ import { DEFAULT_HOST, buildPortraitPrompt, createCharacter, deleteCharacter, ge
 import { generatePortrait, uploadPortrait } from '../lib/muapi/portrait';
 import { useVoices } from '../lib/muapi/useVoices';
 import { SPEED_RANGE, TTS_SLUG, buildTtsInput, clampSpeed, type VoiceProvider } from '../lib/muapi/voices';
-import { getMuapiKey, runModel } from '../lib/muapi/client';
+import { runModel } from '../lib/muapi/client';
+import { useAuth } from '../lib/auth';
+import { BLOCK_TEXT } from '../lib/credits';
 import type { CharacterBible } from '../lib/types';
 
 const SAMPLE_LINE = "So what's ur take? Honestly, pineapple belongs on pizza.";
@@ -16,7 +18,8 @@ export function CastPage() {
   const [list, setList] = useState<CharacterBible[] | null>(null);
   const [selectedId, setSelectedId] = useState<string>();
   const [error, setError] = useState('');
-  const hasKey = !!getMuapiKey();
+  const { generationBlock: block } = useAuth();
+  const canGenerate = !block;
 
   const refresh = useCallback(async () => {
     try { const l = await listCharacters(); setList(l); setSelectedId(id => id ?? l[0]?.id); } catch (e) { setError(e instanceof Error ? e.message : 'Could not load characters'); setList([]); }
@@ -43,7 +46,7 @@ export function CastPage() {
           <button onClick={() => add('guest')} className="flex h-9 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot px-3 text-[13px] font-semibold text-black"><Plus className="h-4 w-4" />Guest</button>
         </div>
       </div>
-      {!hasKey && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />Add your muapi key in <Link to="/settings" className="underline">Settings</Link> to generate portraits and preview voices.</div>}
+      {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} {block === 'guest' && <Link to="/login" className="underline">Sign up or sign in</Link>} Generating portraits and previewing voices uses credits.</div>}
       {error && <p className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">{error}</p>}
 
       {list === null && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map(i => <div key={i} className="skeleton h-32 rounded-2xl" />)}</div>}
@@ -69,14 +72,14 @@ export function CastPage() {
               </button>
             ))}
           </div>
-          {selected && <CharacterEditor key={selected.id} character={selected} hasKey={hasKey} onSaved={refresh} onDeleted={() => { setSelectedId(undefined); refresh(); }} />}
+          {selected && <CharacterEditor key={selected.id} character={selected} canGenerate={canGenerate} onSaved={refresh} onDeleted={() => { setSelectedId(undefined); refresh(); }} />}
         </div>
       )}
     </div>
   );
 }
 
-function CharacterEditor({ character, hasKey, onSaved, onDeleted }: { character: CharacterBible; hasKey: boolean; onSaved: () => void; onDeleted: () => void }) {
+function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { character: CharacterBible; canGenerate: boolean; onSaved: () => void; onDeleted: () => void }) {
   const [c, setC] = useState(character);
   const [busy, setBusy] = useState<'' | 'upload' | 'generate' | 'save' | 'preview'>('');
   const [err, setErr] = useState('');
@@ -126,7 +129,7 @@ function CharacterEditor({ character, hasKey, onSaved, onDeleted }: { character:
               <Upload className="h-3.5 w-3.5" />Upload
               <input type="file" accept="image/*" className="sr-only" aria-label="Upload portrait" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run('upload', async () => { await persist({ portrait_url: await uploadPortrait(f) }); }); }} />
             </label>
-            <button disabled={!hasKey || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~$0.03</button>
+            <button disabled={!canGenerate || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~$0.03</button>
           </div>
         </div>
 
@@ -141,7 +144,7 @@ function CharacterEditor({ character, hasKey, onSaved, onDeleted }: { character:
           </div>
           <div><Label hint={`${clampSpeed(provider, c.voice_speed).toFixed(2)}x`}>Speed</Label>
             <input type="range" className="w-full" min={lo} max={hi} step={0.05} value={clampSpeed(provider, c.voice_speed)} onChange={e => set('voice_speed', Number(e.target.value))} onMouseUp={() => persist({ voice_speed: c.voice_speed })} onTouchEnd={() => persist({ voice_speed: c.voice_speed })} onKeyUp={() => persist({ voice_speed: c.voice_speed })} aria-label="Voice speed" /></div>
-          <button disabled={!hasKey || !c.voice_id || (busy !== '' && busy !== 'preview')} onClick={preview} className="flex h-9 items-center gap-2 rounded-xl bg-white/5 px-3 text-[13px] font-medium text-zinc-100 hover:bg-white/10 disabled:opacity-40">
+          <button disabled={!canGenerate || !c.voice_id || (busy !== '' && busy !== 'preview')} onClick={preview} className="flex h-9 items-center gap-2 rounded-xl bg-white/5 px-3 text-[13px] font-medium text-zinc-100 hover:bg-white/10 disabled:opacity-40">
             {busy === 'preview' ? <Loader2 className="h-4 w-4 animate-spin" /> : previewing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{previewing ? 'Stop' : 'Preview voice'}
           </button>
           <div className="grid gap-3 sm:grid-cols-2">

@@ -98,7 +98,7 @@ export function sumCost(parts: Array<number | null | undefined>): number | null 
   return Math.round(total * 10000) / 10000;
 }
 
-/** Live estimate (TTS + render) before the user commits. */
+/** Live quote in CREDITS (TTS + render) before the user commits. */
 export async function estimateLipsync(speaker: Speaker, script: string, model: LipsyncModel): Promise<number | null> {
   if (!speaker.voice_provider || !speaker.voice_id || !script.trim()) return null;
   const read = (r: Record<string, unknown>) => (typeof r.cost === 'number' ? r.cost : null);

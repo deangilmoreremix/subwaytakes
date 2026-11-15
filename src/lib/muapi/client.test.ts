@@ -15,7 +15,7 @@ describe('describeError', () => {
   it('falls back to the message when the body is not JSON or missing', async () => {
     expect(await describeError({ message: 'boom', context: res('<html>', 502) })).toBe('boom');
     expect(await describeError({ message: 'boom' })).toBe('boom');
-    expect(await describeError({})).toBe('muapi proxy failed');
+    expect(await describeError({})).toBe('The generator failed');
   });
 });
 

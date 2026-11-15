@@ -4,7 +4,7 @@ import { ArrowLeft, User, MapPin, Clock, Save, Loader2, CheckCircle2 } from 'luc
 import { useAuth } from '../lib/auth';
 import { CITIES } from '../lib/places';
 import { clsx } from '../lib/format';
-import { MuapiKeyCard } from '../components/MuapiKeyCard';
+import { CreditsCard } from '../components/CreditsCard';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -75,7 +75,7 @@ export function SettingsPage() {
 
       <h1 className="text-2xl font-semibold text-zinc-100 mb-8">Settings</h1>
 
-      <div className="mb-6"><MuapiKeyCard /></div>
+      <div className="mb-6"><CreditsCard /></div>
 
       <div className="space-y-8">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
@@ -110,9 +110,7 @@ export function SettingsPage() {
                 )}>
                   {profile?.subscription_tier || 'Free'}
                 </span>
-                <span className="text-sm text-zinc-500">
-                  {profile?.credits_balance ?? 0} credits remaining
-                </span>
+
               </div>
             </div>
           </div>

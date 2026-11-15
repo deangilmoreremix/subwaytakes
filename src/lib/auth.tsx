@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { supabase } from './supabase';
 import type { User, Session } from '@supabase/supabase-js';
+import { generationBlock, subscribeBalance } from './credits';
 
 let _currentAuthUserId: string | null = null;
 
@@ -32,7 +33,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: string | null }>;
-  deductCredits: (amount: number, description: string) => Promise<boolean>;
+  /** null when this account can generate, else why not */
+  generationBlock: 'guest' | 'unverified' | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -56,15 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (error || !data) {
+        // Credits are never created here: a new profile always starts at 0 and only the server ledger can change it.
         const { data: newProfile } = await supabase
           .from('user_profiles')
-          .upsert({
-            id: userId,
-            credits_balance: 100,
-            subscription_tier: 'free',
-            default_city_style: 'nyc',
-            default_duration: 6,
-          }, { onConflict: 'id' })
+          .upsert({ id: userId, default_city_style: 'nyc', default_duration: 6 }, { onConflict: 'id' })
           .select()
           .maybeSingle();
         setProfile(newProfile);
@@ -149,14 +146,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, [user, fetchProfile]);
 
-  const deductCredits = useCallback(async (amount: number): Promise<boolean> => {
-    if (!profile || profile.credits_balance < amount) return false;
-    const { data, error } = await supabase
-      .rpc('deduct_credits', { p_user_id: profile.id, p_amount: amount });
-    if (error || data === false) return false;
-    if (user) await fetchProfile(user.id);
-    return true;
-  }, [profile, user, fetchProfile]);
+  // the gateway reports the new balance on every paid call: keep the pill current without refetching
+  useEffect(() => subscribeBalance(n => setProfile(p => (p ? { ...p, credits_balance: n } : p))), []);
+
+  const block = generationBlock(user ? { isGuest: !!user.is_anonymous, emailConfirmed: !!user.email_confirmed_at } : null);
 
   const value = useMemo(() => ({
     user,
@@ -170,8 +163,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut: handleSignOut,
     refreshProfile,
     updateProfile,
-    deductCredits,
-  }), [user, session, profile, loading, isAuthenticated, isGuest, signUp, signIn, handleSignOut, refreshProfile, updateProfile, deductCredits]);
+    generationBlock: block,
+  }), [user, session, profile, loading, isAuthenticated, isGuest, signUp, signIn, handleSignOut, refreshProfile, updateProfile, block]);
 
   return (
     <AuthContext.Provider value={value}>

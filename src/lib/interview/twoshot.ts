@@ -7,7 +7,8 @@ import { buildNativePrompt, buildTwoShotStillPrompt, effectiveHostDescription, t
 import type { ClipJob } from '../muapi/jobs';
 
 export const STILL_MODEL = 'gpt-image-2-image-to-image';
-export const STILL_APPROX_USD = 0.09;
+/** Built-in guess for the starting image in CREDITS (about $0.09 x 2.5), used only when the live quote is unavailable. */
+export const STILL_APPROX_CREDITS = 23;
 export type TwoShotStage = 'still' | 'animate';
 
 export interface TwoShotDeps {

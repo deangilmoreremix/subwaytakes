@@ -1,4 +1,5 @@
 /** Models, limits and cost maths for Recast. All pure. */
+import { usdToCredits } from '../credits';
 
 export type RecastModel = 'wan' | 'seedance';
 export type RecastMode = 'motion_transfer' | 'object_swap';
@@ -71,4 +72,18 @@ export function estimateRecast(model: RecastModel, refs: number, plates: number,
     [`Character sheets ×${refs}`, c.sheet * refs], ['Prompt writer', c.writer], [`Render (${RECAST_MODELS[model].label})`, c.render],
   ];
   return { total: Math.round(lines.reduce((n, [, v]) => n + v, 0) * 10000) / 10000, lines };
+}
+
+/**
+ * Pure: total CREDITS for a plan, rounded per call exactly like the gateway (each muapi call is priced and rounded up on its own).
+ * `liveRender` is the gateway's own quote for the render call, in credits, and replaces the built-in guess when known.
+ */
+export function estimateRecastCredits(model: RecastModel, refs: number, plates: number, liveRender?: number | null, seconds = 5): { total: number; lines: Array<[string, number]> } {
+  const render = liveRender ?? usdToCredits(RECAST_MODELS[model].approxRenderPerSec * seconds);
+  const lines: Array<[string, number]> = [
+    ['Depth map', usdToCredits(APPROX_COSTS.depth)], ['Scene analysis', usdToCredits(APPROX_COSTS.vision)],
+    [`Clean backgrounds ×${plates}`, usdToCredits(APPROX_COSTS.plate) * plates], [`Character sheets ×${refs}`, usdToCredits(APPROX_COSTS.sheet) * refs],
+    ['Prompt writer', usdToCredits(APPROX_COSTS.writer)], [`Render (${RECAST_MODELS[model].label})`, render],
+  ];
+  return { total: lines.reduce((n, [, v]) => n + v, 0), lines };
 }

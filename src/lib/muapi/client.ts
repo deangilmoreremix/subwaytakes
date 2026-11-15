@@ -1,22 +1,7 @@
 import { supabase } from '../supabase';
 import { extractError, extractMediaUrl, normalizeStatus, pickMessage } from './result';
 export { pickMessage };
-
-const KEY_STORAGE = 'subwaytakes.muapi_key';
-
-export function getMuapiKey(): string {
-  try { return localStorage.getItem(KEY_STORAGE) || ''; } catch { return ''; }
-}
-export function setMuapiKey(key: string): void {
-  try {
-    if (key.trim()) localStorage.setItem(KEY_STORAGE, key.trim());
-    else localStorage.removeItem(KEY_STORAGE);
-  } catch { /* storage unavailable */ }
-}
-
-export class MissingKeyError extends Error {
-  constructor() { super('Add your muapi API key in Settings to generate video.'); this.name = 'MissingKeyError'; }
-}
+import { AccountRequiredError, InsufficientCreditsError, publishBalance } from '../credits';
 
 export type PredictionStatus = 'queued' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export interface Prediction {
@@ -40,32 +25,47 @@ export async function describeError(error: { message?: string; context?: unknown
       if (m) return m;
     } catch { /* body not JSON: fall through */ }
   }
-  return error.message || 'muapi proxy failed';
+  return error.message || 'The generator failed';
 }
 
-/** Calls the muapi-proxy edge function, which forwards the user's key and stores nothing. */
-async function proxy<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-  const key = getMuapiKey();
-  if (!key) throw new MissingKeyError();
-  const { data, error } = await supabase.functions.invoke('muapi-proxy', {
-    body: { method, path, body },
-    headers: { 'x-muapi-key': key },
-  });
-  if (error) throw new Error(await describeError(error));
+/** Turn a failed gateway call into the right error: not enough credits, account problems, or muapi's own message. */
+export async function interpretGatewayFailure(error: { message?: string; context?: unknown }): Promise<Error> {
+  const ctx = error.context as Response | undefined;
+  if (ctx && typeof ctx.clone === 'function') {
+    try {
+      const b = await ctx.clone().json() as { code?: string; needed?: unknown; balance?: unknown; error?: unknown };
+      if (b.code === 'insufficient_credits') {
+        const balance = Number(b.balance) || 0;
+        publishBalance(balance);
+        return new InsufficientCreditsError(Number(b.needed) || balance + 1, balance);
+      }
+      if ((b.code === 'account_required' || b.code === 'verify_email') && typeof b.error === 'string') return new AccountRequiredError(b.code, b.error);
+    } catch { /* not JSON: fall through to the generic message */ }
+  }
+  return new Error(await describeError(error));
+}
+
+/** Calls the muapi-gateway edge function. The server holds the muapi key and charges credits; nothing secret is sent from here. */
+async function proxy<T>(method: 'GET' | 'POST', path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('muapi-gateway', { body: { method, path, body, idempotencyKey } });
+  if (error) throw await interpretGatewayFailure(error);
   if (data && typeof data === 'object' && 'error' in data && !('status' in data)) {
     throw new Error(String((data as { error: unknown }).error));
   }
+  const bal = (data as { credits?: { balance?: unknown } } | null)?.credits?.balance;
+  if (typeof bal === 'number') publishBalance(bal);
   return data as T;
 }
 
 export const muapi = {
+  /** One idempotency key per submit, so a retry of the same call can never be charged twice. */
   submit: (slug: string, input: Record<string, unknown>) =>
-    proxy<{ request_id: string }>('POST', `/api/v1/${slug}`, input),
+    proxy<{ request_id: string }>('POST', `/api/v1/${slug}`, input, crypto.randomUUID()),
   result: (requestId: string) => proxy<Prediction>('GET', `/api/v1/predictions/${requestId}/result`),
-  balance: () => proxy<Record<string, unknown>>('GET', '/api/v1/account/balance'),
   model: (slug: string) => proxy<Record<string, unknown>>('GET', `/api/v1/models/${slug}`),
+  /** Price of a call in CREDITS (the gateway never reveals muapi dollars or the margin). */
   estimate: (slug: string, input: Record<string, unknown>) =>
-    proxy<Record<string, unknown>>('POST', `/api/v1/models/${slug}/estimate-cost`, input),
+    proxy<{ cost: number; unit?: string }>('POST', `/api/v1/models/${slug}/estimate-cost`, input),
 };
 
 export function outputUrl(p: Prediction): string | undefined {

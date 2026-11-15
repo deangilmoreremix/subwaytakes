@@ -23,7 +23,7 @@ function Elapsed({ since }: { since: number }) {
 
 const ASPECT_CLASS: Record<Aspect, string> = { '9:16': 'aspect-[9/16] h-full max-h-full', '16:9': 'aspect-video w-full', '1:1': 'aspect-square h-full max-h-full' };
 
-export function PreviewCanvas({ aspect, job, running, take, question = "So what's ur take?", hasKey, project, playerRef }: { aspect: Aspect; job?: ClipJob; running?: Running | null; take: string; question?: string; hasKey: boolean; project: Project; playerRef: RefObject<PlayerRef> }) {
+export function PreviewCanvas({ aspect, job, running, take, question = "So what's ur take?", canGenerate, project, playerRef }: { aspect: Aspect; job?: ClipJob; running?: Running | null; take: string; question?: string; canGenerate: boolean; project: Project; playerRef: RefObject<PlayerRef> }) {
   const duration = projectDuration(project);
   const showPlayer = duration > 0 && !running;
   const [w, h] = COMP_SIZE[aspect];
@@ -70,7 +70,7 @@ export function PreviewCanvas({ aspect, job, running, take, question = "So what'
                   <p className="font-display text-[26px] font-semibold leading-tight text-white">{question}</p>
                   <div className="h-px w-10 bg-accent/60" />
                   <p className="line-clamp-4 text-[13px] italic text-zinc-300">“{take}”</p>
-                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500"><Sparkles className="h-3.5 w-3.5" />{hasKey ? 'Press Generate to render this shot' : 'Add your muapi key to render'}</div>
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500"><Sparkles className="h-3.5 w-3.5" />{canGenerate ? 'Press Generate to render this shot' : 'Create an account to generate'}</div>
                 </>
               )}
             </div>

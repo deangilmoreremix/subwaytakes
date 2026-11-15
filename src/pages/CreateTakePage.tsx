@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Sparkles, KeyRound } from 'lucide-react';
+import { Loader2, Sparkles, UserPlus } from 'lucide-react';
 import type { PlayerRef } from '@remotion/player';
 import { PreviewCanvas, type Running } from '../components/studio/PreviewCanvas';
 import { Inspector } from '../components/studio/Inspector';
@@ -13,14 +13,16 @@ import { applyShow, showOf, titleFor, type ShowId } from '../lib/shows';
 import { resolveTitle } from '../lib/shows/stored';
 import { twoShotRoute, describeCharacter, buildNativePrompt, spokenLines } from '../lib/interview';
 import { batchSpecs } from '../lib/interview/batch';
-import { runTwoShotImageJob, STILL_APPROX_USD, STILL_MODEL, buildStillInput, buildAnimateInput } from '../lib/interview/twoshot';
+import { runTwoShotImageJob, STILL_APPROX_CREDITS, STILL_MODEL, buildStillInput, buildAnimateInput } from '../lib/interview/twoshot';
 import { CutsPanel } from '../components/studio/CutsPanel';
 import { NATIVE_MODELS, chooseNativeModel, type Pipeline } from '../lib/muapi/registry';
 import { LipsyncPanel } from '../components/studio/LipsyncPanel';
 import { LIPSYNC_MODELS, estimateLipsync, runLipsyncJob, validateLipsync, type LipsyncModel } from '../lib/muapi/lipsync';
 import { listCharacters } from '../lib/characters';
 import type { CharacterBible } from '../lib/types';
-import { getMuapiKey, muapi } from '../lib/muapi/client';
+import { muapi } from '../lib/muapi/client';
+import { useAuth } from '../lib/auth';
+import { BLOCK_TEXT, CONFIRM_CREDITS, formatCredits } from '../lib/credits';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
 import { addClip, assembleBestOf, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
@@ -40,7 +42,14 @@ export function CreateTakePage() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [captionState, setCaptionState] = useState<{ busy: boolean; error: string }>({ busy: false, error: '' });
-  const hasKey = !!getMuapiKey();
+  const { generationBlock: block, profile } = useAuth();
+  const canGenerate = !block;
+  /** Say so up front when the balance cannot cover a plan, so nothing starts that cannot finish. Returns true when it is fine to go on. */
+  const affordable = (needed: number): boolean => {
+    const have = profile?.credits_balance;
+    if (typeof have === 'number' && have < needed) { setError(`You need ${(needed - have).toLocaleString('en-US')} more credits (this costs about ${needed.toLocaleString('en-US')}, you have ${have.toLocaleString('en-US')}). Open Settings to see your credits.`); return false; }
+    return true;
+  };
 
   const [pipeline, setPipeline] = useState<Pipeline>('native');
   const [characters, setCharacters] = useState<CharacterBible[]>([]);
@@ -147,7 +156,6 @@ export function CreateTakePage() {
   }
 
   const LIPSYNC_STAGES = ['Writing the voice', 'Preparing audio', 'Rendering the video'];
-  const COST_CONFIRM_USD = 1;
 
   async function generateLipsync() {
     const speaker = characters.find(c => c.id === speakerId);
@@ -155,7 +163,8 @@ export function CreateTakePage() {
     const problem = validateLipsync({ speaker, script: spec.take, model: lipModel });
     if (problem) { setError(problem); return; }
     const cost = await estimateLipsync(speaker, spec.take, lipModel).catch(() => null);
-    if (cost !== null && cost > COST_CONFIRM_USD && !window.confirm(`This will cost about $${cost.toFixed(2)}. Continue?`)) return;
+    if (cost !== null && !affordable(cost)) return;
+    if (cost !== null && cost > CONFIRM_CREDITS && !window.confirm(`This will cost about ${formatCredits(cost)}. Continue?`)) return;
     setError(''); setRunning({ status: 'processing', startedAt: Date.now(), stages: LIPSYNC_STAGES, stageIdx: 0 });
     try {
       const job = await runLipsyncJob({ speaker, script: spec.take, model: lipModel, scene: `${placePrompt(spec.place)}. ${spec.tone} tone, natural expressions.`, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'voice' ? 0 : s === 'prepare' ? 1 : 2 }) });
@@ -182,7 +191,8 @@ export function CreateTakePage() {
     }
     const costs = await Promise.all(plan.map(shot => estimateLipsync(speakers[shot.role], shot.text, lipModel).catch(() => null)));
     const total = costs.every((c): c is number => c !== null) ? costs.reduce((a, b) => a + b, 0) : null;
-    if (total !== null && total > COST_CONFIRM_USD && !window.confirm(`All ${plan.length} shots will cost about $${total.toFixed(2)}. Continue?`)) return;
+    if (total !== null && !affordable(total)) return;
+    if (total !== null && total > CONFIRM_CREDITS && !window.confirm(`All ${plan.length} shots will cost about ${formatCredits(total)}. Continue?`)) return;
     setError('');
     try {
       for (const shot of plan) {
@@ -200,14 +210,15 @@ export function CreateTakePage() {
 
   const [batch, setBatch] = useState<{ running: boolean; done: number; total: number; failed: string[] } | null>(null);
   async function runBatch(lines: string[]) {
-    if (running || batch?.running || !hasKey) return;
+    if (running || batch?.running || !canGenerate) return;
     if (spec.format !== 'twoshot' || imageRoute) { setError('Batch works with the Two-shot format and a described host.'); return; }
     const { specs, problem } = batchSpecs(spec, lines);
     if (problem) { setError(problem); return; }
     if (!specs.length) return;
     const one = await muapi.estimate(slug, { prompt: buildNativePrompt(specs[0]), aspect_ratio: spec.aspect, duration: spec.durationSeconds }).catch(() => null);
     const each = one && typeof one.cost === 'number' ? one.cost : null;
-    const msg = each !== null ? `Queue ${specs.length} episodes at about $${each.toFixed(2)} each, $${(each * specs.length).toFixed(2)} in total?` : `Queue ${specs.length} episodes? The price could not be estimated.`;
+    if (each !== null && !affordable(each * specs.length)) return;
+    const msg = each !== null ? `Queue ${specs.length} episodes at about ${formatCredits(each)} each, ${formatCredits(each * specs.length)} in total?` : `Queue ${specs.length} episodes? The price could not be estimated.`;
     if (!window.confirm(msg)) return;
     setError(''); setBatch({ running: true, done: 0, total: specs.length, failed: [] });
     const failed: string[] = []; let done = 0;
@@ -232,9 +243,10 @@ export function CreateTakePage() {
       muapi.estimate(STILL_MODEL, buildStillInput(spec, host.portrait_url, guest?.portrait_url ?? undefined)).catch(() => null),
       muapi.estimate(slug, buildAnimateInput(spec, slug, 'https://example.com/still.png', host)).catch(() => null),
     ]);
-    const val = (r: Record<string, unknown> | null) => (r && typeof r.cost === 'number' ? r.cost : null);
-    const total = (val(estimates[0]) ?? STILL_APPROX_USD) + (val(estimates[1]) ?? 0);
-    if (total > COST_CONFIRM_USD && !window.confirm(`The starting image and the video will cost about $${total.toFixed(2)}. Continue?`)) return;
+    const val = (r: { cost: number } | null) => (r && typeof r.cost === 'number' ? r.cost : null);
+    const total = (val(estimates[0]) ?? STILL_APPROX_CREDITS) + (val(estimates[1]) ?? 0);
+    if (!affordable(total)) return;
+    if (total > CONFIRM_CREDITS && !window.confirm(`The starting image and the video will cost about ${formatCredits(total)}. Continue?`)) return;
     setError(''); setRunning({ status: 'processing', startedAt: Date.now(), stages: TWOSHOT_STAGES, stageIdx: 0 });
     try {
       const job = await runTwoShotImageJob({ spec: { ...spec, hostDescription: describeCharacter(host) }, host, guestPortraitUrl: guest?.portrait_url ?? undefined, modelSlug: slug, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'still' ? 0 : 1 }) });
@@ -248,7 +260,7 @@ export function CreateTakePage() {
   }
 
   async function generate() {
-    if (running || !hasKey) return;
+    if (running || !canGenerate) return;
     if (spec.format === 'cuts') { await generateCuts(); return; }
     if (pipeline === 'recast') { nav('/recast'); return; }
     if (pipeline === 'lipsync') { await generateLipsync(); return; }
@@ -281,13 +293,13 @@ export function CreateTakePage() {
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-4 p-4 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-h-0 flex-col gap-3">
           <div className="h-[min(56vh,520px)] min-h-[380px] lg:h-auto lg:min-h-0 lg:flex-1">
-            <PreviewCanvas aspect={spec.aspect} job={previewJob} running={running} take={spec.take} question={spokenLines(spec).host} hasKey={hasKey} project={project} playerRef={playerRef} />
+            <PreviewCanvas aspect={spec.aspect} job={previewJob} running={running} take={spec.take} question={spokenLines(spec).host} canGenerate={canGenerate} project={project} playerRef={playerRef} />
           </div>
           <div className="flex items-center gap-2 rounded-2xl border border-line bg-ink-850 p-2 shadow-panel">
             <input value={spec.take} onChange={e => set('take', e.target.value)} placeholder="Type a hot take…" maxLength={220}
               className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[14px] text-white placeholder:text-zinc-600 focus:outline-none" />
             <span className="hidden items-center gap-1 text-[11px] text-zinc-600 xl:flex"><Kbd>Ctrl</Kbd><Kbd>↵</Kbd></span>
-            {hasKey ? (
+            {canGenerate ? (
               <button onClick={generate} disabled={!!running}
                 className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot px-4 text-[13px] font-semibold text-black shadow-glow transition hover:brightness-110 disabled:opacity-60">
                 {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -295,7 +307,7 @@ export function CreateTakePage() {
                 {model && <span className="hidden rounded-md bg-black/15 px-1.5 py-0.5 text-[10px] font-semibold sm:inline">{model.label}</span>}
               </button>
             ) : (
-              <Link to="/settings" className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-4 text-[13px] font-semibold text-accent"><KeyRound className="h-4 w-4" />Add muapi key</Link>
+              <Link to={block === 'guest' ? '/login' : '/settings'} title={block ? BLOCK_TEXT[block] : undefined} className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-4 text-[13px] font-semibold text-accent"><UserPlus className="h-4 w-4" />{block === 'unverified' ? 'Confirm your email' : 'Create an account'}</Link>
             )}
           </div>
           {error && <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">{error}</p>}
@@ -313,11 +325,11 @@ export function CreateTakePage() {
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}
             characters={characters} hostHint={route.hint} imageRoute={imageRoute}
             cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} />}
-            lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} hasKey={hasKey} />}
+            lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} canGenerate={canGenerate} />}
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => setProject({ ...project, style: { ...project.style, captionFont: f } })}
-            captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} captionState={captionState} onGenerateCaptions={() => clip && generateCaptions(clip.id)} hasKey={hasKey} />
+            captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} captionState={captionState} onGenerateCaptions={() => clip && generateCaptions(clip.id)} canGenerate={canGenerate} />
         </div>
       </div>
       <TimelineEditor project={project} setProject={setProject} checkpoint={checkpoint} undo={undo} redo={redo}

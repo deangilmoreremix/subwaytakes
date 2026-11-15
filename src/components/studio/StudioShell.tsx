@@ -1,9 +1,8 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import type { ComponentType, ReactNode } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { Clapperboard, Users, Repeat2, LayoutGrid, Settings, Wallet, Film } from 'lucide-react';
 import { clsx } from '../../lib/format';
 import { useAuth } from '../../lib/auth';
-import { getMuapiKey, muapi } from '../../lib/muapi/client';
 
 interface Item { to: string; label: string; icon: ComponentType<{ className?: string }>; soon?: string }
 const ITEMS: Item[] = [
@@ -13,22 +12,6 @@ const ITEMS: Item[] = [
   { to: '/library', label: 'Library', icon: LayoutGrid },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
-
-function useBalance() {
-  const [state, setState] = useState<{ kind: 'nokey' | 'loading' | 'ok' | 'err'; text: string }>({ kind: getMuapiKey() ? 'loading' : 'nokey', text: '' });
-  const { pathname } = useLocation();
-  useEffect(() => {
-    if (!getMuapiKey()) { setState({ kind: 'nokey', text: '' }); return; }
-    let live = true;
-    muapi.balance().then(b => {
-      if (!live) return;
-      const v = b.balance ?? b.credits ?? b.credit_balance;
-      setState({ kind: 'ok', text: v !== undefined ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }) : 'Connected' });
-    }).catch(() => live && setState({ kind: 'err', text: 'Key error' }));
-    return () => { live = false; };
-  }, [pathname]);
-  return state;
-}
 
 function Rail() {
   const nav = useNavigate();
@@ -73,7 +56,7 @@ function TabBar() {
 export function StudioShell({ children }: { children: ReactNode }) {
   const { profile, user } = useAuth();
   const nav = useNavigate();
-  const bal = useBalance();
+  const credits = profile?.credits_balance ?? 0;
   const initial = profile?.display_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U';
   return (
     <div className="flex h-full bg-ink-900 text-zinc-200">
@@ -86,10 +69,10 @@ export function StudioShell({ children }: { children: ReactNode }) {
             <div className="hidden sm:block text-[11px] text-zinc-500">SubwayTakes Studio · draft</div>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => nav('/settings')} className={clsx('flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium tnum transition',
-              bal.kind === 'ok' ? 'border-line bg-ink-800 text-zinc-200 hover:border-white/15' : bal.kind === 'err' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-accent/40 bg-accent-soft text-accent')}>
+            <button onClick={() => nav('/settings')} aria-label="Credits" title="Your credits" className={clsx('flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium tnum transition',
+              !profile ? 'border-line bg-ink-800 text-zinc-500' : credits > 0 ? 'border-line bg-ink-800 text-zinc-200 hover:border-white/15' : 'border-accent/40 bg-accent-soft text-accent')}>
               <Wallet className="h-3.5 w-3.5" />
-              {bal.kind === 'ok' ? bal.text : bal.kind === 'loading' ? '…' : bal.kind === 'err' ? bal.text : 'Add muapi key'}
+              {!profile ? '…' : <span data-testid="credit-pill">{credits.toLocaleString('en-US')} credits</span>}
             </button>
             <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 text-[12px] font-semibold text-zinc-200 ring-1 ring-white/10">{initial}</div>
           </div>
