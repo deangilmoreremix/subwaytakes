@@ -10,6 +10,7 @@ const CreateTakePage = lazy(() => import('./pages/CreateTakePage').then(m => ({ 
 const CastPage = lazy(() => import('./pages/CastPage').then(m => ({ default: m.CastPage })));
 const RecastPage = lazy(() => import('./pages/RecastPage').then(m => ({ default: m.RecastPage })));
 const GalleryPage = lazy(() => import('./pages/GalleryPage').then(m => ({ default: m.GalleryPage })));
+const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
 function PageLoader() {
@@ -82,6 +83,7 @@ function AppContent() {
                     <Route path="/recast" element={<RecastPage />} />
                     <Route path="/library" element={<GalleryPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/admin" element={<AdminPage />} />
                     <Route path="*" element={<Navigate to="/create" replace />} />
                   </Routes>
                 </Suspense>

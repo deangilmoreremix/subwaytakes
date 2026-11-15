@@ -8,7 +8,7 @@ const SB = 'https://stub.supabase.test';
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now() / 1000) + 86400;
 const jwt = `${b64({ alg: 'HS256' })}.${b64({ sub: 'u-1', role: 'authenticated', aud: 'authenticated', exp })}.sig`;
-const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, email_confirmed_at: new Date().toISOString(), created_at: new Date().toISOString() };
 const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 86400, expires_at: exp, user };
 const json = (r, b, status = 200) => r.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(b) });
 const browser = await chromium.launch();
@@ -26,7 +26,7 @@ async function open(viewport, signedIn) {
     if (!signedIn && u.includes('/auth/v1/')) return json(r, { message: 'Anonymous sign-ins are disabled' }, 422);
     if (u.includes('/auth/v1/user')) return json(r, user);
     if (u.includes('/auth/v1/')) return json(r, { ...session, user });
-    if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 1, subscription_tier: 'free', default_city_style: 'london' });
+    if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 5000, subscription_tier: 'free', default_city_style: 'london' });
     return json(r, []);
   });
   return { ctx, page };

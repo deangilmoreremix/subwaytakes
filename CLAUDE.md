@@ -19,16 +19,19 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 - `App.tsx`: routes `/login /create /cast /recast /library /settings`; everything else redirects to `/create`.
 - `pages/`: Create, Cast, Recast, Gallery (library), Settings, Auth.
 - `components/studio/`: the shell, inspector, preview, timeline editor, Place panel, export dialog, Remotion composition (`EpisodeComposition`, `TitleOverlay`).
-- `lib/muapi/`: `client.ts` (calls the `muapi-proxy` edge function, polls predictions), `registry.ts` (model slugs and limits, single source of truth), `result.ts` (tolerant response parsing), `jobs.ts` (`clip_jobs` rows, native pipeline), `lipsync.ts`, `voices.ts`.
+- `lib/muapi/`: `client.ts` (calls the `muapi-gateway` edge function, polls predictions; the key never reaches the browser), `registry.ts` (model slugs and limits, single source of truth), `result.ts` (tolerant response parsing), `jobs.ts` (`clip_jobs` rows, native pipeline), `lipsync.ts`, `voices.ts`.
 - `lib/places/`: cities (each with its own card, stations, locals), scenes, time, crowd, ambience, `placePrompt()`.
 - `lib/shows/`: ten show presets (Hot Take, Happiness, One-question, Reveal, Debate duel, Would you rather, Compliment, Rate my, Red flag, Confessions): host question, tones, badge, reaction beat, ideas, and `titleFor()` for the on-screen graphic. `applyShow()` switches shows. `stored.ts` reads the project's saved title.
 - `lib/interview/`: `TakeSpec`, prompt builders for Two-shot / Cuts / Solo, host-from-Cast, and `twoshot.ts` (starting image then image-to-video), `batch.ts` (queue up to 10 episodes).
 - `lib/recast/`: staged, resumable Recast job (`pipeline.ts`), limits and cost maths, prompts, browser frame extraction, and the optional voice stage (`voice.ts`).
 - `lib/timeline/`: project model and pure edit operations (`ops.ts`, including `assembleBestOf`), chains and transitions, export via `@remotion/web-renderer`.
+- `lib/credits/`: credit formatting, the balance store the gateway keeps current, `InsufficientCreditsError`, `generationBlock()`. 1 credit = $0.01; the server decides prices, the client only displays.
+- `supabase/functions/`: `muapi-gateway` (the only door to muapi: auth, price, reserve, submit, settle or refund), `admin-credits`, `reap-holds`; decision logic is in `_shared/` (pure, unit tested, no Deno APIs). `supabase/migrations/20261120000000_credits_ledger.sql` is the ledger.
 - `lib/ideas.ts` + `lib/questionBank.ts`: take ideas for the Take tab.
 
 ## Rules that matter
 
+- **Money rules.** `credits_balance` changes ONLY through the ledger functions (service_role). Never add a client-side credit write, a free-credit default, or a code path that calls muapi without the gateway. A paid call is reserved first and refunded exactly once on failure. If a price cannot be determined, refuse; never guess. Customers never see muapi dollars or the margin. Any change to the migration must keep `scripts/test-credits-sql.sh` passing (it also races concurrent reserves).
 - **No silent fallbacks.** Failures surface with muapi's real message. Never fabricate output or fall back to stock video.
 - **Never lose a paid result.** Later optional stages (for example the Recast voice stage) must fail soft and keep what was already paid for.
 - **No live spend without approval.** Live scripts (`scripts/live-*.ts`) are dry runs by default and need `--run` plus a cap. Do not run them without the user's say-so.
@@ -42,8 +45,9 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 - Node `fetch` bypasses the credential-injecting proxy unless you run with `NODE_USE_ENV_PROXY=1` (needed for `scripts/live-*.ts`).
 - Run TS scripts with `npx vite-node scripts/<file>.ts` and dummy Supabase env vars.
 - Browser scripts (`scripts/*-e2e.mjs`, `screenshots.mjs`, `export-test.mjs`) use the pre-installed Playwright Chromium against the dev server started with `VITE_SUPABASE_URL=https://stub.supabase.test VITE_SUPABASE_ANON_KEY=stub npm run dev`; network is stubbed.
+- `scripts/test-credits-sql.sh` needs the postgres 16 binaries and uses a throwaway `mktemp` directory (the postgres user cannot read the scratchpad).
 - A hook may flag large shell heredocs as a dangerous `rm`; write files with the editor tools instead.
 
 ## Deploying
 
-Apply `supabase/migrations/20261111000000_clip_jobs.sql` and `20261112000000_cast_voice_and_media_bucket.sql`, then `supabase functions deploy muapi-proxy`.
+See the README, "Deploying the backend": migrations, secrets (`MUAPI_API_KEY`, `CRON_SECRET`), deploy `muapi-gateway`, `admin-credits`, `reap-holds`, schedule the reaper, require email confirmation, make yourself an admin, grant credits, run `scripts/gateway-smoke.mjs`.

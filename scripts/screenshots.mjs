@@ -13,7 +13,7 @@ mkdirSync(out, { recursive: true });
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now() / 1000) + 86400 * 30;
 const jwt = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: 'u-1', role: 'authenticated', aud: 'authenticated', exp })}.sig`;
-const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'demo@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'demo@example.com', app_metadata: {}, user_metadata: {}, email_confirmed_at: new Date().toISOString(), created_at: new Date().toISOString() };
 const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 86400 * 30, expires_at: exp, user };
 
 const jobs = [
@@ -48,7 +48,7 @@ async function newPage(browser, vp, { key, proxy = 'ok', withJobs = false, proje
     if (m === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
     if (u.includes('/auth/v1/user')) return json(route, user);
     if (u.includes('/auth/v1/')) return json(route, { ...session, user });
-    if (u.includes('/functions/v1/muapi-proxy')) {
+    if (u.includes('/functions/v1/muapi-gateway')) {
       if (proxy === 'processing') { const b = route.request().postData() || ''; return json(route, b.includes('predictions') ? { status: 'processing' } : { request_id: 'r9' }); }
       return proxy === 'ok' ? json(route, { balance: 42.5, currency: 'credits' }) : json(route, { error: 'Invalid API key (401 from muapi)' });
     }

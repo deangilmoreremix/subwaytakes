@@ -11,7 +11,7 @@ const SB = 'https://stub.supabase.test', MEDIA = 'https://stub.media.test';
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now() / 1000) + 86400;
 const jwt = `${b64({ alg: 'HS256' })}.${b64({ sub: 'u-1', role: 'authenticated', aud: 'authenticated', exp })}.sig`;
-const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, email_confirmed_at: new Date().toISOString(), created_at: new Date().toISOString() };
 const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 86400, expires_at: exp, user };
 const file = n => readFileSync(join(dir, n));
 const meta = JSON.parse(file('eleven_meta.json').toString());
@@ -44,7 +44,7 @@ await page.route(`${SB}/**`, async r => {
   if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
   if (u.includes('/auth/v1/user')) return json(r, user);
   if (u.includes('/auth/v1/')) return json(r, { ...session, user });
-  if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 1, subscription_tier: 'free' });
+  if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 5000, subscription_tier: 'free' });
   if (u.includes('/storage/v1/object/public/media/')) { const k = decodeURIComponent(u.split('/public/media/')[1]); const b = uploads.get(k); return b ? rangeBody(r, b.buf, b.type) : r.fulfill({ status: 404 }); }
   if (u.includes('/storage/v1/object/media/')) { const k = decodeURIComponent(u.split('/object/media/')[1].split('?')[0]); // Chromium does not expose request bodies over ~1 MB to Playwright, so for the (large) portrait fall back to the source file the test selected.
     const captured = unwrapMultipart(req.postDataBuffer() ?? Buffer.alloc(0), req.headers()['content-type']); const body = captured.length ? captured : (k.endsWith('portrait.png') ? file('portrait.png') : captured);
@@ -62,11 +62,11 @@ await page.route(`${SB}/**`, async r => {
     if (m === 'POST') { const row = { id: `j${jobs.length + 1}`, created_at: new Date().toISOString(), error: null, output_url: null, request_id: null, ...JSON.parse(req.postData()) }; jobs.unshift(row); return json(r, row, 201); }
     if (m === 'PATCH') { const row = jobs.find(j => j.id === id); if (row) Object.assign(row, JSON.parse(req.postData())); return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }); }
   }
-  if (u.includes('/functions/v1/muapi-proxy')) {
+  if (u.includes('/functions/v1/muapi-gateway')) {
     const { method, path, body } = JSON.parse(req.postData() || '{}');
     muapiCalls.push({ method, path, body });
     if (path === '/api/v1/models/elevenlabs-tts-turbo-2-5') return json(r, meta);
-    if (path.endsWith('/estimate-cost')) return json(r, { cost: path.includes('omnihuman') ? 0.5 : path.includes('kling') ? 0.35 : path.includes('gpt-image') ? 0.025 : 0.0035 });
+    if (path.endsWith('/estimate-cost')) return json(r, { cost: path.includes('omnihuman') ? 125 : path.includes('kling') ? 88 : path.includes('gpt-image') ? 7 : 15 });
     if (path === '/api/v1/elevenlabs-tts-turbo-2-5') return json(r, { request_id: 'tts1' });
     if (path === '/api/v1/gpt-image-2-text-to-image') return json(r, { request_id: 'img1' });
     if (path === '/api/v1/omnihuman-2-0') return json(r, { request_id: 'oh1' });

@@ -90,7 +90,7 @@ export function AuthPage() {
           {success && mode === 'signup' && (
             <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
               <p className="text-sm text-emerald-400">
-                Account created successfully! You can now sign in.
+                Account created! Check your email and click the confirmation link. You can look around now, but generating needs a confirmed email.
               </p>
             </div>
           )}

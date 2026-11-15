@@ -21,4 +21,6 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      # real Postgres: applies the credits migration and races concurrent reserves (the runner image ships postgres binaries)
+      - run: scripts/test-credits-sql.sh
       - run: npm run build

@@ -9,7 +9,7 @@ const SB = 'https://stub.supabase.test', MEDIA = 'https://stub.media.test';
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now() / 1000) + 86400;
 const jwt = `${b64({ alg: 'HS256' })}.${b64({ sub: 'u-1', role: 'authenticated', aud: 'authenticated', exp })}.sig`;
-const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, email_confirmed_at: new Date().toISOString(), created_at: new Date().toISOString() };
 const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 86400, expires_at: exp, user };
 const ch = (id, name, role, portrait) => ({ id, user_id: 'u-1', name, role, age_range: 'late-20s', gender: 'female', ethnicity: 'latina', clothing_style: 'a yellow bomber jacket', hair_description: 'big curls', distinguishing_features: 'round sunglasses', energy_persona: 'witty', voice_style: '', is_default: false, created_at: '', portrait_url: portrait ? `${MEDIA}/portrait.png` : null, voice_provider: 'elevenlabs', voice_id: 'v1', voice_speed: 1 });
 const chars = [ch('h1', 'Rae', 'host', true), ch('h2', 'No Photo', 'host', false)];
@@ -29,7 +29,7 @@ await page.route(`${SB}/**`, async r => {
   if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
   if (u.includes('/auth/v1/user')) return json(r, user);
   if (u.includes('/auth/v1/')) return json(r, { ...session, user });
-  if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 1, subscription_tier: 'free' });
+  if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 5000, subscription_tier: 'free' });
   if (u.includes('/storage/v1/object/public/media/')) { const k = decodeURIComponent(u.split('/public/media/')[1]); const b = uploads.get(k); return b ? media(r, b.buf, b.type) : r.fulfill({ status: 404 }); }
   if (u.includes('/storage/v1/object/media/')) { const k = decodeURIComponent(u.split('/object/media/')[1].split('?')[0]); uploads.set(k, { buf: readFileSync(img), type: 'image/png' }); return json(r, { Key: `media/${k}` }); }
   if (u.includes('/rest/v1/character_bibles')) return json(r, chars);
@@ -39,9 +39,9 @@ await page.route(`${SB}/**`, async r => {
     if (m === 'POST') { const row = { id: `j${jobs.length + 1}`, created_at: new Date().toISOString(), error: null, output_url: null, request_id: null, ...JSON.parse(req.postData()) }; jobs.unshift(row); return json(r, row); }
     if (m === 'PATCH') { const row = jobs.find(j => j.id === id); if (row) Object.assign(row, JSON.parse(req.postData())); return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }); }
   }
-  if (u.includes('/functions/v1/muapi-proxy')) {
+  if (u.includes('/functions/v1/muapi-gateway')) {
     const { method, path, body } = JSON.parse(req.postData() || '{}');
-    if (path.endsWith('/estimate-cost')) return json(r, { cost: 0.3 });
+    if (path.endsWith('/estimate-cost')) return json(r, { cost: 75, unit: 'credits' });
     const sub = /^\/api\/v1\/([\w.\-]+)$/.exec(path);
     if (method === 'POST' && sub) { calls.push({ slug: sub[1], body }); return json(r, { request_id: `req-${sub[1]}`, status: 'processing' }); }
     const pm = /predictions\/req-([\w.\-]+)\/result/.exec(path);

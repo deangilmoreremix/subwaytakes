@@ -35,6 +35,13 @@ describe('admin access', () => {
   });
 });
 
+describe('whoami', () => {
+  it('confirms admins and refuses everyone else', async () => {
+    expect(await adminHandle(admin, { action: 'whoami' }, setup().deps)).toEqual({ status: 200, body: { admin: true } });
+    expect((await adminHandle(admin, { action: 'whoami' }, setup(false).deps)).status).toBe(403);
+  });
+});
+
 describe('granting and adjusting', () => {
   it('grants credits with a reason and logs who did it', async () => {
     const { deps, calls, logs } = setup();

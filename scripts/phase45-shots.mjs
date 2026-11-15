@@ -9,7 +9,7 @@ const SB = 'https://stub.supabase.test';
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now() / 1000) + 86400;
 const jwt = `${b64({ alg: 'HS256' })}.${b64({ sub: 'u-1', role: 'authenticated', aud: 'authenticated', exp })}.sig`;
-const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, email_confirmed_at: new Date().toISOString(), created_at: new Date().toISOString() };
 const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 86400, expires_at: exp, user };
 const ch = (id, name, role) => ({ id, user_id: 'u-1', name, role, age_range: 'early-30s', gender: 'female', ethnicity: 'diverse', clothing_style: 'red coat', hair_description: 'curly', distinguishing_features: '', energy_persona: 'witty', voice_style: '', is_default: false, created_at: '', portrait_url: 'https://stub.media.test/portrait.png', voice_provider: 'elevenlabs', voice_id: 'v1', voice_speed: 1 });
 const chars = [ch('h1', 'Host (original)', 'host'), ch('g1', 'Maya', 'guest')];
@@ -21,7 +21,7 @@ async function shoot(name, viewport, steps) {
   const page = await ctx.newPage();
   page.on('pageerror', e => console.log('[pageerror]', String(e).slice(0, 200)));
   await page.route('https://stub.media.test/**', r => r.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'image/png' }, body: readFileSync(portrait) }));
-  await page.route(`${SB}/**`, r => { const u = r.request().url(); if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } }); if (u.includes('/auth/v1/user')) return json(r, user); if (u.includes('/auth/v1/')) return json(r, { ...session, user }); if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 1, subscription_tier: 'free' }); if (u.includes('character_bibles')) return json(r, chars); if (u.includes('functions/v1/muapi-proxy')) return json(r, { cost: 0.6 }); return json(r, []); });
+  await page.route(`${SB}/**`, r => { const u = r.request().url(); if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } }); if (u.includes('/auth/v1/user')) return json(r, user); if (u.includes('/auth/v1/')) return json(r, { ...session, user }); if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 5000, subscription_tier: 'free' }); if (u.includes('character_bibles')) return json(r, chars); if (u.includes('functions/v1/muapi-gateway')) return json(r, { cost: 0.6 }); return json(r, []); });
   await steps(page, name);
   await ctx.close();
 }

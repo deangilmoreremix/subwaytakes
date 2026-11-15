@@ -26,6 +26,7 @@ export async function adminHandle(caller: AdminCaller | null, req: unknown, deps
   if (!isObj(req) || typeof req.action !== 'string') return bad('Missing action.');
 
   switch (req.action) {
+    case 'whoami': return { status: 200, body: { admin: true } };
     case 'stats': return { status: 200, body: await deps.stats() };
     case 'settings': return { status: 200, body: await deps.getSettings() };
     case 'lookup': {

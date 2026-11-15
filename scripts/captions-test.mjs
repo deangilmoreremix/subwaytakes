@@ -9,7 +9,7 @@ const SB = 'https://stub.supabase.test';
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now() / 1000) + 86400;
 const jwt = `${b64({ alg: 'HS256' })}.${b64({ sub: 'u-1', role: 'authenticated', aud: 'authenticated', exp })}.sig`;
-const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+const user = { id: 'u-1', aud: 'authenticated', role: 'authenticated', email: 'd@example.com', app_metadata: {}, user_metadata: {}, email_confirmed_at: new Date().toISOString(), created_at: new Date().toISOString() };
 const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', expires_in: 86400, expires_at: exp, user };
 const src = 'https://stub.media.test/clip.mp4';
 // clip placed at timeline 30 (1s in), trimmed 15 frames off the front of a 90-frame source -> visible source frames 15..75
@@ -29,13 +29,13 @@ await page.route(`${SB}/**`, r => {
   if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
   if (u.includes('/auth/v1/user')) return json(r, user);
   if (u.includes('/auth/v1/')) return json(r, { ...session, user });
-  if (u.includes('/functions/v1/muapi-proxy')) {
+  if (u.includes('/functions/v1/muapi-gateway')) {
     const b = JSON.parse(r.request().postData() || '{}');
     if (b.path?.includes('openai-whisper')) { whisperBody = b.body; return mode === 'fail' ? json(r, { error: 'Insufficient credits' }, 402) : json(r, { request_id: 'w1' }); }
     if (b.path?.includes('predictions')) return json(r, { status: 'completed', text: mode === 'empty' ? '' : SRT });
     return json(r, { balance: 5 });
   }
-  if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 1, subscription_tier: 'free' });
+  if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 5000, subscription_tier: 'free' });
   return json(r, []);
 });
 const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('subwaytakes.project.v1')).clips.filter(c => c.kind === 'caption').map(c => [c.start, c.duration, c.text]));

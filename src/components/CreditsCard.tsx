@@ -4,6 +4,7 @@ import { Coins, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { BLOCK_TEXT, formatCredits } from '../lib/credits';
+import { checkAdmin } from '../lib/admin';
 
 interface Row { id: number; delta: number; kind: string; reason: string; created_at: string }
 
@@ -14,7 +15,9 @@ export function CreditsCard() {
   const { profile, user, generationBlock } = useAuth();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const balance = profile?.credits_balance ?? 0;
+  useEffect(() => { if (user && !user.is_anonymous) checkAdmin().then(setIsAdmin); }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -40,6 +43,7 @@ export function CreditsCard() {
           {BLOCK_TEXT[generationBlock]} {generationBlock === 'guest' && <Link to="/login" className="underline">Sign up or sign in</Link>}
         </p>
       )}
+      {isAdmin && <p className="mt-3 text-[12px]"><Link to="/admin" className="text-accent underline">Admin tools</Link></p>}
       <div className="mt-4">
         <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Recent activity</p>
         {rows === null && <div className="flex items-center gap-2 text-[12px] text-zinc-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading…</div>}
