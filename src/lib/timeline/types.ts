@@ -38,7 +38,7 @@ export interface Track { id: string; kind: TrackKind; name: string }
 export interface Project {
   fps: number;
   /** project-wide look */
-  style?: { captionFont?: 'inter' | 'anton' | 'bangers'; /** on-screen title; also accepts the older { take, guest, badge } shape (see resolveTitle) */ title?: { data?: TitleData; take?: string; guest?: string; badge?: boolean; showBadge?: boolean } };
+  style?: { captionFont?: 'inter' | 'anton' | 'bangers'; /** on-screen title; also accepts the older { take, guest, badge } shape (see resolveTitle) */ title?: { data?: TitleData; take?: string; guest?: string; badge?: boolean; showBadge?: boolean; series?: { name: string; episode: number } } };
   tracks: Track[];
   clips: Clip[];
 }

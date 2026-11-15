@@ -10,6 +10,7 @@ Everything generative runs through [muapi](https://muapi.ai) with your own API k
 | --- | --- |
 | **Create** | Write a take (or pick one from Ideas), choose a **Place**, pick an interview format and a model, generate a shot, then cut it on the timeline. |
 | **Place** | 25 real cities (each with its own transit card, real stations, local signage and style), 10 scenes, time of day, crowd, ambient sound, NYC lines and stations, and a street mode. |
+| **Shows** | Ten show presets on the same card-as-mic format: Hot Take, Happiness, One-question, Reveal (number graphic), Debate duel, Would you rather, Compliment, Rate my (score sticker), Red flag / green flag, Confessions. Plus series label, batch queue (up to 10) and a Best-of assembler. |
 | **Interview formats** | **Two-shot** (host and guest side by side, native-audio video), **Cuts** (host then guest as two lip-synced shots), **Solo** (guest close-up). A Cast host with a portrait keeps the same face in Two-shot. |
 | **Cast** | Characters with a portrait (upload or generate) and a voice (ElevenLabs or MiniMax). |
 | **Recast** | Replace the performer in a 4-15 second clip with a Cast character, optionally giving them a new voice with the mouth re-animated. |

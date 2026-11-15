@@ -196,3 +196,45 @@ export function addRecastClips(p: Project, a: { generatedUrl: string; sourceUrl:
   next = addClip(next, { id: audioId, trackId: sound.id, kind: 'audio', label: 'Original audio', start: placed.start, duration, trimStart: 0, sourceFrames: a.sourceFrames, src: a.sourceUrl, volume: 1 });
   return { project: next, videoId, audioId };
 }
+
+// ---------------------------------------------------------------- best-of
+
+export interface BestOfOptions { transition?: TransitionType | null; frames?: number; maxClips?: number }
+
+/**
+ * "Best of" compilation: lay the first `maxClips` video clips back to back from frame 0 in timeline order and join
+ * them with a transition. Sound, caption and effect clips that started inside a video clip move with it, so a recast's
+ * restored audio or a caption stays on its shot. Clips past the limit are left out of the layout (not deleted).
+ */
+export function assembleBestOf(p: Project, opts: BestOfOptions = {}): Project {
+  const { transition = 'fade', frames = 8, maxClips = 8 } = opts;
+  const video = p.tracks.find(t => t.kind === 'video');
+  if (!video) return p;
+  const shots = p.clips.filter(c => c.trackId === video.id).sort((a, b) => a.start - b.start).slice(0, maxClips);
+  if (!shots.length) return p;
+  let cursor = 0;
+  const base = new Map<string, number>();
+  for (const s of shots) { base.set(s.id, cursor); cursor += s.duration; }
+  const keep = new Set(shots.map(s => s.id));
+  // 1. the video track: abut, then join with transitions (which pull later shots left)
+  let next: Project = {
+    ...p,
+    clips: p.clips.filter(c => c.trackId !== video.id || keep.has(c.id)).map(c => {
+      if (c.trackId !== video.id) return c;
+      const { transitionIn: _drop, ...rest } = c; void _drop;
+      return { ...rest, start: base.get(c.id)! } as Clip;
+    }),
+  };
+  if (transition) for (const s of shots.slice(1)) next = setTransition(next, s.id, { type: transition, frames });
+  // 2. everything else follows the shot it started inside, using the FINAL shot positions
+  const finalStart = new Map(next.clips.filter(c => c.trackId === video.id).map(c => [c.id, c.start]));
+  next = {
+    ...next,
+    clips: next.clips.map(c => {
+      if (c.trackId === video.id) return c;
+      const owner = shots.find(s => c.start >= s.start && c.start < s.start + s.duration);
+      return owner ? { ...c, start: finalStart.get(owner.id)! + (c.start - owner.start) } : c;
+    }),
+  };
+  return normalizeTransitions(next);
+}

@@ -34,8 +34,10 @@ export function useProject() {
   }, [project]);
 
   const checkpoint = useCallback(() => { past.current.push(latest.current); if (past.current.length > 100) past.current.shift(); future.current = []; }, []);
-  const set = useCallback((next: Project, record = true) => { if (record) checkpoint(); setProject(next); }, [checkpoint]);
+  const set = useCallback((next: Project, record = true) => { if (record) checkpoint(); latest.current = next; setProject(next); }, [checkpoint]);
   const undo = useCallback(() => { const p = past.current.pop(); if (p) { future.current.push(latest.current); setProject(p); } }, []);
   const redo = useCallback(() => { const p = future.current.pop(); if (p) { past.current.push(latest.current); setProject(p); } }, []);
-  return { project, set, checkpoint, undo, redo };
+  /** The newest project, even when called from a callback created before the last update. */
+  const getProject = useCallback(() => latest.current, []);
+  return { project, set, checkpoint, undo, redo, getProject };
 }

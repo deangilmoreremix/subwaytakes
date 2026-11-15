@@ -27,7 +27,7 @@ export function TitleOverlay({ title, fontFamily, fontWeight }: { title: StoredT
       )}
 
       {d.variant === 'number' && d.value && (
-        <div style={{ ...base, position: 'absolute', left: 0, right: 0, top: '36%', textAlign: 'center', fontSize: 230, lineHeight: 1, color: d.badgeBg, textShadow: SHADOW, opacity: fade, transform: `scale(${pop})` }}>{d.value}</div>
+        <div style={{ ...base, position: 'absolute', left: 0, right: 0, top: '52%', textAlign: 'center', fontSize: 230, lineHeight: 1, color: d.badgeBg, textShadow: SHADOW, opacity: fade, transform: `scale(${pop})` }}>{d.value}</div>
       )}
 
       {d.variant === 'score' && d.value && (
@@ -54,6 +54,9 @@ export function TitleOverlay({ title, fontFamily, fontWeight }: { title: StoredT
         </div>
       )}
 
+      {title.series?.name.trim() && (
+        <div style={{ ...base, position: 'absolute', top: '2.2%', right: '4%', fontSize: 30, letterSpacing: 2, color: '#fff', background: 'rgba(0,0,0,0.62)', padding: '6px 16px', borderRadius: 10, textTransform: 'uppercase' }}>{title.series.name.trim()} · EP {title.series.episode}</div>
+      )}
       {title.showBadge !== false && (
         <div style={{ ...base, position: 'absolute', left: '5%', bottom: '5%', fontSize: 34, color: d.badgeFg, background: d.badgeBg, padding: '8px 22px', borderRadius: 12, letterSpacing: 2 }}>{d.badge}</div>
       )}

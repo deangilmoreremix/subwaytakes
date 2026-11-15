@@ -6,6 +6,7 @@ import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { FORMATS } from '../../lib/interview';
 import { PlacePanel } from './PlacePanel';
 import { IdeasButton } from './IdeasButton';
+import { BatchBox } from './BatchBox';
 import { SHOWS, TONE_LABEL, showOf, titleFor } from '../../lib/shows';
 import type { StoredTitle } from '../../lib/shows/stored';
 import { clsx } from '../../lib/format';
@@ -21,10 +22,10 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
+export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
-  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; characters: CharacterBible[]; hostHint?: string; imageRoute: boolean; title?: StoredTitle; onTitle: (t: StoredTitle | undefined) => void;
+  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; characters: CharacterBible[]; hostHint?: string; imageRoute: boolean; title?: StoredTitle; onTitle: (t: StoredTitle | undefined) => void; onBestOf: () => void; videoClipCount: number; onBatch: (lines: string[]) => void; batch: { running: boolean; done: number; total: number; failed: string[] } | null;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; onAddEffect: () => void; fps: number;
   transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
@@ -97,6 +98,7 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
           <PlacePanel place={spec.place} onChange={p => set('place', p)} />
           <div><Label>Tone</Label>
             <Segmented value={spec.tone} onChange={v => set('tone', v)} options={show.tones.map(t => ({ value: t, label: TONE_LABEL[t] }))} /></div>
+          <BatchBox show={show.id} editableQuestion={show.editableQuestion} duel={show.guests === 2} disabled={spec.format !== 'twoshot' || imageRoute} onBatch={onBatch} batch={batch} />
           <details className="rounded-xl border border-line bg-ink-950 p-3 text-[12px] text-zinc-500">
             <summary className="cursor-pointer text-zinc-400">Final prompt</summary>
             <p className="mt-2 whitespace-pre-wrap leading-relaxed">{buildNativePrompt(spec)}</p>
@@ -233,9 +235,16 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
             <label className="flex items-center gap-2 text-[12px] text-zinc-300"><input type="checkbox" checked={!!title} onChange={e => onTitle(e.target.checked ? { data: titleFor(spec), showBadge: true } : undefined)} />Show the on-screen graphic ({show.label})</label>
             {title && (<div className="mt-2 space-y-2">
               <input className={inputCls} value={title.guest ?? ''} placeholder="Guest name sticker (optional)" onChange={e => onTitle({ ...title, guest: e.target.value || undefined })} />
+              <div className="grid grid-cols-[1fr_72px] gap-2">
+                <input className={inputCls} value={title.series?.name ?? ''} placeholder="Series name (optional)" onChange={e => onTitle({ ...title, series: e.target.value ? { name: e.target.value, episode: title.series?.episode ?? 1 } : undefined })} />
+                <input className={inputCls} type="number" min={1} aria-label="Episode number" value={title.series?.episode ?? 1} disabled={!title.series} onChange={e => title.series && onTitle({ ...title, series: { ...title.series, episode: Math.max(1, Number(e.target.value) || 1) } })} />
+              </div>
               <label className="flex items-center gap-2 text-[12px] text-zinc-400"><input type="checkbox" checked={title.showBadge !== false} onChange={e => onTitle({ ...title, showBadge: e.target.checked })} />{title.data.badge} badge</label>
             </div>)}
           </div>
+          <div><Label hint={`${videoClipCount} shots`}>Best of</Label>
+            <button onClick={onBestOf} disabled={videoClipCount < 2} className="h-9 w-full rounded-xl border border-line bg-ink-850 text-[12px] font-medium text-zinc-200 transition hover:border-white/15 disabled:opacity-40">Line up the first 8 shots with fades</button>
+            <p className="mt-1.5 text-[11px] text-zinc-600">Puts your shots back to back with transitions. Sound and captions stay with their shot.</p></div>
           <div><Label>Caption font</Label>
             <Segmented value={captionFont} onChange={onCaptionFont} options={FONT_IDS.map(id => ({ value: id, label: FONTS[id].label, hint: FONTS[id].blurb }))} />
             <p className="mt-1.5 text-[11px] text-zinc-600" style={{ fontFamily: 'inherit' }}>Applies to every caption in the preview and the export.</p></div>

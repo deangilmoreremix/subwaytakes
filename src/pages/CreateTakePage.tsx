@@ -11,7 +11,8 @@ import { DEFAULT_TAKE, cutsPlan, cutsProblem, type TakeSpec } from '../lib/muapi
 import { placePrompt } from '../lib/places';
 import { applyShow, showOf, titleFor, type ShowId } from '../lib/shows';
 import { resolveTitle } from '../lib/shows/stored';
-import { twoShotRoute, describeCharacter } from '../lib/interview';
+import { twoShotRoute, describeCharacter, buildNativePrompt, spokenLines } from '../lib/interview';
+import { batchSpecs } from '../lib/interview/batch';
 import { runTwoShotImageJob, STILL_APPROX_USD, STILL_MODEL, buildStillInput, buildAnimateInput } from '../lib/interview/twoshot';
 import { CutsPanel } from '../components/studio/CutsPanel';
 import { NATIVE_MODELS, chooseNativeModel, type Pipeline } from '../lib/muapi/registry';
@@ -22,7 +23,7 @@ import type { CharacterBible } from '../lib/types';
 import { getMuapiKey, muapi } from '../lib/muapi/client';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
-import { addClip, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
+import { addClip, assembleBestOf, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
 import { getMediaInfo } from '../lib/timeline/media';
 import { transcribeClip } from '../lib/captions/transcribe';
 import { captionsToClips } from '../lib/captions/captions';
@@ -49,7 +50,7 @@ export function CreateTakePage() {
   const [lipModel, setLipModel] = useState<LipsyncModel>('omnihuman-2-0');
   useEffect(() => { listCharacters().then(l => { setCharacters(l); setSpeakerId(id => id ?? (l.find(c => c.role === 'guest' && c.portrait_url && c.voice_id) ?? l[0])?.id); setHostId(id => id ?? (l.find(c => c.role === 'host') ?? l[0])?.id); }).catch(() => undefined); }, []);
 
-  const { project, set: setProject, checkpoint, undo, redo } = useProject();
+  const { project, set: setProject, checkpoint, undo, redo, getProject } = useProject();
   const [selectedClip, setSelectedClip] = useState<string>();
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -98,16 +99,17 @@ export function CreateTakePage() {
 
   const addJobToTimeline = useCallback(async (job: ClipJob) => {
     if (!job.output_url) return;
-    const fps = project.fps;
     const hinted = Number(job.input?.duration) || 5;
     const secs = await getMediaInfo(job.output_url).then(i => i.durationSec).catch(() => hinted);
-    const frames = Math.max(6, Math.round(secs * fps));
-    const track = project.tracks.find(t => t.kind === 'video')!;
-    const end = project.clips.filter(c => c.trackId === track.id).reduce((m, c) => Math.max(m, c.start + c.duration), 0);
+    // read the project AFTER the await: a batch calls this repeatedly from one closure, and a stale copy would drop earlier clips
+    const cur = getProject();
+    const frames = Math.max(6, Math.round(secs * cur.fps));
+    const track = cur.tracks.find(t => t.kind === 'video')!;
+    const end = cur.clips.filter(c => c.trackId === track.id).reduce((m, c) => Math.max(m, c.start + c.duration), 0);
     const id = newId();
-    setProject(addClip(project, { id, trackId: track.id, kind: 'video', label: typeof job.input?.take === 'string' ? job.input.take : job.model, start: end, duration: frames, trimStart: 0, sourceFrames: frames, src: job.output_url, volume: 1 }));
+    setProject(addClip(cur, { id, trackId: track.id, kind: 'video', label: typeof job.input?.take === 'string' ? job.input.take : job.model, start: end, duration: frames, trimStart: 0, sourceFrames: frames, src: job.output_url, volume: 1 }));
     setSelectedClip(id);
-  }, [project, setProject]);
+  }, [getProject, setProject]);
 
   const addSfx = useCallback(async (sfx: Sfx) => {
     const fps = project.fps;
@@ -196,6 +198,33 @@ export function CreateTakePage() {
     } finally { setRunning(null); }
   }
 
+  const [batch, setBatch] = useState<{ running: boolean; done: number; total: number; failed: string[] } | null>(null);
+  async function runBatch(lines: string[]) {
+    if (running || batch?.running || !hasKey) return;
+    if (spec.format !== 'twoshot' || imageRoute) { setError('Batch works with the Two-shot format and a described host.'); return; }
+    const { specs, problem } = batchSpecs(spec, lines);
+    if (problem) { setError(problem); return; }
+    if (!specs.length) return;
+    const one = await muapi.estimate(slug, { prompt: buildNativePrompt(specs[0]), aspect_ratio: spec.aspect, duration: spec.durationSeconds }).catch(() => null);
+    const each = one && typeof one.cost === 'number' ? one.cost : null;
+    const msg = each !== null ? `Queue ${specs.length} episodes at about $${each.toFixed(2)} each, $${(each * specs.length).toFixed(2)} in total?` : `Queue ${specs.length} episodes? The price could not be estimated.`;
+    if (!window.confirm(msg)) return;
+    setError(''); setBatch({ running: true, done: 0, total: specs.length, failed: [] });
+    const failed: string[] = []; let done = 0;
+    for (let i = 0; i < specs.length; i++) {
+      setRunning({ status: 'queued', startedAt: Date.now(), stages: [`Episode ${i + 1} of ${specs.length}`], stageIdx: 0 });
+      try {
+        const job = await runNativeJob({ spec: specs[i], tier: 'fast', modelSlug: slug });
+        await addJobToTimeline(job);
+        done++;
+      } catch (e) { failed.push(`Episode ${i + 1}: ${e instanceof Error ? e.message : 'failed'}`); } // one failure never stops the rest
+      setBatch({ running: true, done, total: specs.length, failed: [...failed] });
+    }
+    setBatch({ running: false, done, total: specs.length, failed });
+    setRunning(null);
+    await refresh();
+  }
+
   const TWOSHOT_STAGES = ['Making the starting image', 'Animating the interview'];
   async function generateTwoShotImage(host: NonNullable<typeof hostChar> & { portrait_url: string }) {
     const guest = characters.find(c => c.id === speakerId && c.role === 'guest' && c.portrait_url);
@@ -252,7 +281,7 @@ export function CreateTakePage() {
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-4 p-4 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-h-0 flex-col gap-3">
           <div className="h-[min(56vh,520px)] min-h-[380px] lg:h-auto lg:min-h-0 lg:flex-1">
-            <PreviewCanvas aspect={spec.aspect} job={previewJob} running={running} take={spec.take} hasKey={hasKey} project={project} playerRef={playerRef} />
+            <PreviewCanvas aspect={spec.aspect} job={previewJob} running={running} take={spec.take} question={spokenLines(spec).host} hasKey={hasKey} project={project} playerRef={playerRef} />
           </div>
           <div className="flex items-center gap-2 rounded-2xl border border-line bg-ink-850 p-2 shadow-panel">
             <input value={spec.take} onChange={e => set('take', e.target.value)} placeholder="Type a hot take…" maxLength={220}
@@ -270,11 +299,18 @@ export function CreateTakePage() {
             )}
           </div>
           {error && <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">{error}</p>}
+          {batch && (
+            <div role="status" className="rounded-xl border border-line bg-ink-850 px-3 py-2 text-[12px] text-zinc-300">
+              {batch.running ? 'Rendering' : 'Finished'}: {batch.done}/{batch.total} done{batch.failed.length ? `, ${batch.failed.length} failed` : ''}.
+              {batch.failed.map((f, i) => <span key={i} className="block text-red-300">{f}</span>)}
+            </div>
+          )}
         </div>
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
+            onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}
             characters={characters} hostHint={route.hint} imageRoute={imageRoute}
             cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} />}
             lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} hasKey={hasKey} />}

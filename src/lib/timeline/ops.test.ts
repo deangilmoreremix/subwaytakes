@@ -152,3 +152,40 @@ describe('addRecastClips voiced variant', () => {
     expect(silent.audioId).toBeTruthy();
   });
 });
+
+describe('assembleBestOf', () => {
+  const mk = () => {
+    let p: import('./types').Project = JSON.parse(JSON.stringify(DEFAULT_PROJECT));
+    const v = p.tracks.find(t => t.kind === 'video')!.id;
+    const a = p.tracks.find(t => t.kind === 'audio')!.id;
+    for (let i = 0; i < 3; i++) p = addClip(p, { id: `v${i}`, trackId: v, kind: 'video', label: `s${i}`, start: i * 300, duration: 120, trimStart: 0, sourceFrames: 120, src: `https://x/${i}.mp4` });
+    p = addClip(p, { id: 'snd1', trackId: a, kind: 'audio', label: 'Original audio', start: 300 + 10, duration: 100, trimStart: 0, sourceFrames: 100, src: 'https://x/a.mp4' });
+    return p;
+  };
+  it('lays shots back to back with transitions and keeps their length', async () => {
+    const { assembleBestOf } = await import('./ops');
+    const out = assembleBestOf(mk(), { transition: 'fade', frames: 8 });
+    const v = out.clips.filter(c => c.kind === 'video').sort((x, y) => x.start - y.start);
+    expect(v.map(c => c.id)).toEqual(['v0', 'v1', 'v2']);
+    expect(v[0].start).toBe(0);
+    expect(v[1].start).toBe(120 - 8); expect(v[1].transitionIn).toEqual({ type: 'fade', frames: 8 });
+    expect(v[2].start).toBe(v[1].start + 120 - 8);
+    expect(v.every(c => c.duration === 120)).toBe(true);
+  });
+  it('moves audio that started inside a shot together with that shot', async () => {
+    const { assembleBestOf } = await import('./ops');
+    const out = assembleBestOf(mk(), { transition: 'fade', frames: 8 });
+    const v1 = out.clips.find(c => c.id === 'v1')!, snd = out.clips.find(c => c.id === 'snd1')!;
+    expect(snd.start - v1.start).toBe(10);
+  });
+  it('without a transition shots simply abut', async () => {
+    const { assembleBestOf } = await import('./ops');
+    const v = assembleBestOf(mk(), { transition: null }).clips.filter(c => c.kind === 'video').sort((x, y) => x.start - y.start);
+    expect(v.map(c => c.start)).toEqual([0, 120, 240]); expect(v.some(c => c.transitionIn)).toBe(false);
+  });
+  it('limits to maxClips and does nothing on an empty timeline', async () => {
+    const { assembleBestOf } = await import('./ops');
+    expect(assembleBestOf(mk(), { maxClips: 2 }).clips.filter(c => c.kind === 'video')).toHaveLength(2);
+    expect(assembleBestOf(DEFAULT_PROJECT)).toBe(DEFAULT_PROJECT);
+  });
+});

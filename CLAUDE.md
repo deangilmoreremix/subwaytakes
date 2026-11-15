@@ -21,9 +21,10 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 - `components/studio/`: the shell, inspector, preview, timeline editor, Place panel, export dialog, Remotion composition (`EpisodeComposition`, `TitleOverlay`).
 - `lib/muapi/`: `client.ts` (calls the `muapi-proxy` edge function, polls predictions), `registry.ts` (model slugs and limits, single source of truth), `result.ts` (tolerant response parsing), `jobs.ts` (`clip_jobs` rows, native pipeline), `lipsync.ts`, `voices.ts`.
 - `lib/places/`: cities (each with its own card, stations, locals), scenes, time, crowd, ambience, `placePrompt()`.
-- `lib/interview/`: `TakeSpec`, prompt builders for Two-shot / Cuts / Solo, host-from-Cast, and `twoshot.ts` (starting image then image-to-video).
+- `lib/shows/`: ten show presets (Hot Take, Happiness, One-question, Reveal, Debate duel, Would you rather, Compliment, Rate my, Red flag, Confessions): host question, tones, badge, reaction beat, ideas, and `titleFor()` for the on-screen graphic. `applyShow()` switches shows. `stored.ts` reads the project's saved title.
+- `lib/interview/`: `TakeSpec`, prompt builders for Two-shot / Cuts / Solo, host-from-Cast, and `twoshot.ts` (starting image then image-to-video), `batch.ts` (queue up to 10 episodes).
 - `lib/recast/`: staged, resumable Recast job (`pipeline.ts`), limits and cost maths, prompts, browser frame extraction, and the optional voice stage (`voice.ts`).
-- `lib/timeline/`: project model and pure edit operations (`ops.ts`), chains and transitions, export via `@remotion/web-renderer`.
+- `lib/timeline/`: project model and pure edit operations (`ops.ts`, including `assembleBestOf`), chains and transitions, export via `@remotion/web-renderer`.
 - `lib/ideas.ts` + `lib/questionBank.ts`: take ideas for the Take tab.
 
 ## Rules that matter
@@ -33,7 +34,8 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 - **No live spend without approval.** Live scripts (`scripts/live-*.ts`) are dry runs by default and need `--run` plus a cap. Do not run them without the user's say-so.
 - **Say what is verified.** Tests and stubbed browser runs prove plumbing, not video quality. Label stubbed screenshots as stubbed.
 - Prompts: the transit card is the only microphone; no real mic, no logos. Each city has its own card (`places/cities.ts`); never hard-code "MetroCard".
-- The web renderer supports only a CSS subset (no `backdrop-filter`, 3D transforms, inset shadows). Verify any new overlay with a real export (`scripts/export-title-test.mjs`).
+- The web renderer supports only a CSS subset (no `backdrop-filter`, 3D transforms, inset shadows). Verify any new overlay with a real export (`scripts/export-show-test.mjs` drives the UI to pick a show and exports a real frame; the graphic is computed by the app, so tests must choose the show through the UI).
+- Anything that adds clips from a long async loop must read the timeline with `getProject()` after the await, never from a captured `project` (a stale copy drops earlier clips).
 
 ## Sandbox gotchas
 
