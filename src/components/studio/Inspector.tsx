@@ -10,7 +10,10 @@ import { BatchBox } from './BatchBox';
 import { SHOWS, TONE_LABEL, showOf, titleFor } from '../../lib/shows';
 import type { StoredTitle } from '../../lib/shows/stored';
 import { clsx } from '../../lib/format';
-import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles, UserRound } from 'lucide-react';
+import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles, UserRound, Lock } from 'lucide-react';
+import { UnlockPrompt } from '../UnlockPrompt';
+import { useBilling } from '../../lib/billing/useBilling';
+import { showLocked, type Feature } from '../../lib/billing/features';
 import type { CharacterBible } from '../../lib/types';
 import type { ClipJob } from '../../lib/muapi/jobs';
 import type { Clip } from '../../lib/timeline/types';
@@ -32,6 +35,8 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
   captionCount: number; captionState: { busy: boolean; error: string }; onGenerateCaptions: () => void; canGenerate: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('take');
+  const { owned, has } = useBilling();
+  const [unlock, setUnlock] = useState<Feature | null>(null);
   const [lastClip, setLastClip] = useState<string>();
   const [playingSfx, setPlayingSfx] = useState<string>();
   const audioEl = useRef<HTMLAudioElement | null>(null);
@@ -60,10 +65,13 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
           <div><Label>Show</Label>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
               {SHOWS.map(sh => (
-                <button key={sh.id} onClick={() => set('show', sh.id)} aria-pressed={spec.show === sh.id} title={sh.blurb}
-                  className={clsx('rounded-lg border px-2.5 py-1.5 text-[12px] transition', spec.show === sh.id ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-850 text-zinc-400 hover:border-white/15 hover:text-zinc-200')}>{sh.label}</button>
+                <button key={sh.id} onClick={() => { if (showLocked(sh.id, owned)) setUnlock('happiness'); else { setUnlock(null); set('show', sh.id); } }} aria-pressed={spec.show === sh.id} title={sh.blurb}
+                  className={clsx('inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[12px] transition', spec.show === sh.id ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-850 text-zinc-400 hover:border-white/15 hover:text-zinc-200')}>
+                  {sh.label}{showLocked(sh.id, owned) && <Lock aria-label="locked" className="h-3 w-3 text-zinc-500" />}
+                </button>
               ))}
             </div>
+            {unlock === 'happiness' && <UnlockPrompt feature="happiness" onClose={() => setUnlock(null)} className="mt-2" />}
             <p className="mt-1.5 text-[11px] text-zinc-600">{show.blurb}</p>
           </div>
           {show.editableQuestion && (
@@ -107,7 +115,8 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
 
         {tab === 'model' && (<>
           <div><Label>Interview format</Label>
-            <Segmented value={spec.format} onChange={v => set('format', v)} options={FORMATS.map(f => ({ value: f.id, label: f.label, hint: f.hint }))} />
+            <Segmented value={spec.format} onChange={v => { if (v === 'cuts' && !has('cuts')) setUnlock('cuts'); else { setUnlock(null); set('format', v); } }} options={FORMATS.map(f => ({ value: f.id, label: f.id === 'cuts' && !has('cuts') ? `${f.label} 🔒` : f.label, hint: f.hint }))} />
+            {unlock === 'cuts' && <UnlockPrompt feature="cuts" onClose={() => setUnlock(null)} className="mt-2" />}
             <p className="mt-2 text-[11px] text-zinc-600">{FORMATS.find(f => f.id === spec.format)?.hint}. Both people hold a transit card as the microphone.</p>
           </div>
           {spec.format === 'cuts' ? cutsSlot : (<>

@@ -7,6 +7,8 @@ import { clsx } from '../lib/format';
 import { muapi } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
 import { BLOCK_TEXT, CONFIRM_CREDITS, formatCredits, usdToCredits } from '../lib/credits';
+import { UnlockPrompt } from '../components/UnlockPrompt';
+import { useBilling } from '../lib/billing/useBilling';
 import { uploadMedia } from '../lib/storage';
 import { listCharacters } from '../lib/characters';
 import { getMediaInfo, readMediaInfo } from '../lib/timeline/media';
@@ -27,7 +29,9 @@ const credits = (n: number) => formatCredits(n);
 export function RecastPage() {
   const nav = useNavigate();
   const { generationBlock: block } = useAuth();
-  const canGenerate = !block; // can this account generate (signed in, email confirmed)
+  const { has, loaded: billingLoaded } = useBilling();
+  const locked = billingLoaded && !has('recast');
+  const canGenerate = !block && !locked; // signed in, email confirmed, and Recast unlocked
   const [source, setSource] = useState<Source | null>(null);
   const [sourceBusy, setSourceBusy] = useState(false);
   const [sourceErr, setSourceErr] = useState('');
@@ -179,6 +183,7 @@ export function RecastPage() {
         <h1 className="font-display text-2xl font-semibold tracking-tight text-white">Recast</h1>
         <p className="text-[13px] text-zinc-500">Replace the performer in a clip with someone new. The motion and camera stay. Give them their own voice, or keep the original soundtrack.</p>
       </div>
+      {locked && <UnlockPrompt feature="recast" className="mb-4" />}
       {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} {block === 'guest' && <Link to="/login" className="underline">Sign up or sign in</Link>}</div>}
 
       {resumable.length > 0 && !running && (

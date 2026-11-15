@@ -28,6 +28,7 @@ await page.route(`${SB}/**`, async r => {
   if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
   if (u.includes('/auth/v1/user')) return json(r, user);
   if (u.includes('/auth/v1/')) return json(r, { ...session, user });
+  if (u.includes('/rest/v1/entitlements')) return json(r, [{ key: 'pro_pack' }, { key: 'recast' }, { key: 'happiness' }]);
   if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 5000, subscription_tier: 'free' });
   if (u.includes('/rest/v1/clip_jobs')) {
     const id = new URL(u).searchParams.get('id')?.replace('eq.', '');

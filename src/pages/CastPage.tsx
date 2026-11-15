@@ -9,7 +9,9 @@ import { useVoices } from '../lib/muapi/useVoices';
 import { SPEED_RANGE, TTS_SLUG, buildTtsInput, clampSpeed, type VoiceProvider } from '../lib/muapi/voices';
 import { runModel } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
-import { BLOCK_TEXT } from '../lib/credits';
+import { BLOCK_TEXT, usdToCredits } from '../lib/credits';
+import { UnlockPrompt } from '../components/UnlockPrompt';
+import { useBilling } from '../lib/billing/useBilling';
 import type { CharacterBible } from '../lib/types';
 
 const SAMPLE_LINE = "So what's ur take? Honestly, pineapple belongs on pizza.";
@@ -80,6 +82,8 @@ export function CastPage() {
 }
 
 function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { character: CharacterBible; canGenerate: boolean; onSaved: () => void; onDeleted: () => void }) {
+  const { has, loaded: billingLoaded } = useBilling();
+  const voicesLocked = billingLoaded && !has('voices');
   const [c, setC] = useState(character);
   const [busy, setBusy] = useState<'' | 'upload' | 'generate' | 'save' | 'preview'>('');
   const [err, setErr] = useState('');
@@ -129,7 +133,7 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
               <Upload className="h-3.5 w-3.5" />Upload
               <input type="file" accept="image/*" className="sr-only" aria-label="Upload portrait" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run('upload', async () => { await persist({ portrait_url: await uploadPortrait(f) }); }); }} />
             </label>
-            <button disabled={!canGenerate || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~$0.03</button>
+            <button disabled={!canGenerate || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~{usdToCredits(0.03)} credits</button>
           </div>
         </div>
 
@@ -140,11 +144,12 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
               <option value="">Choose a voice…</option>
               {voices.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
             </select>
-            {provider === 'elevenlabs' && !live && <p className="mt-1 text-[11px] text-zinc-600">Showing a short list. Add your muapi key to load every voice.</p>}
+            {provider === 'elevenlabs' && !live && <p className="mt-1 text-[11px] text-zinc-600">Showing a short list of voices.</p>}
           </div>
           <div><Label hint={`${clampSpeed(provider, c.voice_speed).toFixed(2)}x`}>Speed</Label>
             <input type="range" className="w-full" min={lo} max={hi} step={0.05} value={clampSpeed(provider, c.voice_speed)} onChange={e => set('voice_speed', Number(e.target.value))} onMouseUp={() => persist({ voice_speed: c.voice_speed })} onTouchEnd={() => persist({ voice_speed: c.voice_speed })} onKeyUp={() => persist({ voice_speed: c.voice_speed })} aria-label="Voice speed" /></div>
-          <button disabled={!canGenerate || !c.voice_id || (busy !== '' && busy !== 'preview')} onClick={preview} className="flex h-9 items-center gap-2 rounded-xl bg-white/5 px-3 text-[13px] font-medium text-zinc-100 hover:bg-white/10 disabled:opacity-40">
+          {voicesLocked && <UnlockPrompt feature="voices" />}
+          <button disabled={!canGenerate || voicesLocked || !c.voice_id || (busy !== '' && busy !== 'preview')} onClick={preview} className="flex h-9 items-center gap-2 rounded-xl bg-white/5 px-3 text-[13px] font-medium text-zinc-100 hover:bg-white/10 disabled:opacity-40">
             {busy === 'preview' ? <Loader2 className="h-4 w-4 animate-spin" /> : previewing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{previewing ? 'Stop' : 'Preview voice'}
           </button>
           <div className="grid gap-3 sm:grid-cols-2">

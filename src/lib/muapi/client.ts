@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import { extractError, extractMediaUrl, normalizeStatus, pickMessage } from './result';
 export { pickMessage };
-import { AccountRequiredError, InsufficientCreditsError, publishBalance } from '../credits';
+import { AccountRequiredError, InsufficientCreditsError, LockedFeatureError, publishBalance } from '../credits';
 
 export type PredictionStatus = 'queued' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export interface Prediction {
@@ -33,12 +33,13 @@ export async function interpretGatewayFailure(error: { message?: string; context
   const ctx = error.context as Response | undefined;
   if (ctx && typeof ctx.clone === 'function') {
     try {
-      const b = await ctx.clone().json() as { code?: string; needed?: unknown; balance?: unknown; error?: unknown };
+      const b = await ctx.clone().json() as { code?: string; needed?: unknown; balance?: unknown; error?: unknown; entitlement?: unknown };
       if (b.code === 'insufficient_credits') {
         const balance = Number(b.balance) || 0;
         publishBalance(balance);
         return new InsufficientCreditsError(Number(b.needed) || balance + 1, balance);
       }
+      if (b.code === 'locked' && typeof b.entitlement === 'string') return new LockedFeatureError(b.entitlement, typeof b.error === 'string' ? b.error : 'This feature is not unlocked.');
       if ((b.code === 'account_required' || b.code === 'verify_email') && typeof b.error === 'string') return new AccountRequiredError(b.code, b.error);
     } catch { /* not JSON: fall through to the generic message */ }
   }

@@ -5,6 +5,9 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { BLOCK_TEXT, formatCredits } from '../lib/credits';
 import { checkAdmin } from '../lib/admin';
+import { loadOrders, startCheckout, type Order, type Product } from '../lib/billing';
+import { PACK_NAMES, formatPrice } from '../lib/billing/features';
+import { useBilling } from '../lib/billing/useBilling';
 
 interface Row { id: number; delta: number; kind: string; reason: string; created_at: string }
 
@@ -16,6 +19,15 @@ export function CreditsCard() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const { products, owned, loaded: billingLoaded } = useBilling();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [buying, setBuying] = useState('');
+  const [buyError, setBuyError] = useState('');
+  useEffect(() => { if (user && !user.is_anonymous) loadOrders().then(setOrders).catch(() => setOrders([])); }, [user]);
+  async function buy(p: Product) {
+    setBuying(p.key); setBuyError('');
+    try { await startCheckout(p.key); } catch (e) { setBuyError(e instanceof Error ? e.message : 'Could not start checkout.'); setBuying(''); }
+  }
   const balance = profile?.credits_balance ?? 0;
   useEffect(() => { if (user && !user.is_anonymous) checkAdmin().then(setIsAdmin); }, [user]);
 
@@ -36,12 +48,49 @@ export function CreditsCard() {
           <p className="tnum text-3xl font-semibold text-white" data-testid="credit-balance">{balance.toLocaleString('en-US')}</p>
           <p className="text-[12px] text-zinc-500">credits available. 1 credit is about one cent of generation.</p>
         </div>
-        <button disabled title="Credit packs arrive with checkout" className="h-9 rounded-xl border border-line bg-ink-800 px-4 text-[12px] font-medium text-zinc-500">Buy credits · coming soon</button>
       </div>
       {generationBlock && (
         <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200">
           {BLOCK_TEXT[generationBlock]} {generationBlock === 'guest' && <Link to="/login" className="underline">Sign up or sign in</Link>}
         </p>
+      )}
+      <div className="mt-4" aria-label="Buy credits">
+        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Buy credits and unlocks</p>
+        {billingLoaded && products.length === 0 && <p className="text-[12px] text-zinc-600">Nothing is for sale right now.</p>}
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {products.map(p => {
+            const owns = p.entitlements.length > 0 && p.entitlements.every(k => owned.includes(k));
+            return (
+              <li key={p.key} className="flex flex-col justify-between gap-2 rounded-xl border border-line bg-ink-800 p-3">
+                <div>
+                  <p className="text-[13px] font-medium text-white">{p.name}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    {[p.credits > 0 ? `${p.credits.toLocaleString('en-US')} credits` : '', ...p.entitlements.map(k => PACK_NAMES[k] ?? k)].filter(Boolean).join(' + ')}
+                  </p>
+                  {p.description && <p className="mt-1 text-[11px] text-zinc-600">{p.description}</p>}
+                </div>
+                <button disabled={!!buying || owns || !!generationBlock} onClick={() => buy(p)} className="h-8 rounded-lg bg-accent px-3 text-[12px] font-semibold text-black disabled:opacity-50" aria-label={owns ? `${p.name} unlocked` : `Buy ${p.name}`}>
+                  {owns ? 'Unlocked' : buying === p.key ? 'Opening checkout…' : `Buy · ${formatPrice(p.price_cents, p.currency)}`}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        {buyError && <p className="mt-2 text-[12px] text-red-300" role="alert">{buyError}</p>}
+        <p className="mt-2 text-[11px] text-zinc-600">Payment is handled by Stripe. Credits and unlocks appear as soon as the payment is confirmed.</p>
+      </div>
+      {orders.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Orders</p>
+          <ul className="divide-y divide-line">
+            {orders.map(o => (
+              <li key={o.id} className="flex items-center justify-between gap-3 py-2 text-[12px]">
+                <span className="min-w-0"><span className="block truncate text-zinc-200">{o.product_name}</span><span className="block text-[11px] text-zinc-600">{new Date(o.created_at).toLocaleDateString()}</span></span>
+                <span className="shrink-0 text-right"><span className="tnum block text-zinc-300">{formatPrice(o.amount_cents, o.currency)}</span>{o.status !== 'paid' && <span className="block text-[11px] text-amber-300">{o.status}</span>}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {isAdmin && <p className="mt-3 text-[12px]"><Link to="/admin" className="text-accent underline">Admin tools</Link></p>}
       <div className="mt-4">

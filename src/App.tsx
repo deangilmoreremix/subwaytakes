@@ -11,6 +11,8 @@ const CastPage = lazy(() => import('./pages/CastPage').then(m => ({ default: m.C
 const RecastPage = lazy(() => import('./pages/RecastPage').then(m => ({ default: m.RecastPage })));
 const GalleryPage = lazy(() => import('./pages/GalleryPage').then(m => ({ default: m.GalleryPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const BillingSuccessPage = lazy(() => import('./pages/BillingResultPage').then(m => ({ default: m.BillingSuccessPage })));
+const BillingCancelPage = lazy(() => import('./pages/BillingResultPage').then(m => ({ default: m.BillingCancelPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
 function PageLoader() {
@@ -83,6 +85,8 @@ function AppContent() {
                     <Route path="/recast" element={<RecastPage />} />
                     <Route path="/library" element={<GalleryPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/billing/success" element={<BillingSuccessPage />} />
+                    <Route path="/billing/cancel" element={<BillingCancelPage />} />
                     <Route path="/admin" element={<AdminPage />} />
                     <Route path="*" element={<Navigate to="/create" replace />} />
                   </Routes>

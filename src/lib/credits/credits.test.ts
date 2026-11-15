@@ -22,7 +22,7 @@ describe('credit helpers', () => {
   });
   it('writes a helpful shortfall message', () => {
     const e = new InsufficientCreditsError(150, 40);
-    expect(e.message).toBe('You need 110 more credits (this costs 150, you have 40).');
+    expect(e.message).toBe('You need 110 more credits (this costs 150, you have 40). Add credits in Settings.');
     expect(e).toBeInstanceOf(Error);
   });
 });

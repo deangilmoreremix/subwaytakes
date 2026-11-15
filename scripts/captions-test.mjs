@@ -35,6 +35,7 @@ await page.route(`${SB}/**`, r => {
     if (b.path?.includes('predictions')) return json(r, { status: 'completed', text: mode === 'empty' ? '' : SRT });
     return json(r, { balance: 5 });
   }
+  if (u.includes('/rest/v1/entitlements')) return json(r, [{ key: 'pro_pack' }, { key: 'recast' }, { key: 'happiness' }]);
   if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 5000, subscription_tier: 'free' });
   return json(r, []);
 });

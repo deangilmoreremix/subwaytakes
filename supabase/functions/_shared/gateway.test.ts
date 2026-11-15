@@ -10,6 +10,7 @@ function world(opts: { balance?: number; usd?: number | null; settings?: Partial
   const w = {
     balance: opts.balance ?? 1000,
     holds: new Map<string, { amount: number; status: 'held' | 'settled' | 'released'; idem: string | null; hash: string; slug: string }>(),
+    owned: [] as string[], enforce: true as boolean, entitlementsThrows: false,
     hits: [] as Array<'free' | 'submit'>, hitError: null as string | null, quoteBodies: [] as unknown[], submitBodies: [] as unknown[],
     calls: new Map<string, { userId: string; holdId: string; status: 'submitted' | 'completed' | 'failed' }>(),
     submits: 0, estimates: 0, logs: [] as Array<[string, Record<string, unknown>]>,
@@ -21,8 +22,9 @@ function world(opts: { balance?: number; usd?: number | null; settings?: Partial
   };
   let n = 0;
   const deps: Deps = {
-    settings: async () => ({ margin: 2.5, maxCreditsPerCall: 1500, killSwitch: false, ...opts.settings }),
+    settings: async () => ({ margin: 2.5, maxCreditsPerCall: 1500, killSwitch: false, enforceEntitlements: w.enforce, ...opts.settings }),
     modelRule: async () => null,
+    entitlements: async () => { if (w.entitlementsThrows) throw new Error('db'); return w.owned; },
     hit: async (_u, kind) => { w.hits.push(kind); if (w.hitError) throw new GatewayDbError(w.hitError); },
     // mirrors credit_reserve: a reused key must carry the same request, and a refunded key can never start a new job
     reserve: async (_u, amount, slug, idem, hash) => {
@@ -292,7 +294,7 @@ describe('H2: an idempotency key means exactly one request', () => {
     expect(r).toMatchObject({ status: 409, body: { code: 'idem_mismatch' } }); expect(w.submits).toBe(1); expect(w.balance).toBe(850);
   });
   it('refuses the same key on a different model', async () => {
-    const { deps, w } = world();
+    const { deps, w } = world(); w.owned = ['pro_pack'];
     await handle(user, submit({ idempotencyKey: 'k' }), deps);
     const r = await handle(user, { method: 'POST', path: '/api/v1/omnihuman-2-0', body: { prompt: 'x' }, idempotencyKey: 'k' }, deps);
     expect(r).toMatchObject({ status: 409, body: { code: 'idem_mismatch' } }); expect(w.submits).toBe(1);
@@ -416,5 +418,50 @@ describe('M6: a submit that cannot be recorded is retried, then refunded and log
     const { deps, w } = world(); w.muapiThrows = true;
     await handle(user, submit(), deps);
     expect(w.balance).toBe(1000); expect(w.logs.some(([e]) => e === 'submit_uncertain')).toBe(true);
+  });
+});
+
+
+// ================================================================ Phase 8: paid features are enforced on the server
+describe('entitlements', () => {
+  const lipsync = { method: 'POST', path: '/api/v1/omnihuman-2-0', body: { prompt: 'x' } } as const;
+  const recast = { method: 'POST', path: '/api/v1/wan3.0-reference-to-video', body: { prompt: 'x' } } as const;
+  const tts = { method: 'POST', path: '/api/v1/elevenlabs-tts-turbo-2-5', body: { prompt: 'hi' } } as const;
+  it('refuses a locked model with 403 "locked" before quoting, reserving or calling muapi', async () => {
+    const { deps, w } = world();
+    const r = await handle(user, lipsync, deps);
+    expect(r).toMatchObject({ status: 403, body: { code: 'locked', entitlement: 'pro_pack' } });
+    expect(w.estimates).toBe(0); expect(w.submits).toBe(0); expect(w.holds.size).toBe(0); expect(w.balance).toBe(1000);
+  });
+  it('lets the right pack through, and charges as usual', async () => {
+    const { deps, w } = world(); w.owned = ['pro_pack'];
+    expect((await handle(user, lipsync, deps)).status).toBe(200); expect(w.submits).toBe(1);
+  });
+  it('a pack for something else does not unlock it', async () => {
+    const { deps, w } = world(); w.owned = ['recast'];
+    expect((await handle(user, lipsync, deps)).status).toBe(403); expect((await handle(user, recast, deps)).status).toBe(200); expect(w.submits).toBe(1);
+  });
+  it('shared models accept either pack (voices serve Cuts and the Recast voice stage)', async () => {
+    for (const k of ['pro_pack', 'recast']) { const { deps, w } = world(); w.owned = [k]; expect((await handle(user, tts, deps)).status).toBe(200); }
+    const { deps } = world(); expect((await handle(user, tts, deps)).status).toBe(403);
+  });
+  it('ordinary models stay open to anyone with credits', async () => {
+    const { deps } = world(); expect((await handle(user, submit(), deps)).status).toBe(200);
+  });
+  it('a revoked entitlement locks again at once (no caching)', async () => {
+    const { deps, w } = world(); w.owned = ['pro_pack']; expect((await handle(user, lipsync, deps)).status).toBe(200);
+    w.owned = []; expect((await handle(user, lipsync, deps)).status).toBe(403);
+  });
+  it('the operator switch turns enforcement off (test accounts, a free promotion)', async () => {
+    const { deps, w } = world(); w.enforce = false; expect((await handle(user, lipsync, deps)).status).toBe(200);
+  });
+  it('if the entitlement lookup fails the request is refused, never allowed through', async () => {
+    const { deps, w } = world(); w.entitlementsThrows = true;
+    const r = await handle(user, lipsync, deps);
+    expect(r.status).toBe(503); expect(w.submits).toBe(0); expect(w.balance).toBe(1000);
+  });
+  it('quotes stay available for locked models so the app can show the price next to the lock', async () => {
+    const { deps } = world(); const r = await handle(user, { method: 'POST', path: '/api/v1/models/omnihuman-2-0/estimate-cost', body: {} }, deps);
+    expect(r.status).toBe(200);
   });
 });

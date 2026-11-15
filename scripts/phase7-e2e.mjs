@@ -31,6 +31,7 @@ async function scenario({ who = 'member', balance = 1000, admin = false, failNex
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
     if (u.includes('/auth/v1/user')) return json(r, user);
     if (u.includes('/auth/v1/')) return json(r, { ...session, user });
+    if (u.includes('/rest/v1/entitlements')) return json(r, [{ key: 'pro_pack' }, { key: 'recast' }, { key: 'happiness' }]);
     if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: st.balance, subscription_tier: 'free' });
     if (u.includes('/rest/v1/credit_ledger')) return json(r, st.ledger);
     if (u.includes('/rest/v1/clip_jobs')) {
@@ -87,7 +88,7 @@ await scenario({ balance: 1000 }, async (page, st, dialogs) => {
   check('Settings shows the balance', (await page.getByTestId('credit-balance').innerText()) === '850');
   await page.getByText('Credits added').first().waitFor({ timeout: 10000 }).catch(() => {});
   check('Settings lists spend and grant rows', (await page.getByText('Generation').count()) >= 1 && (await page.getByText('Credits added').count()) >= 1);
-  check('checkout is clearly marked as coming soon', await page.getByRole('button', { name: /coming soon/ }).isDisabled());
+  check('the old "coming soon" checkout placeholder is gone (Phase 8 sells credits)', (await page.getByRole('button', { name: /coming soon/ }).count()) === 0);
   check('non-admins do not see the admin link', (await page.getByRole('link', { name: 'Admin tools' }).count()) === 0);
   await page.screenshot({ path: `${out}/02-settings-credits.png` });
 });

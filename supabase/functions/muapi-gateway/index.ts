@@ -33,9 +33,9 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 
 const deps: Deps = {
   settings: async () => {
-    const { data, error } = await admin.from("gateway_settings").select("margin, max_credits_per_call, kill_switch").eq("id", true).single();
+    const { data, error } = await admin.from("gateway_settings").select("margin, max_credits_per_call, kill_switch, enforce_entitlements").eq("id", true).single();
     if (error || !data) throw new Error("settings unavailable");
-    return { margin: Number(data.margin), maxCreditsPerCall: data.max_credits_per_call, killSwitch: data.kill_switch };
+    return { margin: Number(data.margin), maxCreditsPerCall: data.max_credits_per_call, killSwitch: data.kill_switch, enforceEntitlements: data.enforce_entitlements !== false };
   },
   modelRule: async (slug) => {
     const { data } = await admin.from("model_prices").select("enabled, margin, min_credits").eq("slug", slug).maybeSingle();
@@ -56,6 +56,7 @@ const deps: Deps = {
     const { data } = await admin.from("muapi_calls").select("user_id, status").eq("request_id", requestId).maybeSingle();
     return data ? { userId: data.user_id, status: data.status } : null;
   },
+  entitlements: async (userId) => (await rpc<string[] | null>("entitlements_for", { p_user: userId })) ?? [],
   settle: (requestId) => rpc<string>("credit_settle", { p_request_id: requestId }),
   release: (requestId, reason) => rpc<string>("credit_release", { p_request_id: requestId, p_reason: reason }),
   releaseHold: (holdId, reason) => rpc<string>("credit_release_hold", { p_hold: holdId, p_reason: reason }),

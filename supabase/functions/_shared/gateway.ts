@@ -10,13 +10,14 @@
 import { creditsFor, readEstimateUsd } from './pricing.ts';
 import { classify } from './paths.ts';
 import { isFailedBody, normalizeStatus, readRequestId } from './status.ts';
+import { hasAccess, requiredEntitlements } from './entitlements.ts';
 import { requestHash } from './hash.ts';
 import { isOurAccountProblem, predictionView, scrub } from './scrub.ts';
 
 export interface Caller { id: string; isAnonymous: boolean; emailConfirmed: boolean }
 export interface GatewayRequest { method: string; path: string; body?: unknown; idempotencyKey?: string }
 export interface GatewayResponse { status: number; body: unknown }
-export interface Settings { margin: number; maxCreditsPerCall: number; killSwitch: boolean }
+export interface Settings { margin: number; maxCreditsPerCall: number; killSwitch: boolean; enforceEntitlements?: boolean }
 export interface ModelRule { enabled: boolean; margin: number | null; minCredits: number }
 
 /** Thrown by the database layer; `code` is one of the codes raised by the credit functions. */
@@ -37,6 +38,8 @@ export interface Deps {
   release(requestId: string, reason: string): Promise<string>;
   releaseHold(holdId: string, reason: string): Promise<string>;
   balance(userId: string): Promise<number>;
+  /** Active entitlement keys the user has bought or been given. */
+  entitlements(userId: string): Promise<string[]>;
   /** Talks to muapi with the SERVER key. Throws on a network error. */
   muapi(method: 'GET' | 'POST', path: string, body?: unknown): Promise<{ status: number; json: unknown }>;
   /** Structured log. Never pass keys, prompts or request bodies. */
@@ -149,6 +152,14 @@ export async function handle(caller: Caller | null, req: GatewayRequest, deps: D
   // ---- submit: the paid path
   if (settings.killSwitch) return err(503, 'killed', 'Generation is paused for maintenance. You were not charged.');
   if (!isObj(req.body)) return err(400, 'bad_request', 'The request body must be an object.');
+
+  // Paid features: checked before anything is quoted, reserved or sent to muapi.
+  if (settings.enforceEntitlements !== false && requiredEntitlements(route.slug)) {
+    let owned: string[];
+    try { owned = await deps.entitlements(caller.id); } catch { return err(503, 'service_unavailable', 'The service is temporarily unavailable. Try again.'); }
+    const access = hasAccess(route.slug, owned);
+    if (!access.ok) return err(403, 'locked', 'This feature is part of a pack you have not unlocked. You were not charged.', { entitlement: access.needs[0], entitlements: access.needs });
+  }
 
   const q = await quote(route.slug, req.body, deps, settings);
   if ('status' in q) return q;

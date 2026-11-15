@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import { Label, inputCls } from '../components/studio/ui';
 import { adminCall, checkAdmin } from '../lib/admin';
+import { AdminBilling } from '../components/AdminBilling';
 
 interface Stats { credits_granted: number; credits_spent_net: number; credits_outstanding: number; est_muapi_usd_completed: number; est_muapi_usd_24h: number; calls_24h: number; failed_24h: number; open_holds: number }
 interface Settings { margin: number; max_credits_per_call: number; max_calls_per_minute: number; max_open_holds: number; daily_credit_cap: number; kill_switch: boolean }
@@ -75,6 +76,8 @@ export function AdminPage() {
             <ul className="mt-2 divide-y divide-line text-[12px]">{lookup.ledger.map(r => <li key={r.id} className="flex justify-between gap-3 py-1.5"><span className="min-w-0 truncate text-zinc-400">{r.kind} · {r.reason}</span><span className="tnum text-zinc-200">{r.delta > 0 ? '+' : ''}{r.delta}</span></li>)}</ul></div>
         )}
       </section>
+
+      <AdminBilling />
 
       <section className="rounded-2xl border border-line bg-ink-850 p-5" aria-label="Gateway settings">
         <div className="flex items-center justify-between"><Label>Gateway</Label>

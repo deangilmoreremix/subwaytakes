@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { adminHandle, type AdminDeps } from './admin.ts';
 
+const ORDER = '11111111-1111-1111-1111-111111111111';
 function setup(isAdmin = true) {
   const calls: Array<[string, unknown[]]> = []; const logs: unknown[] = [];
   const deps: AdminDeps = {
@@ -13,6 +14,15 @@ function setup(isAdmin = true) {
     getSettings: async () => ({ margin: 2.5 }),
     setSettings: async p => { calls.push(['setSettings', [p]]); },
     setModel: async (s, p) => { calls.push(['setModel', [s, p]]); },
+    billingStats: async () => ({ paid_cents: 3700 }),
+    listProducts: async () => [{ key: 'starter' }],
+    setProduct: async (k, p) => { calls.push(['setProduct', [k, p]]); if (k === 'ghost') throw new Error('not_found'); if (p.credits === 0) throw new Error('check'); },
+    listOrders: async () => [{ id: 'o1' }],
+    listEntitlements: async () => ['pro_pack'],
+    setEntitlement: async (...a) => { calls.push(['setEntitlement', a]); },
+    paidOrderPayment: async id => (id === ORDER ? { paymentIntent: 'pi_1', userId: 'u-maya' } : null),
+    stripeRefund: async pi => { calls.push(['refund', [pi]]); if (pi === 'pi_fail') throw new Error('x'); },
+    audit: async (...a) => { calls.push(['audit', a]); },
     newRef: () => 'ref-1',
     log: (e, d) => { logs.push([e, d]); },
   };
@@ -93,5 +103,67 @@ describe('lookup, stats and settings', () => {
     expect(calls[0]).toEqual(['setModel', ['veo3.1-text-to-video', { enabled: false, margin: 4 }]]);
     expect((await adminHandle(admin, { action: 'set_model', slug: '../x', enabled: true }, deps)).status).toBe(400);
     expect((await adminHandle(admin, { action: 'set_model', slug: 'ok' }, deps)).status).toBe(400);
+  });
+});
+
+
+describe('billing admin actions', () => {
+  it('shows stats and products', async () => {
+    const { deps } = setup(); expect(await adminHandle(admin, { action: 'billing' }, deps)).toMatchObject({ status: 200, body: { stats: { paid_cents: 3700 }, products: [{ key: 'starter' }] } });
+  });
+  it('lists a user\'s orders and entitlements', async () => {
+    const { deps } = setup();
+    expect(await adminHandle(admin, { action: 'orders', email: 'maya@example.com' }, deps)).toMatchObject({ status: 200, body: { orders: [{ id: 'o1' }], entitlements: ['pro_pack'] } });
+    expect((await adminHandle(admin, { action: 'orders', email: 'nobody@example.com' }, deps)).status).toBe(404);
+  });
+  it('edits a product with validated fields mapped to columns', async () => {
+    const { deps, calls } = setup();
+    const r = await adminHandle(admin, { action: 'set_product', key: 'starter', patch: { priceCents: 4900, credits: 2500, active: false, entitlements: ['pro_pack'], name: ' Starter ' } }, deps);
+    expect(r.status).toBe(200); expect(calls.find(c => c[0] === 'setProduct')![1]).toEqual(['starter', { price_cents: 4900, credits: 2500, active: false, entitlements: ['pro_pack'], name: 'Starter' }]);
+  });
+  it.each([[{ priceCents: 10 }], [{ priceCents: 99.5 }], [{ credits: -1 }], [{ active: 'yes' }], [{ entitlements: ['Bad Key'] }], [{ entitlements: 'pro_pack' }], [{ name: '' }], [{}]])('rejects bad product patch %j', async patch => {
+    const { deps, calls } = setup(); expect((await adminHandle(admin, { action: 'set_product', key: 'starter', patch }, deps)).status).toBe(400); expect(calls.some(c => c[0] === 'setProduct')).toBe(false);
+  });
+  it('maps unknown product and constraint failures', async () => {
+    const { deps } = setup();
+    expect((await adminHandle(admin, { action: 'set_product', key: 'ghost', patch: { active: true } }, deps)).status).toBe(404);
+    expect((await adminHandle(admin, { action: 'set_product', key: 'starter', patch: { credits: 0 } }, deps)).status).toBe(400);
+    expect((await adminHandle(admin, { action: 'set_product', key: '../x', patch: { active: true } }, deps)).status).toBe(400);
+  });
+  it('grants and revokes an entitlement for a user', async () => {
+    const { deps, calls } = setup();
+    expect((await adminHandle(admin, { action: 'set_entitlement', email: 'maya@example.com', key: 'recast', on: true }, deps)).status).toBe(200);
+    expect(calls.find(c => c[0] === 'setEntitlement')![1]).toEqual(['u-maya', 'recast', true]);
+    expect((await adminHandle(admin, { action: 'set_entitlement', email: 'maya@example.com', key: 'recast', on: 'yes' }, deps)).status).toBe(400);
+    expect((await adminHandle(admin, { action: 'set_entitlement', email: 'x@example.com', key: 'recast', on: true }, deps)).status).toBe(404);
+  });
+  it('refunds a paid order through Stripe and leaves credits to the webhook', async () => {
+    const { deps, calls } = setup();
+    const r = await adminHandle(admin, { action: 'refund', orderId: ORDER }, deps);
+    expect(r.status).toBe(200); expect(calls.find(c => c[0] === 'refund')![1]).toEqual(['pi_1']); expect(calls.some(c => c[0] === 'apply')).toBe(false);
+  });
+  it('refuses to refund an order that is not paid or a malformed id, and reports a Stripe failure', async () => {
+    const { deps } = setup();
+    expect((await adminHandle(admin, { action: 'refund', orderId: '22222222-2222-2222-2222-222222222222' }, deps)).status).toBe(404);
+    expect((await adminHandle(admin, { action: 'refund', orderId: 'nope' }, deps)).status).toBe(400);
+    const w = setup(); w.deps.paidOrderPayment = async () => ({ paymentIntent: 'pi_fail', userId: 'u' });
+    expect((await adminHandle(admin, { action: 'refund', orderId: ORDER }, w.deps)).status).toBe(502);
+  });
+  it('every money or unlock change is written to the audit trail with the acting admin', async () => {
+    const { deps, calls } = setup();
+    await adminHandle(admin, { action: 'set_product', key: 'starter', patch: { priceCents: 4900 } }, deps);
+    await adminHandle(admin, { action: 'set_entitlement', email: 'maya@example.com', key: 'recast', on: true }, deps);
+    await adminHandle(admin, { action: 'refund', orderId: ORDER }, deps);
+    expect(calls.filter(c => c[0] === 'audit').map(c => [c[1][0], c[1][1]])).toEqual([['a1', 'set_product'], ['a1', 'set_entitlement'], ['a1', 'refund']]);
+  });
+  it('only admins can use any of it', async () => {
+    const { deps, calls } = setup(false);
+    for (const a of ['billing', 'orders', 'set_product', 'set_entitlement', 'refund']) expect((await adminHandle(admin, { action: a, orderId: ORDER }, deps)).status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+  it('can switch entitlement enforcement', async () => {
+    const { deps, calls } = setup(); await adminHandle(admin, { action: 'set_settings', patch: { enforceEntitlements: false } }, deps);
+    expect(calls.find(c => c[0] === 'setSettings')![1]).toEqual([{ enforce_entitlements: false }]);
+    expect((await adminHandle(admin, { action: 'set_settings', patch: { enforceEntitlements: 'no' } }, deps)).status).toBe(400);
   });
 });

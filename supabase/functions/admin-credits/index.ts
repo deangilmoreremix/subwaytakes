@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { adminHandle, type AdminDeps } from "../_shared/admin.ts";
+import { refundPayment } from "../_shared/stripe.ts";
 
 // Operator tools: grant or adjust credits, look up a user, view money stats, change gateway limits, turn a model on or off.
 // Only users listed in admin_users may call it.
@@ -28,7 +29,7 @@ const deps: AdminDeps = {
     return data as number;
   },
   stats: async () => (await admin.rpc("credit_stats")).data,
-  getSettings: async () => (await admin.from("gateway_settings").select("margin, max_credits_per_call, max_calls_per_minute, max_open_holds, daily_credit_cap, kill_switch").eq("id", true).single()).data ?? {},
+  getSettings: async () => (await admin.from("gateway_settings").select("margin, max_credits_per_call, max_calls_per_minute, max_open_holds, daily_credit_cap, kill_switch, enforce_entitlements").eq("id", true).single()).data ?? {},
   setSettings: async (patch) => { const { error } = await admin.from("gateway_settings").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", true); if (error) throw new Error(error.message); },
   setModel: async (slug, p) => {
     const row: Record<string, unknown> = { slug };
@@ -38,6 +39,22 @@ const deps: AdminDeps = {
     const { error } = await admin.from("model_prices").upsert(row, { onConflict: "slug" });
     if (error) throw new Error(error.message);
   },
+  billingStats: async () => (await admin.rpc("billing_stats")).data,
+  listProducts: async () => (await admin.from("products").select("key, kind, name, description, price_cents, currency, credits, entitlements, active, sort").order("sort")).data ?? [],
+  setProduct: async (key, patch) => {
+    const { data, error } = await admin.from("products").update({ ...patch, updated_at: new Date().toISOString() }).eq("key", key).select("key");
+    if (error) throw new Error(error.code === "23514" ? "check" : error.message);
+    if (!data?.length) throw new Error("not_found");
+  },
+  listOrders: async (id, limit) => (await admin.from("orders").select("id, product_key, product_name, amount_cents, currency, credits, status, credits_clawed, clawback_shortfall, created_at, paid_at").eq("user_id", id).order("created_at", { ascending: false }).limit(limit)).data ?? [],
+  listEntitlements: async (id) => (await admin.rpc("entitlements_for", { p_user: id })).data ?? [],
+  setEntitlement: async (id, key, on) => { const { error } = await admin.rpc("entitlement_set", { p_user: id, p_key: key, p_on: on }); if (error) throw new Error(error.message); },
+  paidOrderPayment: async (orderId) => {
+    const { data } = await admin.from("orders").select("stripe_payment_intent, user_id, status").eq("id", orderId).maybeSingle();
+    return data && data.status === "paid" && data.stripe_payment_intent ? { paymentIntent: data.stripe_payment_intent, userId: data.user_id } : null;
+  },
+  stripeRefund: (pi) => refundPayment((u, init) => fetch(u, { ...init, signal: AbortSignal.timeout(20_000) }), Deno.env.get("STRIPE_SECRET_KEY") ?? "", pi),
+  audit: async (actor, action, detail) => { const { error } = await admin.rpc("billing_audit_write", { p_actor: actor, p_action: action, p_detail: detail }); if (error) throw new Error("audit_failed"); },
   newRef: () => crypto.randomUUID(),
   log: (event, data) => console.log(JSON.stringify({ event, ...data })),
 };

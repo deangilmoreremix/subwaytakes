@@ -53,6 +53,7 @@ async function newPage(browser, vp, { key, proxy = 'ok', withJobs = false, proje
       return proxy === 'ok' ? json(route, { balance: 42.5, currency: 'credits' }) : json(route, { error: 'Invalid API key (401 from muapi)' });
     }
     if (u.includes('/rest/v1/clip_jobs')) return json(route, m === 'GET' ? (withJobs ? jobs : []) : jobs[0]);
+    if (u.includes('/rest/v1/entitlements')) return json(route, [{ key: 'pro_pack' }, { key: 'recast' }, { key: 'happiness' }]);
     if (u.includes('/rest/v1/user_profiles')) return json(route, { id: 'u-1', display_name: 'Demo', credits_balance: 100, subscription_tier: 'free', default_city_style: 'nyc', default_duration: 6 });
     return json(route, []);
   });

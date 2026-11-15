@@ -26,6 +26,7 @@ async function open(viewport, signedIn) {
     if (!signedIn && u.includes('/auth/v1/')) return json(r, { message: 'Anonymous sign-ins are disabled' }, 422);
     if (u.includes('/auth/v1/user')) return json(r, user);
     if (u.includes('/auth/v1/')) return json(r, { ...session, user });
+    if (u.includes('/rest/v1/entitlements')) return json(r, [{ key: 'pro_pack' }, { key: 'recast' }, { key: 'happiness' }]);
     if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 5000, subscription_tier: 'free', default_city_style: 'london' });
     return json(r, []);
   });

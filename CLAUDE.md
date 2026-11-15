@@ -16,7 +16,7 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 
 ## Code map (`src/`)
 
-- `App.tsx`: routes `/login /create /cast /recast /library /settings`; everything else redirects to `/create`.
+- `App.tsx`: routes `/login /create /cast /recast /library /settings /billing/success /billing/cancel /admin`; everything else redirects to `/create`.
 - `pages/`: Create, Cast, Recast, Gallery (library), Settings, Auth.
 - `components/studio/`: the shell, inspector, preview, timeline editor, Place panel, export dialog, Remotion composition (`EpisodeComposition`, `TitleOverlay`).
 - `lib/muapi/`: `client.ts` (calls the `muapi-gateway` edge function, polls predictions; the key never reaches the browser), `registry.ts` (model slugs and limits, single source of truth), `result.ts` (tolerant response parsing), `jobs.ts` (`clip_jobs` rows, native pipeline), `lipsync.ts`, `voices.ts`.
@@ -27,11 +27,13 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 - `lib/timeline/`: project model and pure edit operations (`ops.ts`, including `assembleBestOf`), chains and transitions, export via `@remotion/web-renderer`.
 - `lib/credits/`: credit formatting, the balance store the gateway keeps current, `InsufficientCreditsError`, `generationBlock()`. 1 credit = $0.01; the server decides prices, the client only displays.
 - `supabase/functions/`: `muapi-gateway` (the only door to muapi: auth, price, reserve, submit, settle or refund), `admin-credits`, `reap-holds`; decision logic is in `_shared/` (pure, unit tested, no Deno APIs). `supabase/migrations/20261120000000_credits_ledger.sql` is the ledger.
+- `lib/billing/`: products, orders, entitlements store (`useBilling`), `features.ts` (which feature needs which unlock), `startCheckout`. `supabase/functions/`: `checkout-create`, `stripe-webhook`; logic in `_shared/billing.ts`, `stripeSig.ts`, `stripe.ts`, `entitlements.ts`; migration `20261121000000_checkout_entitlements.sql`.
 - `lib/ideas.ts` + `lib/questionBank.ts`: take ideas for the Take tab.
 
 ## Rules that matter
 
 - **Money rules.** `credits_balance` changes ONLY through the ledger functions (service_role). Never add a client-side credit write, a free-credit default, or a code path that calls muapi without the gateway. A paid call is reserved first and refunded exactly once on failure. If a price cannot be determined, refuse; never guess. Customers never see muapi dollars or the margin. Any change to the migration must keep `scripts/test-credits-sql.sh` passing (it also races concurrent reserves).
+- **Checkout rules.** Credits are granted for a purchase ONLY by `order_fulfil`, called by the signature-verified Stripe webhook; never from the browser or from the success page. The price always comes from the `products` table. The webhook must verify the signature on the raw body, dedupe, match amount and currency to the order, and return 500 only for transient failures. Refunds and disputes go through `order_reverse` (claw back at most the remaining balance). Paid models are gated by `supabase/functions/_shared/entitlements.ts`; keep it in step with `src/lib/billing/features.ts` (a test checks).
 - **Gateway rules.** An idempotency key means exactly one request (same key + different body is refused; a refunded key never starts a new job). A job whose charge was refunded must never deliver its result. Customers get only scrubbed muapi fields (no prices, balances, account errors). Every attempt (free or paid) is counted by `credit_hit` before muapi is touched. Admin credit changes record the acting admin.
 - **No silent fallbacks.** Failures surface with muapi's real message. Never fabricate output or fall back to stock video.
 - **Never lose a paid result.** Later optional stages (for example the Recast voice stage) must fail soft and keep what was already paid for.

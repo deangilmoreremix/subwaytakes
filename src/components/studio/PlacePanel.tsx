@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Lock } from 'lucide-react';
 import { Label, Segmented, inputCls } from './ui';
 import { clsx } from '../../lib/format';
+import { UnlockPrompt } from '../UnlockPrompt';
+import { useBilling } from '../../lib/billing/useBilling';
+import { cityLocked } from '../../lib/billing/features';
 import { AMBIENCE, CITIES, CROWDS, NEIGHBORHOODS, NYC_LINES, SCENES, STREET_SCENES, TIMES, cityOf, placeLabel, stationsFor, type AmbienceId, type PlaceSpec } from '../../lib/places';
 
 const chip = (on: boolean) => clsx('rounded-lg border px-2.5 py-1.5 text-[12px] transition', on ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-850 text-zinc-400 hover:border-white/15 hover:text-zinc-200');
@@ -9,6 +12,8 @@ const chip = (on: boolean) => clsx('rounded-lg border px-2.5 py-1.5 text-[12px] 
 export function PlacePanel({ place, onChange }: { place: PlaceSpec; onChange: (p: PlaceSpec) => void }) {
   const [more, setMore] = useState(false);
   const set = (patch: Partial<PlaceSpec>) => onChange({ ...place, ...patch });
+  const { owned } = useBilling();
+  const [lockedCity, setLockedCity] = useState(false);
   const city = cityOf(place.city);
   const stations = stationsFor(place.city, place.line);
   const toggleAmb = (id: AmbienceId) => set({ ambience: place.ambience.includes(id) ? place.ambience.filter(a => a !== id) : [...place.ambience, id] });
@@ -25,13 +30,15 @@ export function PlacePanel({ place, onChange }: { place: PlaceSpec; onChange: (p
         <div><Label hint={`card: ${city.card}`}>City</Label>
           <div className="grid max-h-44 grid-cols-2 gap-1.5 overflow-y-auto pr-1" role="listbox" aria-label="City">
             {CITIES.map(c => (
-              <button key={c.id} role="option" aria-selected={c.id === place.city} onClick={() => set({ city: c.id, line: undefined, station: undefined })}
+              <button key={c.id} role="option" aria-selected={c.id === place.city} onClick={() => { if (cityLocked(c.id, owned)) { setLockedCity(true); return; } setLockedCity(false); set({ city: c.id, line: undefined, station: undefined }); }}
                 className={clsx(chip(c.id === place.city), 'flex items-center gap-2 text-left')}>
                 <span className="h-4 w-4 shrink-0 rounded-[4px]" style={{ background: `linear-gradient(135deg, ${c.swatch[0]} 50%, ${c.swatch[1]} 50%)` }} />
                 <span className="truncate">{c.label}</span>
+                {cityLocked(c.id, owned) && <Lock aria-label="locked" className="ml-auto h-3 w-3 shrink-0 text-zinc-500" />}
               </button>
             ))}
           </div>
+          {lockedCity && <UnlockPrompt feature="extra_cities" onClose={() => setLockedCity(false)} className="mt-2" />}
           <p className="mt-1.5 text-[10px] leading-snug text-zinc-600">{city.tagline}. Mic: {city.card}.</p>
         </div>
         <div><Label>Scene</Label>

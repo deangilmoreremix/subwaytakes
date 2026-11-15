@@ -10,6 +10,17 @@ export interface AdminDeps {
   getSettings(): Promise<Record<string, unknown>>;
   setSettings(patch: Record<string, unknown>): Promise<void>;
   setModel(slug: string, patch: { enabled?: boolean; margin?: number | null; minCredits?: number }): Promise<void>;
+  billingStats(): Promise<unknown>;
+  listProducts(): Promise<Array<Record<string, unknown>>>;
+  setProduct(key: string, patch: Record<string, unknown>): Promise<void>;
+  listOrders(userId: string, limit: number): Promise<Array<Record<string, unknown>>>;
+  listEntitlements(userId: string): Promise<string[]>;
+  setEntitlement(userId: string, key: string, on: boolean): Promise<void>;
+  /** The Stripe payment behind a paid order, or null when the order is unknown or not paid. */
+  paidOrderPayment(orderId: string): Promise<{ paymentIntent: string; userId: string } | null>;
+  stripeRefund(paymentIntent: string): Promise<void>;
+  /** Permanent record of an operator action that changes money or unlocks (who, what). */
+  audit(actorId: string, action: string, detail: Record<string, unknown>): Promise<void>;
   newRef(): string;
   log(event: string, data: Record<string, unknown>): void;
 }
@@ -66,11 +77,69 @@ export async function adminHandle(caller: AdminCaller | null, req: unknown, deps
       if ('maxCallsPerMinute' in p) { if (!isInt(p.maxCallsPerMinute, 1, 1000)) return bad('Calls per minute must be a whole number.'); out.max_calls_per_minute = p.maxCallsPerMinute; }
       if ('maxOpenHolds' in p) { if (!isInt(p.maxOpenHolds, 1, 200)) return bad('Open holds must be a whole number.'); out.max_open_holds = p.maxOpenHolds; }
       if ('dailyCreditCap' in p) { if (!isInt(p.dailyCreditCap, 1, 1_000_000)) return bad('Daily cap must be a whole number.'); out.daily_credit_cap = p.dailyCreditCap; }
+      if ('enforceEntitlements' in p) { if (typeof p.enforceEntitlements !== 'boolean') return bad('enforceEntitlements must be true or false.'); out.enforce_entitlements = p.enforceEntitlements; }
       if ('killSwitch' in p) { if (typeof p.killSwitch !== 'boolean') return bad('Kill switch must be true or false.'); out.kill_switch = p.killSwitch; }
       if (!Object.keys(out).length) return bad('Nothing to change.');
       await deps.setSettings(out);
       deps.log('admin_settings', { keys: Object.keys(out), by: caller.id });
       return { status: 200, body: await deps.getSettings() };
+    }
+    case 'billing': return { status: 200, body: { stats: await deps.billingStats(), products: await deps.listProducts() } };
+    case 'orders': {
+      const email = String(req.email ?? '').trim();
+      const id = email ? await deps.findUser(email) : null;
+      if (!id) return { status: 404, body: { error: 'No user with that email.' } };
+      return { status: 200, body: { orders: await deps.listOrders(id, 25), entitlements: await deps.listEntitlements(id) } };
+    }
+    case 'set_product': {
+      const key = String(req.key ?? '');
+      if (!/^[a-z0-9_]{2,40}$/.test(key)) return bad('Bad product key.');
+      const p = isObj(req.patch) ? req.patch : {};
+      const out: Record<string, unknown> = {};
+      if ('name' in p) { if (typeof p.name !== 'string' || !p.name.trim() || p.name.length > 80) return bad('Name is required (80 characters max).'); out.name = p.name.trim(); }
+      if ('description' in p) { if (typeof p.description !== 'string' || p.description.length > 300) return bad('Description is 300 characters max.'); out.description = p.description; }
+      if ('priceCents' in p) { if (!isInt(p.priceCents, 50, 1_000_000)) return bad('Price must be between 50 and 1000000 cents.'); out.price_cents = p.priceCents; }
+      if ('credits' in p) { if (!isInt(p.credits, 0, 1_000_000)) return bad('Credits must be a whole number from 0 to 1000000.'); out.credits = p.credits; }
+      if ('active' in p) { if (typeof p.active !== 'boolean') return bad('active must be true or false.'); out.active = p.active; }
+      if ('sort' in p) { if (!isInt(p.sort, 0, 10_000)) return bad('Sort must be a whole number.'); out.sort = p.sort; }
+      if ('entitlements' in p) {
+        if (!Array.isArray(p.entitlements) || p.entitlements.length > 10 || !p.entitlements.every(k => typeof k === 'string' && /^[a-z0-9_]{2,40}$/.test(k))) return bad('Entitlements must be a short list of keys like pro_pack.');
+        out.entitlements = p.entitlements;
+      }
+      if (!Object.keys(out).length) return bad('Nothing to change.');
+      try { await deps.setProduct(key, out); } catch (e) {
+        const m = e instanceof Error ? e.message : '';
+        if (m.includes('not_found')) return { status: 404, body: { error: 'No such product.' } };
+        if (m.includes('check')) return bad('A product must give credits or an unlock, and the numbers must be in range.');
+        throw e;
+      }
+      await deps.audit(caller.id, 'set_product', { key, patch: out });
+      deps.log('admin_product', { key, keys: Object.keys(out), by: caller.id });
+      return { status: 200, body: { products: await deps.listProducts() } };
+    }
+    case 'set_entitlement': {
+      const email = String(req.email ?? '').trim();
+      const key = String(req.key ?? '');
+      if (!email) return bad('Email is required.');
+      if (!/^[a-z0-9_]{2,40}$/.test(key)) return bad('Bad entitlement key.');
+      if (typeof req.on !== 'boolean') return bad('on must be true or false.');
+      const id = await deps.findUser(email);
+      if (!id) return { status: 404, body: { error: 'No user with that email.' } };
+      await deps.setEntitlement(id, key, req.on);
+      await deps.audit(caller.id, 'set_entitlement', { userId: id, key, on: req.on });
+      deps.log('admin_entitlement', { userId: id, key, on: req.on, by: caller.id });
+      return { status: 200, body: { entitlements: await deps.listEntitlements(id) } };
+    }
+    case 'refund': {
+      const orderId = String(req.orderId ?? '');
+      if (!/^[0-9a-f-]{36}$/.test(orderId)) return bad('Bad order id.');
+      const pay = await deps.paidOrderPayment(orderId);
+      if (!pay) return { status: 404, body: { error: 'That order is not a paid order.' } };
+      try { await deps.stripeRefund(pay.paymentIntent); } catch { return { status: 502, body: { error: 'Stripe did not accept the refund. Check the Stripe dashboard.' } }; }
+      await deps.audit(caller.id, 'refund', { orderId, userId: pay.userId });
+      deps.log('admin_refund', { orderId, userId: pay.userId, by: caller.id });
+      // The credits and unlocks are taken back when Stripe's refund webhook arrives, not here, so there is one path and one record.
+      return { status: 200, body: { ok: true, note: 'Refund sent. Credits and unlocks are removed when Stripe confirms it.' } };
     }
     case 'set_model': {
       const slug = String(req.slug ?? '');

@@ -21,7 +21,7 @@ export function usdToCredits(usd: number, margin = CREDIT_MARGIN): number {
 
 export class InsufficientCreditsError extends Error {
   constructor(public needed: number, public balance: number) {
-    super(`You need ${Math.max(0, needed - balance).toLocaleString('en-US')} more credits (this costs ${needed.toLocaleString('en-US')}, you have ${balance.toLocaleString('en-US')}).`);
+    super(`You need ${Math.max(0, needed - balance).toLocaleString('en-US')} more credits (this costs ${needed.toLocaleString('en-US')}, you have ${balance.toLocaleString('en-US')}). Add credits in Settings.`);
     this.name = 'InsufficientCreditsError';
   }
 }
@@ -55,3 +55,8 @@ export const BLOCK_TEXT = {
   guest: 'Create an account to generate.',
   unverified: 'Confirm your email address to generate. Check your inbox.',
 } as const;
+
+/** The gateway refused a model because the account has not unlocked the pack it belongs to. Nothing was charged. */
+export class LockedFeatureError extends Error {
+  constructor(public entitlement: string, message: string) { super(message); this.name = 'LockedFeatureError'; }
+}
