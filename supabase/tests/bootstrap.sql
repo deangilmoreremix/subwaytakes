@@ -42,6 +42,11 @@ BEGIN
 END $$;
 GRANT EXECUTE ON FUNCTION deduct_credits(uuid, integer) TO authenticated;
 
+-- the legacy token system, as shipped: SECURITY DEFINER, no owner check, executable by clients
+CREATE TABLE token_balances (user_id uuid PRIMARY KEY, monthly_tokens int DEFAULT 0, purchased_tokens int DEFAULT 0, used_this_month int DEFAULT 0);
+CREATE FUNCTION atomic_deduct_tokens(p_user_id uuid, p_amount int) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$ SELECT true $$;
+GRANT EXECUTE ON FUNCTION atomic_deduct_tokens(uuid, int) TO authenticated;
+
 -- Two users that existed BEFORE the migration, one with the old 100 free credits (legacy), one with none.
 INSERT INTO auth.users (id, email) VALUES ('00000000-0000-0000-0000-0000000000a1', 'legacy@example.com'), ('00000000-0000-0000-0000-0000000000a2', 'zero@example.com');
 INSERT INTO user_profiles (id, credits_balance) VALUES ('00000000-0000-0000-0000-0000000000a1', 100), ('00000000-0000-0000-0000-0000000000a2', 0);

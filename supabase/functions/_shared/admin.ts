@@ -5,7 +5,7 @@ export interface AdminDeps {
   findUser(email: string): Promise<string | null>;
   balance(userId: string): Promise<number>;
   ledger(userId: string, limit: number): Promise<Array<Record<string, unknown>>>;
-  apply(userId: string, delta: number, kind: 'grant' | 'adjust', reason: string, ref: string): Promise<number>;
+  apply(userId: string, delta: number, kind: 'grant' | 'adjust', reason: string, ref: string, actor: string): Promise<number>;
   stats(): Promise<unknown>;
   getSettings(): Promise<Record<string, unknown>>;
   setSettings(patch: Record<string, unknown>): Promise<void>;
@@ -48,12 +48,13 @@ export async function adminHandle(caller: AdminCaller | null, req: unknown, deps
       if (!id) return { status: 404, body: { error: 'No user with that email.' } };
       const ref = typeof req.ref === 'string' && req.ref.trim() ? `admin:${req.ref.trim().slice(0, 80)}` : `admin:${deps.newRef()}`;
       try {
-        const balance = await deps.apply(id, req.amount as number, req.action, reason.slice(0, 200), ref);
+        const balance = await deps.apply(id, req.amount as number, req.action, reason.slice(0, 200), ref, caller.id);
         deps.log('admin_credit', { action: req.action, userId: id, amount: req.amount, by: caller.id });
         return { status: 200, body: { balance } };
       } catch (e) {
         const m = e instanceof Error ? e.message : '';
         if (m.includes('would_go_negative')) return bad('That adjustment would take the balance below zero.');
+        if (m.includes('ref_conflict')) return bad('That reference was already used for a different credit change. Use a new reference.');
         throw e;
       }
     }

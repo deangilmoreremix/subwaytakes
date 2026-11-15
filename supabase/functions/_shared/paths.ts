@@ -7,7 +7,8 @@ export type PathKind =
   | { kind: 'submit'; slug: string }
   | { kind: 'denied' };
 
-const SLUG = '[\\w.-]+';
+// Lowercase only, and it must start with a letter or digit: '.', '..', '-x' and case variants are not model names.
+const SLUG = '[a-z0-9][a-z0-9._-]*';
 const POLL = new RegExp(`^/api/v1/predictions/([\\w-]+)/result$`);
 const ESTIMATE = new RegExp(`^/api/v1/models/(${SLUG})/estimate-cost$`);
 const META = new RegExp(`^/api/v1/models/(${SLUG})$`);
@@ -25,6 +26,6 @@ export function classify(method: string, path: string): PathKind {
   m = META.exec(path);
   if (m) return method === 'GET' ? { kind: 'meta', slug: m[1] } : { kind: 'denied' };
   m = SUBMIT.exec(path);
-  if (m && method === 'POST' && !NOT_MODELS.has(m[1].toLowerCase())) return { kind: 'submit', slug: m[1] };
+  if (m && method === 'POST' && !NOT_MODELS.has(m[1])) return { kind: 'submit', slug: m[1] };
   return { kind: 'denied' };
 }

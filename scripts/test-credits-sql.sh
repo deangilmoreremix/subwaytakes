@@ -28,6 +28,13 @@ echo "PASS: migration can be re-applied"
 
 "${PSQL[@]}" -f "$ROOT/supabase/tests/credits.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
 
+# ---- re-applying the migration AFTER launch (users with grants and spends) must not change anyone's balance or add ledger rows.
+BEFORE=$("${PSQL[@]}" -At -c "SELECT (SELECT count(*) FROM credit_ledger) || ',' || (SELECT sum(credits_balance) FROM user_profiles) || ',' || (SELECT count(*) FROM credit_ledger WHERE kind = 'opening')")
+"${PSQL[@]}" -f "$ROOT/supabase/migrations/20261120000000_credits_ledger.sql" >/dev/null 2>&1 || { echo "FAIL: re-apply after activity errored"; exit 1; }
+AFTER=$("${PSQL[@]}" -At -c "SELECT (SELECT count(*) FROM credit_ledger) || ',' || (SELECT sum(credits_balance) FROM user_profiles) || ',' || (SELECT count(*) FROM credit_ledger WHERE kind = 'opening')")
+BAD=$("${PSQL[@]}" -At -c "SELECT count(*) FROM user_profiles p WHERE p.credits_balance IS DISTINCT FROM (SELECT COALESCE(sum(delta), 0) FROM credit_ledger l WHERE l.user_id = p.id)")
+if [ "$BEFORE" = "$AFTER" ] && [ "$BAD" -eq 0 ]; then echo "PASS: re-applying the migration after launch changes no balance and adds no ledger rows ($AFTER)"; else echo "FAIL: re-apply after activity changed state ($BEFORE -> $AFTER, drifted users: $BAD)"; exit 1; fi
+
 # ---- concurrency: 12 sessions race to reserve 40 credits each from a 100 credit balance. At most 2 may win.
 "${PSQL[@]}" -c "INSERT INTO auth.users (id, email) VALUES ('00000000-0000-0000-0000-0000000000c1', 'race@example.com'); INSERT INTO user_profiles (id) VALUES ('00000000-0000-0000-0000-0000000000c1'); SET ROLE service_role; SELECT credit_apply('00000000-0000-0000-0000-0000000000c1', 100, 'grant', 'race', 'race-grant');" >/dev/null
 "${PSQL[@]}" -c "UPDATE gateway_settings SET max_open_holds = 50, max_calls_per_minute = 500;" >/dev/null

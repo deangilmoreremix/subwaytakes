@@ -9,7 +9,8 @@ import { normalizeStatus as clientStatus } from '../../../src/lib/muapi/result';
 function world(opts: { balance?: number; usd?: number | null; settings?: Partial<{ margin: number; maxCreditsPerCall: number; killSwitch: boolean }> } = {}) {
   const w = {
     balance: opts.balance ?? 1000,
-    holds: new Map<string, { amount: number; status: 'held' | 'settled' | 'released'; idem: string | null }>(),
+    holds: new Map<string, { amount: number; status: 'held' | 'settled' | 'released'; idem: string | null; hash: string; slug: string }>(),
+    hits: [] as Array<'free' | 'submit'>, hitError: null as string | null, quoteBodies: [] as unknown[], submitBodies: [] as unknown[],
     calls: new Map<string, { userId: string; holdId: string; status: 'submitted' | 'completed' | 'failed' }>(),
     submits: 0, estimates: 0, logs: [] as Array<[string, Record<string, unknown>]>,
     usd: opts.usd === undefined ? 0.6 : opts.usd,
@@ -22,11 +23,17 @@ function world(opts: { balance?: number; usd?: number | null; settings?: Partial
   const deps: Deps = {
     settings: async () => ({ margin: 2.5, maxCreditsPerCall: 1500, killSwitch: false, ...opts.settings }),
     modelRule: async () => null,
-    reserve: async (_u, amount, _slug, idem) => {
+    hit: async (_u, kind) => { w.hits.push(kind); if (w.hitError) throw new GatewayDbError(w.hitError); },
+    // mirrors credit_reserve: a reused key must carry the same request, and a refunded key can never start a new job
+    reserve: async (_u, amount, slug, idem, hash) => {
       if (w.reserveError) throw new GatewayDbError(w.reserveError);
-      if (idem) for (const [id, h] of w.holds) if (h.idem === idem) return { holdId: id, balance: w.balance, reused: true };
+      if (idem) for (const [id, h] of w.holds) if (h.idem === idem) {
+        if (h.hash !== hash || h.slug !== slug || h.amount !== amount) throw new GatewayDbError('idem_mismatch');
+        if (h.status === 'released') throw new GatewayDbError('idem_reused');
+        return { holdId: id, balance: w.balance, reused: true };
+      }
       if (w.balance < amount) throw new GatewayDbError('insufficient_credits');
-      const id = 'hold-' + ++n; w.balance -= amount; w.holds.set(id, { amount, status: 'held', idem }); return { holdId: id, balance: w.balance, reused: false };
+      const id = 'hold-' + ++n; w.balance -= amount; w.holds.set(id, { amount, status: 'held', idem, hash, slug }); return { holdId: id, balance: w.balance, reused: false };
     },
     attach: async (holdId, requestId) => { if (w.attachThrows) throw new Error('db down'); w.calls.set(requestId, { userId: 'u1', holdId, status: 'submitted' }); },
     callByHold: async holdId => { for (const [rid, c] of w.calls) if (c.holdId === holdId) return { requestId: rid }; return null; },
@@ -35,10 +42,10 @@ function world(opts: { balance?: number; usd?: number | null; settings?: Partial
     release: async rid => { const c = w.calls.get(rid)!; if (c.status === 'completed') return 'completed'; const h = w.holds.get(c.holdId)!; if (h.status === 'held') { h.status = 'released'; w.balance += h.amount; } c.status = 'failed'; return 'failed'; },
     releaseHold: async id => { const h = w.holds.get(id)!; if (h.status === 'held') { h.status = 'released'; w.balance += h.amount; } return h.status; },
     balance: async () => w.balance,
-    muapi: async (method, path) => {
-      if (path.endsWith('/estimate-cost')) { w.estimates++; if (w.estimateThrows) throw new Error('net'); return w.usd === null ? { status: 500, json: {} } : { status: 200, json: { cost: w.usd } }; }
+    muapi: async (method, path, _b) => {
+      if (path.endsWith('/estimate-cost')) { w.estimates++; w.quoteBodies.push(_b); if (w.estimateThrows) throw new Error('net'); return w.usd === null ? { status: 500, json: {} } : { status: 200, json: { cost: w.usd } }; }
       if (w.muapiThrows) throw new Error('net');
-      if (method === 'POST') { w.submits++; return w.muapiSubmit(); }
+      if (method === 'POST') { w.submits++; w.submitBodies.push(_b); return w.muapiSubmit(); }
       return w.muapiResult();
     },
     log: (event, data) => { w.logs.push([event, data]); },
@@ -249,5 +256,165 @@ describe('logging', () => {
   it('never logs prompts or keys', async () => {
     const { deps, w } = world(); await handle(user, submit({ body: { prompt: 'SECRET PROMPT TEXT' } }), deps);
     expect(JSON.stringify(w.logs)).not.toMatch(/SECRET PROMPT TEXT/);
+  });
+});
+
+
+// ================================================================ review findings (security review of the credits system)
+describe('H1: a refunded job can never deliver its result', () => {
+  const finished = () => ({ status: 200, json: { status: 'completed', outputs: ['https://cdn.muapi.ai/a.mp4'] } });
+  it('after the reaper refunded a job (call marked failed) polling returns a refund notice, not the video, and does not ask muapi', async () => {
+    const { deps, w } = world(); await handle(user, submit(), deps);
+    w.calls.get('req-1')!.status = 'failed'; w.holds.get('hold-1')!.status = 'released'; w.balance += 150; // what the reaper does
+    w.muapiResult = finished;
+    const r = await handle(user, poll(), deps);
+    expect(JSON.stringify(r.body)).not.toContain('cdn.muapi.ai'); expect(r.body).toMatchObject({ status: 'failed' }); expect(w.balance).toBe(1000);
+  });
+  it('a result that completes in the instant the reaper refunds is not delivered either (settle answers "failed")', async () => {
+    const { deps, w } = world(); await handle(user, submit(), deps);
+    w.muapiResult = finished;
+    const racing: Deps = { ...deps, settle: async () => 'failed' };
+    const r = await handle(user, poll(), racing);
+    expect(JSON.stringify(r.body)).not.toContain('cdn.muapi.ai'); expect(r.body).toMatchObject({ status: 'failed' });
+  });
+  it('a normal completed job is still delivered', async () => {
+    const { deps, w } = world(); await handle(user, submit(), deps);
+    w.muapiResult = finished;
+    expect(JSON.stringify((await handle(user, poll(), deps)).body)).toContain('cdn.muapi.ai');
+  });
+});
+
+describe('H2: an idempotency key means exactly one request', () => {
+  it('refuses the same key with a different body (no cheaper charge for a bigger job) and submits nothing more', async () => {
+    const { deps, w } = world();
+    await handle(user, submit({ idempotencyKey: 'k', body: { prompt: 'short' } }), deps);
+    const r = await handle(user, submit({ idempotencyKey: 'k', body: { prompt: 'a much bigger and pricier job' } }), deps);
+    expect(r).toMatchObject({ status: 409, body: { code: 'idem_mismatch' } }); expect(w.submits).toBe(1); expect(w.balance).toBe(850);
+  });
+  it('refuses the same key on a different model', async () => {
+    const { deps, w } = world();
+    await handle(user, submit({ idempotencyKey: 'k' }), deps);
+    const r = await handle(user, { method: 'POST', path: '/api/v1/omnihuman-2-0', body: { prompt: 'x' }, idempotencyKey: 'k' }, deps);
+    expect(r).toMatchObject({ status: 409, body: { code: 'idem_mismatch' } }); expect(w.submits).toBe(1);
+  });
+  it('a key whose attempt was refunded can never start a new, uncharged job', async () => {
+    const { deps, w } = world(); w.muapiSubmit = () => ({ status: 422, json: { detail: [{ msg: 'bad' }] } });
+    await handle(user, submit({ idempotencyKey: 'k' }), deps); expect(w.balance).toBe(1000); // refunded
+    w.muapiSubmit = () => ({ status: 200, json: { request_id: 'req-9' } });
+    const r = await handle(user, submit({ idempotencyKey: 'k' }), deps);
+    expect(r).toMatchObject({ status: 409, body: { code: 'idem_reused' } }); expect(w.submits).toBe(1);
+  });
+  it('a retry while the first call is still submitting (no job yet) is told "in progress" and never submits twice', async () => {
+    const { deps, w } = world();
+    let release!: () => void; const gate = new Promise<void>(r => { release = r; });
+    const slow: Deps = { ...deps, muapi: async (m, p, b) => { if (m === 'POST' && !p.endsWith('/estimate-cost')) await gate; return deps.muapi(m, p, b); } };
+    const first = handle(user, submit({ idempotencyKey: 'k' }), slow);
+    await new Promise(r => setTimeout(r, 5));
+    const retry = await handle(user, submit({ idempotencyKey: 'k' }), slow);
+    expect(retry).toMatchObject({ status: 409, body: { code: 'in_progress' } });
+    release(); await first; expect(w.submits).toBe(1); expect(w.balance).toBe(850);
+  });
+  it('the same body in a different key order is the same request', async () => {
+    const { deps, w } = world();
+    const a = await handle(user, submit({ idempotencyKey: 'k', body: { prompt: 'x', duration: 8 } }), deps);
+    const b = await handle(user, submit({ idempotencyKey: 'k', body: { duration: 8, prompt: 'x' } }), deps);
+    expect((b.body as { request_id: string }).request_id).toBe((a.body as { request_id: string }).request_id); expect(w.submits).toBe(1);
+  });
+});
+
+describe('M1/M2: every attempt is counted before muapi is touched', () => {
+  it('counts quotes, polls and metadata as free hits, and submits as submit hits', async () => {
+    const { deps, w } = world();
+    await handle(user, { method: 'POST', path: '/api/v1/models/x/estimate-cost', body: {} }, deps);
+    await handle(user, { method: 'GET', path: '/api/v1/models/x' }, deps);
+    await handle(user, submit(), deps); await handle(user, poll(), deps);
+    expect(w.hits).toEqual(['free', 'free', 'submit', 'free']);
+  });
+  it('a limited user costs muapi nothing: no quote, no submit', async () => {
+    const { deps, w } = world(); w.hitError = 'rate_limited';
+    for (const r of [submit(), poll(), { method: 'GET', path: '/api/v1/models/x' }, { method: 'POST', path: '/api/v1/models/x/estimate-cost', body: {} }]) {
+      expect((await handle(user, r, deps)).status).toBe(429);
+    }
+    expect(w.estimates + w.submits).toBe(0);
+  });
+  it('rejected submits still count (so refund loops cannot dodge the limit)', async () => {
+    const { deps, w } = world(); w.muapiSubmit = () => ({ status: 422, json: {} });
+    await handle(user, submit(), deps); await handle(user, submit(), deps);
+    expect(w.hits.filter(h => h === 'submit')).toHaveLength(2);
+  });
+  it('unconfirmed emails cannot reach ANY route, free ones included, and are not counted', async () => {
+    const { deps, w } = world(); const u = { ...user, emailConfirmed: false };
+    for (const r of [poll(), { method: 'GET', path: '/api/v1/models/x' }, { method: 'POST', path: '/api/v1/models/x/estimate-cost', body: {} }, submit()]) {
+      expect((await handle(u, r, deps)).status).toBe(403);
+    }
+    expect(w.hits).toHaveLength(0); expect(w.estimates).toBe(0);
+  });
+});
+
+describe('M3: customers never see muapi money, account state or raw upstream bodies', () => {
+  const dirty = { status: 'completed', outputs: ['https://cdn.muapi.ai/a.mp4'], cost: 0.6, price_usd: 0.6, balance: 12.5, credits: 99, account: { balance: 9 }, billing: { amount: 3 }, api_key: 'sk-secret', raw: '<html>upstream</html>' };
+  it('poll results keep only the fields the app uses', async () => {
+    const { deps, w } = world(); await handle(user, submit(), deps); w.muapiResult = () => ({ status: 200, json: dirty });
+    const body = JSON.stringify((await handle(user, poll(), deps)).body);
+    expect(body).toContain('cdn.muapi.ai'); expect(body).not.toMatch(/0\.6|12\.5|balance|billing|sk-secret|upstream|price|"cost"/i);
+  });
+  it('model metadata is scrubbed of prices and balances', async () => {
+    const { deps, w } = world(); w.muapiResult = () => ({ status: 200, json: { name: 'x', voices: ['a'], pricing: { usd: 1 }, cost: 2, nested: { balance: 5, ok: true } } });
+    const r = await handle(user, { method: 'GET', path: '/api/v1/models/x' }, deps);
+    expect(r.body).toEqual({ name: 'x', voices: ['a'], nested: { ok: true } });
+  });
+  it('a successful submit returns only the request id, status and our own credit numbers', async () => {
+    const { deps, w } = world(); w.muapiSubmit = () => ({ status: 200, json: { request_id: 'req-1', status: 'processing', cost: 0.6, balance: 12, extra: 'x' } });
+    const r = await handle(user, submit(), deps);
+    expect(r.body).toEqual({ request_id: 'req-1', status: 'processing', credits: { charged: 150, balance: 850 } });
+  });
+  it('our own muapi account problems on poll and metadata read as a generic outage', async () => {
+    const { deps, w } = world(); await handle(user, submit(), deps);
+    for (const status of [401, 402, 403]) {
+      w.muapiResult = () => ({ status, json: { detail: 'Insufficient balance on key sk-live-abc' } });
+      for (const r of [poll(), { method: 'GET', path: '/api/v1/models/x' }]) {
+        const out = await handle(user, r, deps);
+        expect(out.status).toBe(503); expect(JSON.stringify(out.body)).not.toMatch(/balance|sk-live|402|401|403/i);
+      }
+    }
+  });
+  it('an upstream HTML error page is never echoed', async () => {
+    const { deps, w } = world(); w.muapiSubmit = () => ({ status: 502, json: { raw: '<html>nginx bad gateway internal.host.example</html>' } });
+    const out = await handle(user, submit(), deps);
+    expect(JSON.stringify(out.body)).not.toMatch(/nginx|internal\.host|html/i);
+  });
+  it('validation messages for the customer still come through, scrubbed', async () => {
+    const { deps, w } = world(); w.muapiSubmit = () => ({ status: 422, json: { detail: [{ msg: 'prompt too long', loc: ['body', 'prompt'] }], balance: 5 } });
+    const out = await handle(user, submit(), deps);
+    expect(out.status).toBe(422); expect(JSON.stringify(out.body)).toContain('prompt too long'); expect(JSON.stringify(out.body)).not.toContain('balance');
+  });
+});
+
+describe('M4: only real lowercase model names reach muapi', () => {
+  it.each([['POST', '/api/v1/.'], ['POST', '/api/v1/..'], ['POST', '/api/v1/Veo3.1-Fast-Text-To-Video'], ['POST', '/api/v1/-x'], ['POST', '/api/v1/models/./estimate-cost'], ['GET', '/api/v1/models/.'], ['POST', '/api/v1/models/X/estimate-cost'], ['POST', '/api/v1/ACCOUNT']] as const)('denies %s %s', (m, p) => {
+    expect(classify(m, p).kind).toBe('denied');
+  });
+  it('still allows real slugs with dots, digits and dashes', () => {
+    for (const s of ['veo3.1-fast-text-to-video', 'seedance-2.5-omni-reference', 'wan3.0-reference-to-video', 'minimax-speech-2.6-turbo', 'kling-v3.0-pro-text-to-video']) expect(classify('POST', `/api/v1/${s}`)).toEqual({ kind: 'submit', slug: s });
+  });
+});
+
+describe('M6: a submit that cannot be recorded is retried, then refunded and logged for reconciliation', () => {
+  it('survives one transient attach failure without refunding', async () => {
+    const { deps, w } = world(); let fails = 1; const orig = deps.attach;
+    const flaky: Deps = { ...deps, attach: async (...a) => { if (fails-- > 0) throw new Error('blip'); return orig(...a); } };
+    const r = await handle(user, submit(), flaky);
+    expect(r.status).toBe(200); expect(w.balance).toBe(850); expect(w.calls.size).toBe(1);
+  });
+  it('after three failures refunds and logs the request id so the operator can reconcile', async () => {
+    const { deps, w } = world(); w.attachThrows = true;
+    const r = await handle(user, submit(), deps);
+    expect(r.status).toBe(500); expect(w.balance).toBe(1000);
+    expect(w.logs.some(([e, d]) => e === 'attach_failed' && d.requestId === 'req-1')).toBe(true);
+  });
+  it('a timeout on submit refunds and logs "uncertain" (muapi may have accepted it)', async () => {
+    const { deps, w } = world(); w.muapiThrows = true;
+    await handle(user, submit(), deps);
+    expect(w.balance).toBe(1000); expect(w.logs.some(([e]) => e === 'submit_uncertain')).toBe(true);
   });
 });

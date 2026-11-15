@@ -32,6 +32,7 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 ## Rules that matter
 
 - **Money rules.** `credits_balance` changes ONLY through the ledger functions (service_role). Never add a client-side credit write, a free-credit default, or a code path that calls muapi without the gateway. A paid call is reserved first and refunded exactly once on failure. If a price cannot be determined, refuse; never guess. Customers never see muapi dollars or the margin. Any change to the migration must keep `scripts/test-credits-sql.sh` passing (it also races concurrent reserves).
+- **Gateway rules.** An idempotency key means exactly one request (same key + different body is refused; a refunded key never starts a new job). A job whose charge was refunded must never deliver its result. Customers get only scrubbed muapi fields (no prices, balances, account errors). Every attempt (free or paid) is counted by `credit_hit` before muapi is touched. Admin credit changes record the acting admin.
 - **No silent fallbacks.** Failures surface with muapi's real message. Never fabricate output or fall back to stock video.
 - **Never lose a paid result.** Later optional stages (for example the Recast voice stage) must fail soft and keep what was already paid for.
 - **No live spend without approval.** Live scripts (`scripts/live-*.ts`) are dry runs by default and need `--run` plus a cap. Do not run them without the user's say-so.

@@ -11,7 +11,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Idempotency-Key",
 };
 const MUAPI = "https://api.muapi.ai";
-const DB_CODES = ["insufficient_credits", "killed", "rate_limited", "too_many_open", "daily_cap", "amount_too_large"];
+const DB_CODES = ["insufficient_credits", "killed", "rate_limited", "too_many_open", "daily_cap", "amount_too_large", "idem_mismatch", "idem_reused"];
 
 function reply(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
@@ -41,8 +41,9 @@ const deps: Deps = {
     const { data } = await admin.from("model_prices").select("enabled, margin, min_credits").eq("slug", slug).maybeSingle();
     return data ? { enabled: data.enabled, margin: data.margin === null ? null : Number(data.margin), minCredits: data.min_credits } : null;
   },
-  reserve: async (userId, amount, slug, idem) => {
-    const rows = await rpc<Array<{ hold_id: string; balance: number; reused: boolean }>>("credit_reserve", { p_user: userId, p_amount: amount, p_slug: slug, p_idem: idem });
+  hit: async (userId, kind) => { await rpc("credit_hit", { p_user: userId, p_kind: kind }); },
+  reserve: async (userId, amount, slug, idem, hash) => {
+    const rows = await rpc<Array<{ hold_id: string; balance: number; reused: boolean }>>("credit_reserve", { p_user: userId, p_amount: amount, p_slug: slug, p_idem: idem, p_hash: hash });
     const r = rows[0];
     return { holdId: r.hold_id, balance: r.balance, reused: r.reused };
   },

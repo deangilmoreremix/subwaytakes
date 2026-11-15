@@ -22,8 +22,8 @@ const deps: AdminDeps = {
   findUser: async (email) => { const { data } = await admin.rpc("credit_find_user", { p_email: email }); return (data as string | null) ?? null; },
   balance: async (id) => (await admin.from("user_profiles").select("credits_balance").eq("id", id).maybeSingle()).data?.credits_balance ?? 0,
   ledger: async (id, limit) => (await admin.from("credit_ledger").select("id, delta, kind, reason, ref, created_at").eq("user_id", id).order("id", { ascending: false }).limit(limit)).data ?? [],
-  apply: async (id, delta, kind, reason, ref) => {
-    const { data, error } = await admin.rpc("credit_apply", { p_user: id, p_delta: delta, p_kind: kind, p_reason: reason, p_ref: ref });
+  apply: async (id, delta, kind, reason, ref, actor) => {
+    const { data, error } = await admin.rpc("credit_apply", { p_user: id, p_delta: delta, p_kind: kind, p_reason: reason, p_ref: ref, p_actor: actor });
     if (error) throw new Error(error.message);
     return data as number;
   },

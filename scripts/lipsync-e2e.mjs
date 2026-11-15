@@ -36,6 +36,7 @@ const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gestur
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
 await ctx.addInitScript(s => { localStorage.setItem('sb-stub-auth-token', JSON.stringify(s)); localStorage.setItem('subwaytakes.muapi_key', 'mu_test'); }, session);
 const page = await ctx.newPage();
+page.on('dialog', d => { console.log('DIALOG:', d.message()); d.accept(); });
 page.on('pageerror', e => console.log('[pageerror]', String(e).slice(0, 200)));
 
 await page.route(`${MEDIA}/**`, r => { const n = new URL(r.request().url()).pathname.slice(1); return rangeBody(r, file(n), n.endsWith('.mp3') ? 'audio/mpeg' : n.endsWith('.png') ? 'image/png' : 'video/mp4'); });

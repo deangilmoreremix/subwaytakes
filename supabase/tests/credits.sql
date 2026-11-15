@@ -107,11 +107,16 @@ SET ROLE service_role;
 SELECT * FROM credit_reserve(:legacy, 10, 'x', 'open-1'); SELECT * FROM credit_reserve(:legacy, 10, 'x', 'open-2');
 SELECT pg_temp.fails('too many open holds', $q$ SELECT * FROM credit_reserve('00000000-0000-0000-0000-0000000000a1', 10, 'x', 'open-3') $q$, 'too_many_open');
 RESET ROLE;
-UPDATE gateway_settings SET max_open_holds = 10, max_calls_per_minute = 2;
-INSERT INTO muapi_calls (request_id, user_id, slug) VALUES ('rl-1', '00000000-0000-0000-0000-0000000000a1', 'x'), ('rl-2', '00000000-0000-0000-0000-0000000000a1', 'x');
+UPDATE gateway_settings SET max_open_holds = 10, max_calls_per_minute = 2, max_free_per_minute = 3;
 SET ROLE service_role;
-SELECT pg_temp.fails('per-minute rate limit', $q$ SELECT * FROM credit_reserve('00000000-0000-0000-0000-0000000000a1', 10, 'x', 'rate-1') $q$, 'rate_limited');
+SELECT credit_hit(:legacy, 'submit'); SELECT credit_hit(:legacy, 'submit');
+SELECT pg_temp.fails('submit attempts are limited per minute (counted before any muapi call)', $q$ SELECT credit_hit('00000000-0000-0000-0000-0000000000a1', 'submit') $q$, 'rate_limited');
+SELECT credit_hit(:legacy, 'free'); SELECT credit_hit(:legacy, 'free'); SELECT credit_hit(:legacy, 'free');
+SELECT pg_temp.fails('free calls (quotes, polls, metadata) are limited too', $q$ SELECT credit_hit('00000000-0000-0000-0000-0000000000a1', 'free') $q$, 'rate_limited');
+SELECT pg_temp.expect('limits are per user', (SELECT count(*) FROM (SELECT credit_hit('00000000-0000-0000-0000-0000000000a2', 'submit')) x) = 1);
+SELECT pg_temp.fails('only known kinds are accepted', $q$ SELECT credit_hit('00000000-0000-0000-0000-0000000000a1', 'other') $q$, 'bad_kind');
 RESET ROLE;
+DELETE FROM gateway_hits;
 UPDATE gateway_settings SET max_calls_per_minute = 30, daily_credit_cap = 100;
 SET ROLE service_role;
 SELECT pg_temp.fails('daily credit cap counts what was already spent today', $q$ SELECT * FROM credit_reserve('00000000-0000-0000-0000-0000000000a1', 90, 'x', 'daily-1') $q$, 'daily_cap');
@@ -122,13 +127,65 @@ SELECT pg_temp.fails('kill switch stops every reserve', $q$ SELECT * FROM credit
 RESET ROLE;
 UPDATE gateway_settings SET kill_switch = false;
 
+-- ================================================================ idempotency keys are bound to the exact request
+SET ROLE service_role;
+CREATE TEMP TABLE hk AS SELECT * FROM credit_reserve(:legacy, 50, 'veo3.1-fast-text-to-video', 'key-A', 'hash-cheap');
+SELECT pg_temp.expect('first use of a key reserves', (SELECT NOT reused FROM hk));
+SELECT pg_temp.expect('same key + same request returns the same hold, no second charge', (SELECT hold_id FROM credit_reserve(:legacy, 50, 'veo3.1-fast-text-to-video', 'key-A', 'hash-cheap')) = (SELECT hold_id FROM hk));
+SELECT pg_temp.fails('same key with a DIFFERENT body is refused (no cheaper charge for a bigger job)', $q$ SELECT * FROM credit_reserve('00000000-0000-0000-0000-0000000000a1', 50, 'veo3.1-fast-text-to-video', 'key-A', 'hash-expensive') $q$, 'idem_mismatch');
+SELECT pg_temp.fails('same key with a different price is refused', $q$ SELECT * FROM credit_reserve('00000000-0000-0000-0000-0000000000a1', 5, 'veo3.1-fast-text-to-video', 'key-A', 'hash-cheap') $q$, 'idem_mismatch');
+SELECT pg_temp.fails('same key on a different model is refused', $q$ SELECT * FROM credit_reserve('00000000-0000-0000-0000-0000000000a1', 50, 'omnihuman-2-0', 'key-A', 'hash-cheap') $q$, 'idem_mismatch');
+SELECT credit_release_hold((SELECT hold_id FROM hk), 'submit rejected');
+SELECT pg_temp.fails('a refunded key can never start a new, uncharged job', $q$ SELECT * FROM credit_reserve('00000000-0000-0000-0000-0000000000a1', 50, 'veo3.1-fast-text-to-video', 'key-A', 'hash-cheap') $q$, 'idem_reused');
+SELECT pg_temp.expect('keys are per user (another user may reuse the same text)', (SELECT hold_id FROM credit_reserve('00000000-0000-0000-0000-0000000000a2', 5, 'x', 'key-A', 'hash-cheap')) IS NOT NULL);
+SELECT credit_release_hold((SELECT id FROM credit_holds WHERE user_id = '00000000-0000-0000-0000-0000000000a2' AND idem_key = 'key-A'), 'cleanup');
+-- one muapi job per hold
+CREATE TEMP TABLE hk2 AS SELECT * FROM credit_reserve(:legacy, 10, 'x', 'key-B', 'h');
+SELECT credit_attach_request((SELECT hold_id FROM hk2), 'job-once', 0.1);
+SELECT pg_temp.fails('a hold cannot back two muapi jobs', $q$ SELECT credit_attach_request((SELECT id FROM credit_holds WHERE idem_key = 'key-B'), 'job-twice', 0.1) $q$, 'duplicate key');
+SELECT credit_settle('job-once');
+RESET ROLE;
+
+-- ================================================================ admin credit rules
+SET ROLE service_role;
+SELECT credit_apply(:zero, 10, 'grant', 'goodwill', 'g-1', '00000000-0000-0000-0000-0000000000a1');
+SELECT pg_temp.expect('an admin grant records who made it', (SELECT actor FROM credit_ledger WHERE ref = 'g-1') = '00000000-0000-0000-0000-0000000000a1');
+SELECT pg_temp.fails('reusing a ref with a different amount is an error, not a silent success', $q$ SELECT credit_apply('00000000-0000-0000-0000-0000000000a2', 99, 'grant', 'x', 'g-1') $q$, 'ref_conflict');
+SELECT pg_temp.expect('reusing a ref with the same amount is a harmless repeat', credit_apply(:zero, 10, 'grant', 'goodwill', 'g-1') = pg_temp.balance(:zero));
+RESET ROLE;
+
+-- ================================================================ profile safety
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
+UPDATE user_profiles SET display_name = 'Maya', updated_at = now() WHERE id = auth.uid();
+SELECT pg_temp.expect('the app can still touch updated_at when editing a profile', (SELECT display_name FROM user_profiles WHERE id = auth.uid()) = 'Maya');
+SELECT pg_temp.fails('a user cannot delete their own profile row (and with it the balance)', $q$ DELETE FROM user_profiles WHERE id = auth.uid() $q$, 'permission denied');
+SELECT pg_temp.fails('clients cannot read the attempt log', $q$ SELECT * FROM gateway_hits $q$, 'permission denied');
+SELECT pg_temp.fails('clients cannot read holds or calls', $q$ SELECT * FROM credit_holds $q$, 'permission denied');
+SELECT pg_temp.fails('the legacy token deduction cannot be called by clients any more', $q$ SELECT atomic_deduct_tokens(auth.uid(), 1) $q$, 'permission denied');
+RESET ROLE;
+-- the ledger refuses rows for a user with no profile instead of drifting
+INSERT INTO auth.users (id, email) VALUES ('00000000-0000-0000-0000-0000000000d1', 'noprofile@example.com');
+SELECT pg_temp.fails('a ledger row without a profile is an error (balance and ledger cannot drift)', $q$ INSERT INTO credit_ledger (user_id, delta, kind, reason) VALUES ('00000000-0000-0000-0000-0000000000d1', 5, 'grant', 'x') $q$, 'no profile');
+
 -- ================================================================ reaper
 UPDATE credit_holds SET created_at = now() - interval '2 hours' WHERE user_id = :legacy AND status = 'held';
+-- a stale hold WITH a muapi job must be left alone (the gateway asks muapi; refunding blindly would hand out free finished jobs)
 SET ROLE service_role;
-SELECT pg_temp.expect('reaper refunds stale holds and reports how many', credit_reap_holds(60) = 2);
-SELECT pg_temp.expect('reaper is idempotent', credit_reap_holds(60) = 0);
+CREATE TEMP TABLE hr AS SELECT * FROM credit_reserve(:legacy, 7, 'x', 'key-running', 'h');
+SELECT credit_attach_request((SELECT hold_id FROM hr), 'job-running', 0.05);
 RESET ROLE;
-SELECT pg_temp.expect('invariant holds after limits and reaper', pg_temp.balance(:legacy) = pg_temp.ledger_sum(:legacy) AND pg_temp.balance(:legacy) = 4100);
+UPDATE credit_holds SET created_at = now() - interval '2 hours' WHERE id = (SELECT hold_id FROM hr);
+UPDATE muapi_calls SET created_at = now() - interval '2 hours' WHERE request_id = 'job-running';
+SET ROLE service_role;
+SELECT pg_temp.expect('reaper refunds stale holds that never became a job', credit_reap_holds(60) >= 2);
+SELECT pg_temp.expect('reaper leaves a hold with a running job alone', (SELECT status FROM credit_holds WHERE id = (SELECT hold_id FROM hr)) = 'held');
+SELECT pg_temp.expect('reaper is idempotent', credit_reap_holds(60) = 0);
+SELECT pg_temp.expect('the stale job is listed for the gateway to check with muapi', (SELECT count(*) FROM credit_stale_calls(30, 50) WHERE request_id = 'job-running') = 1);
+SELECT pg_temp.expect('a settled or failed job is not listed again', (SELECT count(*) FROM credit_stale_calls(30, 50) WHERE request_id = 'job-once') = 0);
+SELECT pg_temp.expect('refunding the stale job (what the gateway does when muapi says failed) works exactly once', credit_release('job-running', 'timed out') = 'failed' AND credit_release('job-running', 'again') = 'failed');
+RESET ROLE;
+SELECT pg_temp.expect('invariant holds after limits and reaper', pg_temp.balance(:legacy) = pg_temp.ledger_sum(:legacy));
 
 -- ================================================================ global invariant
 SELECT pg_temp.expect('for EVERY user, balance = sum(ledger)', NOT EXISTS (SELECT 1 FROM user_profiles p WHERE p.credits_balance IS DISTINCT FROM (SELECT COALESCE(sum(delta), 0) FROM credit_ledger l WHERE l.user_id = p.id)));

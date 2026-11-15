@@ -8,7 +8,7 @@ function setup(isAdmin = true) {
     findUser: async email => (email.toLowerCase() === 'maya@example.com' ? 'u-maya' : null),
     balance: async () => 120,
     ledger: async () => [{ id: 1, delta: 120, kind: 'grant' }],
-    apply: async (...a) => { calls.push(['apply', a]); if (a[1] === -999) throw new Error('would_go_negative'); return 220; },
+    apply: async (...a) => { calls.push(['apply', a]); if (a[1] === -999) throw new Error('would_go_negative'); if (a[4] === 'admin:dup') throw new Error('ref_conflict'); return 220; },
     stats: async () => ({ credits_granted: 1 }),
     getSettings: async () => ({ margin: 2.5 }),
     setSettings: async p => { calls.push(['setSettings', [p]]); },
@@ -47,7 +47,7 @@ describe('granting and adjusting', () => {
     const { deps, calls, logs } = setup();
     const r = await adminHandle(admin, { action: 'grant', email: ' Maya@Example.com ', amount: 100, reason: 'early customer', ref: 'order-7' }, deps);
     expect(r).toEqual({ status: 200, body: { balance: 220 } });
-    expect(calls[0]).toEqual(['apply', ['u-maya', 100, 'grant', 'early customer', 'admin:order-7']]);
+    expect(calls[0]).toEqual(['apply', ['u-maya', 100, 'grant', 'early customer', 'admin:order-7', 'a1']]);
     expect(JSON.stringify(logs)).toContain('admin_credit');
   });
   it('generates a ref when none is given (so each form submission is its own grant)', async () => {

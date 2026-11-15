@@ -29,7 +29,7 @@ export function AdminPage() {
     try { const r = await fn(); setMsg({ ok: true, text: done ? done(r) : 'Done.' }); await load().catch(() => undefined); } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'Failed' }); } finally { setBusy(''); }
   }
   const find = () => run('lookup', async () => { const r = await adminCall<Lookup>({ action: 'lookup', email }); setLookup(r); return r; }, r => `Balance ${r.balance.toLocaleString('en-US')} credits.`);
-  // one ref per button press: a double click cannot grant twice
+  // a fresh ref per press, so two quick clicks can grant twice; the button is disabled while busy (busy state is the guard)
   const grant = (kind: 'grant' | 'adjust') => run(kind, async () => {
     const r = await adminCall<{ balance: number }>({ action: kind, email, amount: Number(amount), reason, ref: crypto.randomUUID() });
     setLookup(await adminCall<Lookup>({ action: 'lookup', email }).catch(() => null));

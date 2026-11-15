@@ -48,13 +48,13 @@ npm run dev
    supabase functions deploy reap-holds --no-verify-jwt
    ```
 
-4. **Schedule the refund job** every 10 minutes (Supabase Cron or any scheduler): `POST https://<project>.functions.supabase.co/reap-holds` with the header `x-cron-secret: <CRON_SECRET>`. It refunds holds that never resolved (for example a closed tab).
-5. **Auth settings:** require email confirmation (Authentication, Providers, Email). Generation is refused for guests and unconfirmed emails. Consider turning anonymous sign-ins off.
+4. **Schedule the reaper** every 10 minutes (Supabase Cron or any scheduler): `POST https://<project>.functions.supabase.co/reap-holds` with the header `x-cron-secret: <CRON_SECRET>`. It refunds holds that never reached muapi, and for jobs nobody has polled for 30 minutes it asks muapi: completed keeps the charge, failed refunds, still running waits (refunded only after 24 hours). It needs `MUAPI_API_KEY` too; without it, it only does the first part.
+5. **Auth settings:** require email confirmation (Authentication, Providers, Email) and make sure **auto-confirm is OFF**: the gateway trusts `email_confirmed_at`. Every gateway route is refused for guests and unconfirmed emails. Consider turning anonymous sign-ins off. Limits are per account, not per IP, so a signup farm is slowed by email confirmation and the daily cap, not by rate limits.
 6. **Make yourself an admin:** in the SQL editor run `insert into admin_users (user_id) select id from auth.users where email = 'you@example.com';`
 7. **Grant yourself credits** on the `/admin` page, then run the smoke test (below).
 8. Remove the old `muapi-proxy` function from the dashboard if it was ever deployed.
 
-Existing users keep any balance they had (recorded as an `opening` ledger row). If those balances came from the old 100 free credits and you want them gone, run once: `select credit_apply(id, -credits_balance, 'adjust', 'reset legacy free credits', 'reset-legacy-1') from user_profiles where credits_balance > 0;`
+**Before applying the ledger migration to a database that has users**, check what it will turn into opening balances: `select id, credits_balance from user_profiles where credits_balance <> 0;`. Every non-zero balance becomes an `opening` ledger row (including the old 100 free credits). Existing users keep any balance they had (recorded as an `opening` ledger row). If those balances came from the old 100 free credits and you want them gone, run once: `select credit_apply(id, -credits_balance, 'adjust', 'reset legacy free credits', 'reset-legacy-1') from user_profiles where credits_balance > 0;`
 
 ### How credits work
 
