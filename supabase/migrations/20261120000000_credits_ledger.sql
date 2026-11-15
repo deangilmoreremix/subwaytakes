@@ -283,3 +283,28 @@ REVOKE EXECUTE ON FUNCTION credit_reserve(uuid, integer, text, text), credit_att
 GRANT EXECUTE ON FUNCTION credit_reserve(uuid, integer, text, text), credit_attach_request(uuid, text, numeric), credit_settle(text),
   credit_release(text, text), credit_release_hold(uuid, text), credit_apply(uuid, integer, text, text, text), credit_reap_holds(integer)
   TO service_role;
+
+-- ---------------------------------------------------------------- admin helpers (service_role only)
+
+CREATE OR REPLACE FUNCTION credit_find_user(p_email text) RETURNS uuid
+LANGUAGE sql SECURITY DEFINER SET search_path = public, auth AS $$
+  SELECT id FROM auth.users WHERE lower(email) = lower(trim(p_email)) LIMIT 1
+$$;
+
+-- Money picture for the operator: credits sold and spent, and the muapi cost they represent.
+CREATE OR REPLACE FUNCTION credit_stats() RETURNS jsonb
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT jsonb_build_object(
+    'credits_granted', COALESCE((SELECT sum(delta) FROM credit_ledger WHERE kind = 'grant'), 0),
+    'credits_spent_net', COALESCE((SELECT -sum(delta) FROM credit_ledger WHERE kind IN ('spend', 'refund')), 0),
+    'credits_outstanding', COALESCE((SELECT sum(credits_balance) FROM user_profiles), 0),
+    'est_muapi_usd_completed', COALESCE((SELECT sum(estimated_usd) FROM muapi_calls WHERE status = 'completed'), 0),
+    'est_muapi_usd_24h', COALESCE((SELECT sum(estimated_usd) FROM muapi_calls WHERE status = 'completed' AND created_at > now() - interval '24 hours'), 0),
+    'calls_24h', (SELECT count(*) FROM muapi_calls WHERE created_at > now() - interval '24 hours'),
+    'failed_24h', (SELECT count(*) FROM muapi_calls WHERE status = 'failed' AND created_at > now() - interval '24 hours'),
+    'open_holds', (SELECT count(*) FROM credit_holds WHERE status = 'held')
+  )
+$$;
+
+REVOKE EXECUTE ON FUNCTION credit_find_user(text), credit_stats() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION credit_find_user(text), credit_stats() TO service_role;

@@ -133,3 +133,11 @@ SELECT pg_temp.expect('invariant holds after limits and reaper', pg_temp.balance
 -- ================================================================ global invariant
 SELECT pg_temp.expect('for EVERY user, balance = sum(ledger)', NOT EXISTS (SELECT 1 FROM user_profiles p WHERE p.credits_balance IS DISTINCT FROM (SELECT COALESCE(sum(delta), 0) FROM credit_ledger l WHERE l.user_id = p.id)));
 SELECT pg_temp.expect('no balance is negative', NOT EXISTS (SELECT 1 FROM user_profiles WHERE credits_balance < 0));
+
+-- ================================================================ admin helpers
+SELECT pg_temp.expect('credit_find_user is case-insensitive', credit_find_user('  ZERO@example.com ') = :zero);
+SELECT pg_temp.expect('credit_stats reports sold, spent and outstanding credits', (credit_stats()->>'credits_granted')::int >= 4300 AND (credit_stats()->>'credits_outstanding')::int = (SELECT sum(credits_balance) FROM user_profiles));
+SET ROLE authenticated;
+SELECT pg_temp.fails('users cannot read stats', $q$ SELECT credit_stats() $q$, 'permission denied');
+SELECT pg_temp.fails('users cannot look up other users by email', $q$ SELECT credit_find_user('zero@example.com') $q$, 'permission denied');
+RESET ROLE;
