@@ -6,6 +6,8 @@ import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { FORMATS } from '../../lib/interview';
 import { PlacePanel } from './PlacePanel';
 import { IdeasButton } from './IdeasButton';
+import { SHOWS, TONE_LABEL, showOf, titleFor } from '../../lib/shows';
+import type { StoredTitle } from '../../lib/shows/stored';
 import { clsx } from '../../lib/format';
 import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles, UserRound } from 'lucide-react';
 import type { CharacterBible } from '../../lib/types';
@@ -22,7 +24,7 @@ type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, hasKey }: {
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
-  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; characters: CharacterBible[]; hostHint?: string; imageRoute: boolean; title?: { take: string; guest?: string; badge?: boolean }; onTitle: (t: { take: string; guest?: string; badge?: boolean } | undefined) => void;
+  pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; characters: CharacterBible[]; hostHint?: string; imageRoute: boolean; title?: StoredTitle; onTitle: (t: StoredTitle | undefined) => void;
   clip?: Clip; onClipChange: (patch: Partial<Clip>) => void; onAddSfx: (s: Sfx) => void; onAddEffect: () => void; fps: number;
   transition: TransitionContext; onTransition: (t: { type: TransitionType; frames: number } | null) => void;
   captionFont: FontId; onCaptionFont: (f: FontId) => void;
@@ -43,6 +45,7 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
   if (clip?.id !== lastClip) { setLastClip(clip?.id); if (clip) setTab('clip'); else if (tab === 'clip') setTab('take'); }
   const models = NATIVE_MODELS.filter(m => m.mode === (imageRoute ? 'image' : 'text') && m.aspects.includes(spec.aspect));
   const active = models.find(m => m.slug === slug);
+  const show = showOf(spec.show);
 
   return (
     <div className="flex h-full flex-col rounded-2xl border border-line bg-ink-850 shadow-panel">
@@ -53,9 +56,27 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {tab === 'take' && (<>
-          <div><Label hint={<span className="flex items-center gap-3"><IdeasButton onPick={t => set('take', t.slice(0, 220))} />{spec.take.length}/220</span>}>The take</Label>
+          <div><Label>Show</Label>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
+              {SHOWS.map(sh => (
+                <button key={sh.id} onClick={() => set('show', sh.id)} aria-pressed={spec.show === sh.id} title={sh.blurb}
+                  className={clsx('rounded-lg border px-2.5 py-1.5 text-[12px] transition', spec.show === sh.id ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-850 text-zinc-400 hover:border-white/15 hover:text-zinc-200')}>{sh.label}</button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-zinc-600">{show.blurb}</p>
+          </div>
+          {show.editableQuestion && (
+            <div><Label hint={<IdeasButton ideas={show.ideas} onPick={t => set('question', t.slice(0, 160))} />}>The host asks</Label>
+              <input className={inputCls} maxLength={160} value={spec.question ?? show.question} onChange={e => set('question', e.target.value)} /></div>
+          )}
+          <div><Label hint={<span className="flex items-center gap-3">{!show.editableQuestion && <IdeasButton onPick={t => set('take', t.slice(0, 220))} />}{spec.take.length}/220</span>}>{show.id === 'hot_take' ? 'The take' : show.answerLabel}</Label>
             <textarea className={inputCls} rows={4} maxLength={220} value={spec.take} onChange={e => set('take', e.target.value)} /></div>
-          <div><Label>Guest</Label><input className={inputCls} value={spec.guestDescription} onChange={e => set('guestDescription', e.target.value)} /></div>
+          {show.guests === 2 && (<>
+            <div><Label hint={`${(spec.take2 ?? '').length}/220`}>Guest B takes</Label>
+              <textarea className={inputCls} rows={3} maxLength={220} value={spec.take2 ?? ''} onChange={e => set('take2', e.target.value)} /></div>
+            <div><Label>Guest B looks like</Label><input className={inputCls} value={spec.guest2Description ?? ''} placeholder="e.g. a woman in her 20s with a denim jacket" onChange={e => set('guest2Description', e.target.value)} /></div>
+          </>)}
+          <div><Label>{show.guests === 2 ? 'Guest A looks like' : 'Guest'}</Label><input className={inputCls} value={spec.guestDescription} onChange={e => set('guestDescription', e.target.value)} /></div>
           {spec.format === 'twoshot' && (
             <div><Label>Host</Label>
               <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Host source">
@@ -75,7 +96,7 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
           {spec.format !== 'twoshot' && <div><Label>Host</Label><input className={inputCls} value={spec.hostDescription} onChange={e => set('hostDescription', e.target.value)} /></div>}
           <PlacePanel place={spec.place} onChange={p => set('place', p)} />
           <div><Label>Tone</Label>
-            <Segmented value={spec.tone} onChange={v => set('tone', v)} options={[{ value: 'playful', label: 'Playful' }, { value: 'deadpan', label: 'Deadpan' }, { value: 'heated', label: 'Heated' }]} /></div>
+            <Segmented value={spec.tone} onChange={v => set('tone', v)} options={show.tones.map(t => ({ value: t, label: TONE_LABEL[t] }))} /></div>
           <details className="rounded-xl border border-line bg-ink-950 p-3 text-[12px] text-zinc-500">
             <summary className="cursor-pointer text-zinc-400">Final prompt</summary>
             <p className="mt-2 whitespace-pre-wrap leading-relaxed">{buildNativePrompt(spec)}</p>
@@ -209,10 +230,10 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
 
         {tab === 'output' && (<>
           <div><Label>On-screen title</Label>
-            <label className="flex items-center gap-2 text-[12px] text-zinc-300"><input type="checkbox" checked={!!title} onChange={e => onTitle(e.target.checked ? { take: spec.take, badge: true } : undefined)} />Show the take as a title (top-left)</label>
+            <label className="flex items-center gap-2 text-[12px] text-zinc-300"><input type="checkbox" checked={!!title} onChange={e => onTitle(e.target.checked ? { data: titleFor(spec), showBadge: true } : undefined)} />Show the on-screen graphic ({show.label})</label>
             {title && (<div className="mt-2 space-y-2">
               <input className={inputCls} value={title.guest ?? ''} placeholder="Guest name sticker (optional)" onChange={e => onTitle({ ...title, guest: e.target.value || undefined })} />
-              <label className="flex items-center gap-2 text-[12px] text-zinc-400"><input type="checkbox" checked={title.badge !== false} onChange={e => onTitle({ ...title, badge: e.target.checked })} />HOT TAKE badge</label>
+              <label className="flex items-center gap-2 text-[12px] text-zinc-400"><input type="checkbox" checked={title.showBadge !== false} onChange={e => onTitle({ ...title, showBadge: e.target.checked })} />{title.data.badge} badge</label>
             </div>)}
           </div>
           <div><Label>Caption font</Label>

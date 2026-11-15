@@ -11,12 +11,22 @@
  */
 import type { Aspect } from '../muapi/registry';
 import { DEFAULT_PLACE, cardMicPhrase, cityOf, placePrompt, type PlaceSpec } from '../places';
+import { TONE_TEXT, questionFor, showOf, type ShowId, type Tone } from '../shows';
 
+export type { Tone };
 export type InterviewFormat = 'twoshot' | 'cuts' | 'solo';
-export type Tone = 'deadpan' | 'heated' | 'playful';
 
 export interface TakeSpec {
+  /** Which show (host question, tone, badge, graphic). */
+  show: ShowId;
+  /** The host's question; only used by shows whose question is editable. */
+  question?: string;
+  /** What the guest says (Hot Take: the take). Duel: guest A. */
   take: string;
+  /** Duel only: guest B's side. */
+  take2?: string;
+  /** Duel only: how guest B looks. */
+  guest2Description?: string;
   guestDescription: string;
   hostDescription: string;
   /** Cast character used as the host (its portrait enables the starting-image route). */
@@ -33,6 +43,7 @@ export const WORDS_PER_SECOND = 2.5;
 const OPENER_SECONDS = 1.8;
 
 export const DEFAULT_TAKE: TakeSpec = {
+  show: 'hot_take',
   take: 'Pineapple belongs on pizza and anyone who disagrees is scared of joy.',
   guestDescription: 'a local commuter in their 30s in a winter jacket',
   hostDescription: 'a young host with big curly hair and round sunglasses, wearing a bright bomber jacket',
@@ -55,18 +66,29 @@ export function wordBudget(seconds: number, withOpener: boolean): number {
   return Math.max(6, Math.floor(usable * WORDS_PER_SECOND));
 }
 
-/** The lines each person speaks, with the guest's line trimmed to fit the clip. */
-export function spokenLines(t: Pick<TakeSpec, 'take' | 'durationSeconds'>): { host: string; guest: string; trimmed: boolean } {
-  const max = wordBudget(t.durationSeconds, true);
-  const words = t.take.trim().split(/\s+/);
-  return { host: OPENER, guest: words.slice(0, max).join(' '), trimmed: words.length > max };
-}
-
-const TONE_TEXT: Record<Tone, string> = {
-  playful: 'playful and grinning',
-  deadpan: 'deadpan and completely serious',
-  heated: 'heated and passionate',
+const clip = (text: string, max: number) => {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return { text: words.slice(0, max).join(' '), trimmed: words.length > max };
 };
+
+/**
+ * The lines each person speaks, trimmed to fit the clip. The host's line is the show's question.
+ * Duel: the answer time is shared by guest A (`take`) and guest B (`take2`).
+ */
+export function spokenLines(t: Pick<TakeSpec, 'take' | 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'take2'>>): { host: string; guest: string; guest2?: string; trimmed: boolean } {
+  const show = showOf(t.show);
+  const host = questionFor(show, t.question);
+  const hostWords = host.split(/\s+/).length;
+  const hostSeconds = Math.max(OPENER_SECONDS, hostWords / WORDS_PER_SECOND);
+  const budget = Math.max(6, Math.floor(Math.max(2, t.durationSeconds - hostSeconds) * WORDS_PER_SECOND));
+  if (show.guests === 2) {
+    const each = Math.max(4, Math.floor(budget / 2));
+    const a = clip(t.take, each), b = clip(t.take2 ?? '', each);
+    return { host, guest: a.text, guest2: b.text, trimmed: a.trimmed || b.trimmed };
+  }
+  const a = clip(t.take, budget);
+  return { host, guest: a.text, trimmed: a.trimmed };
+}
 
 export const NO_MIC_RULE = 'The transit card is the only microphone. There is no real microphone, no lavalier, no boom, no phone held as a mic, and no visible audio gear. The card shows no brand logos or readable text.';
 
@@ -74,19 +96,33 @@ function sceneText(t: TakeSpec): string {
   return placePrompt(t.place);
 }
 
-/** Native-audio prompt for the chosen format. */
+/** Native-audio prompt for the chosen format and show. */
 export function buildNativePrompt(t: TakeSpec): string {
-  const { host, guest } = spokenLines(t);
+  const show = showOf(t.show);
+  const { host, guest, guest2 } = spokenLines(t);
   const card = cardMicPhrase(t.place.city);
-  const tone = TONE_TEXT[t.tone];
+  const tone = TONE_TEXT[t.tone] ?? TONE_TEXT[show.defaultTone];
   const noText = 'No subtitles, no on-screen text, no logos or watermarks.';
+  const guard = show.guard ? ` ${show.guard}` : '';
+  if (show.guests === 2) {
+    // Debate duel: three people. Unverified on the video models; Cuts (one lip-synced shot each) is the safe route.
+    const sitting = t.place.mode === 'transit' && t.place.scene === 'train_seated';
+    return [
+      `Handheld vertical documentary shot of three people: the host (${t.hostDescription}) between two guests, guest A (${t.guestDescription}) and guest B (${t.guest2Description || 'a different local commuter, clearly distinct from guest A'}).`,
+      `Setting: ${sceneText(t)}.`,
+      `${sitting ? 'They sit' : 'They stand'} close together, the host in the middle, framed from the chest up.`,
+      `The host holds ${card} and turns it toward each guest in turn. ${NO_MIC_RULE}`,
+      `The host asks: "${host}" Guest A, ${tone}, argues: "${guest}" Guest B, ${tone}, argues back: "${guest2 ?? ''}" ${show.reaction}`,
+      `Each of the three voices is distinct and the lips match the words. Slight camera sway, natural ambient sound of the place. ${noText}${guard}`,
+    ].join(' ');
+  }
   if (t.format === 'solo') {
     return [
       `Handheld vertical documentary close-up of ${t.guestDescription}. Setting: ${sceneText(t)}.`,
       `Out of frame, the host's hand holds ${card} toward the guest as the microphone.`,
       NO_MIC_RULE,
       `The host asks off-screen: "${host}" The guest answers to camera, ${tone}: "${guest}"`,
-      `Lip movement matches the speech. Natural gestures, ambient sound of the place. ${noText}`,
+      `Lip movement matches the speech. Natural gestures, ambient sound of the place. ${noText}${guard}`,
     ].join(' ');
   }
   // twoshot (cuts also uses this wording for a single combined fallback)
@@ -97,33 +133,40 @@ export function buildNativePrompt(t: TakeSpec): string {
     sitting ? 'They sit shoulder to shoulder, close together, framed from the chest up.' : 'They stand shoulder to shoulder, close together, framed from the chest up.',
     `Both hold ${card}, so the card is clearly visible near their mouths, passing it between them as they talk.`,
     NO_MIC_RULE,
-    `The host, card at their mouth, asks the guest: "${host}" The guest, ${tone}, takes the card and answers: "${guest}" The host reacts, laughing.`,
-    `Visible lip movement matches each speaker's words and each voice is distinct. Slight camera sway, natural ambient sound of the place. ${noText}`,
+    `The host, card at their mouth, asks the guest: "${host}" The guest, ${tone}, takes the card and answers: "${guest}" ${show.reaction}`,
+    `Visible lip movement matches each speaker's words and each voice is distinct. Slight camera sway, natural ambient sound of the place. ${noText}${guard}`,
   ].join(' ');
 }
 
-export type Role = 'host' | 'guest';
+export type Role = 'host' | 'guest' | 'guest2';
 
 /** Still-image prompt of one person holding the card as a mic (for Cuts). */
 export function buildStillPrompt(t: TakeSpec, role: Role): string {
-  const who = role === 'host' ? t.hostDescription : t.guestDescription;
+  const who = role === 'host' ? t.hostDescription : role === 'guest2' ? (t.guest2Description || 'a different local commuter, clearly distinct from the first guest') : t.guestDescription;
   const card = cardMicPhrase(t.place.city);
   return `Close-up portrait photo of ${who}. Setting: ${sceneText(t)}. They hold ${card} up near their mouth, looking at the camera mid-sentence. ${NO_MIC_RULE} Handheld documentary framing, natural light, photorealistic, ${t.aspect} framing.`;
 }
 
 export interface CutShot { role: Role; text: string; portraitPrompt: string }
 
-/** Cuts: the host asks, then the guest answers. */
+/** Cuts: the host asks, then the guest answers (Debate duel: guest A, then guest B). */
 export function cutsPlan(t: TakeSpec): CutShot[] {
-  const { host, guest } = spokenLines(t);
-  return [
+  const { host, guest, guest2 } = spokenLines(t);
+  const plan: CutShot[] = [
     { role: 'host', text: host, portraitPrompt: buildStillPrompt(t, 'host') },
     { role: 'guest', text: guest, portraitPrompt: buildStillPrompt(t, 'guest') },
   ];
+  if (showOf(t.show).guests === 2 && guest2) plan.push({ role: 'guest2', text: guest2, portraitPrompt: buildStillPrompt(t, 'guest2') });
+  return plan;
 }
 
 /** Whether Cuts has everything it needs (both characters need a portrait and a voice). */
-export function cutsProblem(host: { portrait_url?: string | null; voice_id?: string | null } | undefined, guest: { portrait_url?: string | null; voice_id?: string | null } | undefined): string | null {
+type Person = { portrait_url?: string | null; voice_id?: string | null };
+export function cutsProblem(host: Person | undefined, guest: Person | undefined, guest2?: Person | undefined, needsSecondGuest = false): string | null {
+  if (needsSecondGuest) {
+    if (!guest2) return 'Pick a second guest from Cast for the duel.';
+    if (!guest2.portrait_url || !guest2.voice_id) return 'The second guest needs a portrait and a voice in Cast.';
+  }
   if (!host || !guest) return 'Pick a host and a guest from Cast.';
   if (!host.portrait_url || !host.voice_id) return 'The host needs a portrait and a voice in Cast.';
   if (!guest.portrait_url || !guest.voice_id) return 'The guest needs a portrait and a voice in Cast.';

@@ -9,6 +9,8 @@ import { Kbd } from '../components/studio/ui';
 import { ExportDialog } from '../components/studio/ExportDialog';
 import { DEFAULT_TAKE, cutsPlan, cutsProblem, type TakeSpec } from '../lib/muapi/prompt';
 import { placePrompt } from '../lib/places';
+import { applyShow, showOf, titleFor, type ShowId } from '../lib/shows';
+import { resolveTitle } from '../lib/shows/stored';
 import { twoShotRoute, describeCharacter } from '../lib/interview';
 import { runTwoShotImageJob, STILL_APPROX_USD, STILL_MODEL, buildStillInput, buildAnimateInput } from '../lib/interview/twoshot';
 import { CutsPanel } from '../components/studio/CutsPanel';
@@ -43,6 +45,7 @@ export function CreateTakePage() {
   const [characters, setCharacters] = useState<CharacterBible[]>([]);
   const [speakerId, setSpeakerId] = useState<string>();
   const [hostId, setHostId] = useState<string>();
+  const [guest2Id, setGuest2Id] = useState<string>();
   const [lipModel, setLipModel] = useState<LipsyncModel>('omnihuman-2-0');
   useEffect(() => { listCharacters().then(l => { setCharacters(l); setSpeakerId(id => id ?? (l.find(c => c.role === 'guest' && c.portrait_url && c.voice_id) ?? l[0])?.id); setHostId(id => id ?? (l.find(c => c.role === 'host') ?? l[0])?.id); }).catch(() => undefined); }, []);
 
@@ -61,7 +64,13 @@ export function CreateTakePage() {
     if (imageRoute && cur?.mode !== 'image') setSlug('veo3.1-fast-image-to-video');
     if (!imageRoute && cur?.mode === 'image') setSlug('veo3.1-fast-text-to-video');
   }, [imageRoute, slug]);
-  useEffect(() => { const t = project.style?.title; if (t && t.take !== spec.take) setProject({ ...project, style: { ...project.style, title: { ...t, take: spec.take } } }, false); }, [spec.take, project, setProject]);
+  // keep the on-screen graphic in step with the show and what is said
+  useEffect(() => {
+    const t = resolveTitle(project.style?.title);
+    if (!t) return;
+    const data = titleFor(spec);
+    if (JSON.stringify(data) !== JSON.stringify(t.data)) setProject({ ...project, style: { ...project.style, title: { ...t, data } } }, false);
+  }, [spec, project, setProject]);
 
   // bind to the Remotion Player (mounted only once the timeline has clips)
   useEffect(() => {
@@ -79,7 +88,8 @@ export function CreateTakePage() {
   useEffect(() => { refresh(); }, []);
 
   const set = <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => setSpec(s => {
-    const next = { ...s, [k]: v };
+    let next = { ...s, [k]: v };
+    if (k === 'show') next = applyShow(s, v as ShowId); // the show sets the question, tone and place defaults
     if (k === 'aspect' && !NATIVE_MODELS.find(m => m.slug === slug)?.aspects.includes(v as TakeSpec['aspect'])) {
       setSlug(chooseNativeModel('fast', 'text', v as TakeSpec['aspect']).slug);
     }
@@ -157,22 +167,24 @@ export function CreateTakePage() {
   }
 
   async function generateCuts() {
-    const host = characters.find(c => c.id === hostId), guest = characters.find(c => c.id === speakerId);
-    const problem = cutsProblem(host, guest);
-    if (problem || !host || !guest) { setError(problem ?? 'Pick a host and a guest.'); return; }
+    const host = characters.find(c => c.id === hostId), guest = characters.find(c => c.id === speakerId), guest2 = characters.find(c => c.id === guest2Id);
+    const duel = showOf(spec.show).guests === 2;
+    const problem = cutsProblem(host, guest, guest2, duel);
+    if (problem || !host || !guest || (duel && !guest2)) { setError(problem ?? 'Pick a host and a guest.'); return; }
     const plan = cutsPlan(spec);
-    const speakers = { host, guest };
+    const speakers = { host, guest, guest2: guest2 ?? guest };
+    const roleName = { host: 'Host', guest: duel ? 'Guest A' : 'Guest', guest2: 'Guest B' } as const;
     for (const shot of plan) {
       const p = validateLipsync({ speaker: speakers[shot.role], script: shot.text, model: lipModel });
-      if (p) { setError(`${shot.role === 'host' ? 'Host' : 'Guest'}: ${p}`); return; }
+      if (p) { setError(`${roleName[shot.role]}: ${p}`); return; }
     }
     const costs = await Promise.all(plan.map(shot => estimateLipsync(speakers[shot.role], shot.text, lipModel).catch(() => null)));
     const total = costs.every((c): c is number => c !== null) ? costs.reduce((a, b) => a + b, 0) : null;
-    if (total !== null && total > COST_CONFIRM_USD && !window.confirm(`Both shots will cost about $${total.toFixed(2)}. Continue?`)) return;
+    if (total !== null && total > COST_CONFIRM_USD && !window.confirm(`All ${plan.length} shots will cost about $${total.toFixed(2)}. Continue?`)) return;
     setError('');
     try {
       for (const shot of plan) {
-        const who = shot.role === 'host' ? 'Host' : 'Guest';
+        const who = roleName[shot.role];
         setRunning({ status: 'processing', startedAt: Date.now(), stages: LIPSYNC_STAGES.map(s => `${who}: ${s}`), stageIdx: 0 });
         const job = await runLipsyncJob({ speaker: speakers[shot.role], script: shot.text, model: lipModel, scene: `${placePrompt(spec.place)}. ${spec.tone} tone, natural expressions.`, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'voice' ? 0 : s === 'prepare' ? 1 : 2 }) });
         await addJobToTimeline(job); // appended in order: host first, then guest
@@ -262,9 +274,9 @@ export function CreateTakePage() {
         <div className="min-w-0 lg:min-h-0">
           <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
-            title={project.style?.title ? { ...project.style.title, take: spec.take } : undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
+            title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
             characters={characters} hostHint={route.hint} imageRoute={imageRoute}
-            cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} />}
+            cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} />}
             lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} hasKey={hasKey} />}
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}

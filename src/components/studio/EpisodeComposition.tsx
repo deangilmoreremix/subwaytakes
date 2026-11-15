@@ -8,6 +8,7 @@ import { transitionDef } from '../../lib/timeline/transitions';
 import type { Project } from '../../lib/timeline/types';
 import { useCaptionFont } from '../../lib/captions/fonts';
 import { TitleOverlay } from './TitleOverlay';
+import { resolveTitle } from '../../lib/shows/stored';
 
 export type EpisodeProps = { project: Project };
 
@@ -54,7 +55,7 @@ export function EpisodeComposition({ project }: EpisodeProps) {
           <Audio src={c.src!} trimBefore={c.trimStart} volume={c.volume ?? 1} />
         </Sequence>
       ))}
-      {project.style?.title && <TitleOverlay title={project.style.title} fontFamily={titleFont.family} fontWeight={titleFont.weight} />}
+      {resolveTitle(project.style?.title) && <TitleOverlay title={resolveTitle(project.style?.title)!} fontFamily={titleFont.family} fontWeight={titleFont.weight} />}
       {captions.map(c => (
         <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
           <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', padding: '0 7% 14%' }}>

@@ -3,16 +3,16 @@ import { Lightbulb } from 'lucide-react';
 import { loadIdeas, groupIdeas, STARTER_IDEAS } from '../../lib/ideas';
 
 /** "Ideas" popover: pick a take from the saved question bank (or the built-in starters). */
-export function IdeasButton({ onPick }: { onPick: (text: string) => void }) {
+export function IdeasButton({ onPick, ideas }: { onPick: (text: string) => void; /** a fixed list for a show; when given the saved question bank is not used */ ideas?: string[] }) {
   const [open, setOpen] = useState(false);
-  const [groups, setGroups] = useState(() => groupIdeas(STARTER_IDEAS));
+  const [groups, setGroups] = useState(() => (ideas ? groupIdeas(ideas.map((text, i) => ({ id: `show-${i}`, category: 'Ideas', text }))) : groupIdeas(STARTER_IDEAS)));
   const loaded = useRef(false);
 
   useEffect(() => {
-    if (!open || loaded.current) return;
+    if (!open || loaded.current || ideas) return;
     loaded.current = true;
     loadIdeas().then(r => setGroups(r.groups)).catch(() => undefined);
-  }, [open]);
+  }, [open, ideas]);
 
   return (
     <div className="relative">

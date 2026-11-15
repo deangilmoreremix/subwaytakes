@@ -1,3 +1,4 @@
+import type { TitleData } from '../shows';
 export const FPS = 30;
 
 export type TrackKind = 'video' | 'caption' | 'audio' | 'effect';
@@ -37,7 +38,7 @@ export interface Track { id: string; kind: TrackKind; name: string }
 export interface Project {
   fps: number;
   /** project-wide look */
-  style?: { captionFont?: 'inter' | 'anton' | 'bangers'; title?: { take: string; guest?: string; badge?: boolean } };
+  style?: { captionFont?: 'inter' | 'anton' | 'bangers'; /** on-screen title; also accepts the older { take, guest, badge } shape (see resolveTitle) */ title?: { data?: TitleData; take?: string; guest?: string; badge?: boolean; showBadge?: boolean } };
   tracks: Track[];
   clips: Clip[];
 }
