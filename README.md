@@ -46,6 +46,7 @@ npm run dev
    supabase functions deploy muapi-gateway
    supabase functions deploy admin-credits
    supabase functions deploy reap-holds --no-verify-jwt
+   supabase functions deploy referral-claim
    ```
 
 4. **Schedule the reaper** every 10 minutes (Supabase Cron or any scheduler): `POST https://<project>.functions.supabase.co/reap-holds` with the header `x-cron-secret: <CRON_SECRET>`. It refunds holds that never reached muapi, and for jobs nobody has polled for 30 minutes it asks muapi: completed keeps the charge, failed refunds, still running waits (refunded only after 24 hours). It needs `MUAPI_API_KEY` too; without it, it only does the first part.
@@ -61,6 +62,14 @@ npm run dev
 ### How credits work
 
 1 credit = $0.01 of generation. Each paid call is priced from muapi's live quote (`estimate-cost`), times the margin (default 2.5, set in `gateway_settings`), rounded up. Credits are reserved before the call and refunded automatically if it fails. Limits (per call, per minute, open jobs, daily cap) and a kill switch live in `gateway_settings`; per-model price overrides and on/off live in `model_prices`.
+
+### Retention features (Phase 9)
+
+- **Saved projects:** the timeline is kept in the browser as a draft and, for signed-in customers, saved to their account about two seconds after each change once it has a clip. Saves are version-checked: if another device saved first, nothing is overwritten and the customer chooses between the other copy and keeping theirs as a new project. Up to 50 projects of 512 KB each per customer. Apply `20261122000000_retention.sql` (after the credits and billing migrations).
+- **Onboarding, templates, low-credit nudge:** a getting-started checklist that ticks from real state, ten one-click templates, and an amber credit pill under 150 credits. There are no free credits by design, so the checklist says plainly that generating needs credits.
+- **Brand kit:** logo (PNG, JPEG or WebP under 2 MB), colours, handle and a sponsor end card, applied to titles and exports. Locked behind the `commercial` unlock as a display lock (exports are made in the browser, so it cannot be a hard paywall); without it exports carry a small "Made with SubwayTakes Studio" mark. The Commercial licence product is seeded off: switch it on in `/admin` when you have licence terms.
+- **Usage and referrals:** Settings shows credits spent per week and per kind of work (failed generations net out). Referrals pay only from a referred customer's FIRST purchase of at least $10 (default: 300 credits to the referrer, 200 to the friend, 20 rewards per referrer), are reversed if that order is refunded or disputed, and are controlled in `/admin`. Deploy `supabase functions deploy referral-claim`.
+- **Dubbing:** select a hosted video clip, then Clip, Dub. It transcribes once, then for each language (up to 5) translates, speaks in the chosen voice and lip-syncs the original clip, as its own video you add to the timeline. One language failing does not affect the others. Uses Sync Lipsync by default (Pro Pack or Recast). Translation quality, voice support per language and lip-sync on translated audio are unverified until a capped live run: `scripts/live-dub.ts` is a dry run by default (`--run --cap` to spend).
 
 ### How selling works
 

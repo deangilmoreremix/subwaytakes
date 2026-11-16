@@ -16,11 +16,13 @@ export function BrandKitCard() {
   const [busy, setBusy] = useState<'' | 'save' | 'logo'>('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const file = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (loaded) setDraft(kit ?? DEFAULT_BRAND_KIT); }, [loaded, kit]);
+  // fill the form from the saved kit once, and never over something the customer has already started typing
+  const dirty = useRef(false);
+  useEffect(() => { if (loaded && !dirty.current) setDraft(kit ?? DEFAULT_BRAND_KIT); }, [loaded, kit]);
 
   if (isGuest) return null;
   const entitled = has('brand');
-  const set = <K extends keyof BrandKit>(k: K, v: BrandKit[K]) => setDraft(d => ({ ...d, [k]: v }));
+  const set = <K extends keyof BrandKit>(k: K, v: BrandKit[K]) => { dirty.current = true; setDraft(d => ({ ...d, [k]: v })); };
   const problems = validateBrand(draft);
 
   async function onLogo(f: File | undefined) {
@@ -31,7 +33,7 @@ export function BrandKitCard() {
   }
   async function onSave() {
     setBusy('save'); setMsg(null);
-    try { await save(draft); setMsg({ ok: true, text: 'Brand kit saved. It is applied to your projects.' }); } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'Could not save.' }); } finally { setBusy(''); }
+    try { await save(draft); dirty.current = false; setMsg({ ok: true, text: 'Brand kit saved. It is applied to your projects.' }); } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'Could not save.' }); } finally { setBusy(''); }
   }
 
   return (
@@ -39,7 +41,7 @@ export function BrandKitCard() {
       <div className="flex items-center gap-2 font-semibold text-white"><Palette className="h-4 w-4 text-accent" />Brand kit</div>
       <p className="mt-1 text-[12px] text-zinc-500">Your logo, colours, handle and a sponsor line on every episode.</p>
       {billingLoaded && !entitled && <UnlockPrompt feature="brand" className="mt-3" />}
-      <fieldset disabled={!entitled || !!busy} className="mt-3 space-y-3 disabled:opacity-50">
+      <fieldset disabled={!entitled || !!busy || !loaded} className="mt-3 space-y-3 disabled:opacity-50">
         <div className="grid gap-3 sm:grid-cols-2">
           <div><Label>Channel handle</Label><input className={inputCls} aria-label="Channel handle" placeholder="@yourchannel" maxLength={31} value={draft.handle} onChange={e => set('handle', e.target.value)} /></div>
           <div><Label>Sponsor line (end card)</Label><input className={inputCls} aria-label="Sponsor line" placeholder="Brought to you by Acme" maxLength={80} value={draft.sponsorText} onChange={e => set('sponsorText', e.target.value)} /></div>
