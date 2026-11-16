@@ -34,6 +34,8 @@ export interface DubDeps {
   /** optional: pad speech audio to the clip length and host it (browser only) */
   fitAudio?: (url: string, seconds: number) => Promise<string>;
 }
+/** Attached to the error thrown by runDub, so the caller can resume. */
+export const resumeFrom = (e: unknown): { job: ClipJob; state: DubState } | undefined => (e as { dubResume?: { job: ClipJob; state: DubState } } | null)?.dubResume;
 export interface DubResult { job: ClipJob; results: Array<{ language: string; url?: string; text?: string; error?: string }>; state: DubState }
 
 /** Why this request cannot start, or null. Checked before anything is paid for. */
@@ -160,6 +162,8 @@ export async function runDub(o: DubOptions, deps: DubDeps): Promise<DubResult> {
     await chain;
     const cancelled = error === 'Cancelled';
     await deps.patchJob(job.id, { input: { ...job.input, dub: state }, ...(cancelled ? { stage: 'paused' } : { status: 'failed', stage: 'failed', error }) });
+    // hand the saved state back with the error, so a cancelled run can be resumed without paying again for finished steps
+    if (e instanceof Error) Object.assign(e, { dubResume: { job, state } });
     throw e;
   }
 }

@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS brand_kits (
   primary_color text NOT NULL DEFAULT '#ffb000' CHECK (primary_color ~ '^#[0-9a-fA-F]{6}$'),
   accent_color text NOT NULL DEFAULT '#ffffff' CHECK (accent_color ~ '^#[0-9a-fA-F]{6}$'),
   -- the logo must live in THIS user's folder of the public media bucket (https only)
-  logo_url text CHECK (logo_url IS NULL OR logo_url ~ ('^https://[^/?#]+/storage/v1/object/public/media/' || user_id::text || '/[^?#]{1,200}$')),
+  logo_url text CHECK (logo_url IS NULL OR logo_url ~ ('^https://[a-z0-9.-]+(:[0-9]+)?/storage/v1/object/public/media/' || user_id::text || '/[A-Za-z0-9._-]{1,200}$') AND logo_url !~ '\.\.'),
   sponsor_text text NOT NULL DEFAULT '' CHECK (char_length(sponsor_text) <= 80),
   show_watermark boolean NOT NULL DEFAULT true,
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS referral_settings (
   referee_reward integer NOT NULL DEFAULT 200 CHECK (referee_reward BETWEEN 0 AND 100000),
   min_order_cents integer NOT NULL DEFAULT 1000 CHECK (min_order_cents >= 100),
   max_rewards_per_referrer integer NOT NULL DEFAULT 20 CHECK (max_rewards_per_referrer BETWEEN 0 AND 1000),
+  -- each reward is also capped at this percentage of the credits the qualifying order granted, so a reward can never exceed the sale
+  max_reward_pct integer NOT NULL DEFAULT 30 CHECK (max_reward_pct BETWEEN 0 AND 100),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 INSERT INTO referral_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
@@ -71,6 +73,7 @@ CREATE TABLE IF NOT EXISTS referrals (
   reward_order_id uuid REFERENCES orders(id),
   referrer_reward integer NOT NULL DEFAULT 0,
   referee_reward integer NOT NULL DEFAULT 0,
+  clawback_shortfall integer NOT NULL DEFAULT 0,   -- reward credits that could not be taken back after a refund (already spent)
   claimed_at timestamptz NOT NULL DEFAULT now(),
   rewarded_at timestamptz,
   CHECK (referee_id <> referrer_id)
@@ -134,6 +137,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE uid uuid := auth.uid(); new_id uuid;
 BEGIN
   IF uid IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
+  IF COALESCE((auth.jwt() ->> 'is_anonymous')::boolean, false) THEN RAISE EXCEPTION 'account_required'; END IF;
   INSERT INTO projects (user_id, name, data) VALUES (uid, COALESCE(NULLIF(trim(p_name), ''), 'Untitled episode'), COALESCE(p_data, '{}')) RETURNING projects.id INTO new_id;
   RETURN QUERY SELECT new_id, 1;
 END $$;
@@ -194,6 +198,7 @@ BEGIN
   SELECT user_id INTO r FROM referral_codes WHERE code = upper(trim(p_code));
   IF r IS NULL THEN RAISE EXCEPTION 'unknown_code'; END IF;
   IF r = p_user THEN RAISE EXCEPTION 'self_referral'; END IF;
+  IF EXISTS (SELECT 1 FROM referrals WHERE referee_id = r AND referrer_id = p_user) THEN RAISE EXCEPTION 'reciprocal_referral'; END IF;
   IF EXISTS (SELECT 1 FROM orders WHERE user_id = p_user AND paid_at IS NOT NULL) THEN RAISE EXCEPTION 'not_new_customer'; END IF;
   INSERT INTO referrals (referee_id, referrer_id) VALUES (p_user, r) ON CONFLICT (referee_id) DO NOTHING;
   IF NOT FOUND THEN RAISE EXCEPTION 'already_claimed'; END IF;
@@ -204,7 +209,7 @@ END $$;
 -- A failure here must never fail the purchase, so everything is inside a sub-transaction.
 CREATE OR REPLACE FUNCTION referral_on_paid() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE s referral_settings%ROWTYPE; ref referrals%ROWTYPE; done integer;
+DECLARE s referral_settings%ROWTYPE; ref referrals%ROWTYPE; done integer; r1 integer; r2 integer;
 BEGIN
   IF OLD.status <> 'pending' OR NEW.status <> 'paid' THEN RETURN NEW; END IF;
   BEGIN
@@ -213,16 +218,21 @@ BEGIN
     IF EXISTS (SELECT 1 FROM orders o WHERE o.user_id = NEW.user_id AND o.id <> NEW.id AND o.paid_at IS NOT NULL) THEN RETURN NEW; END IF;
     SELECT * INTO ref FROM referrals WHERE referee_id = NEW.user_id AND status = 'claimed' FOR UPDATE;
     IF NOT FOUND THEN RETURN NEW; END IF;
+    -- serialise every reward for one referrer (so the cap holds under concurrency); lock both profiles in a fixed order
+    PERFORM 1 FROM user_profiles WHERE id IN (ref.referrer_id, ref.referee_id) ORDER BY id FOR UPDATE;
     SELECT count(*) INTO done FROM referrals WHERE referrer_id = ref.referrer_id AND status = 'rewarded';
     IF done >= s.max_rewards_per_referrer THEN
       UPDATE referrals SET status = 'void' WHERE referee_id = ref.referee_id;
       RETURN NEW;
     END IF;
-    IF s.referrer_reward > 0 THEN PERFORM credit_apply(ref.referrer_id, s.referrer_reward, 'grant', 'referral reward', 'referral:' || ref.referee_id::text || ':referrer', NULL); END IF;
-    IF s.referee_reward > 0 THEN PERFORM credit_apply(ref.referee_id, s.referee_reward, 'grant', 'referral welcome bonus', 'referral:' || ref.referee_id::text || ':referee', NULL); END IF;
-    UPDATE referrals SET status = 'rewarded', reward_order_id = NEW.id, rewarded_at = now(), referrer_reward = s.referrer_reward, referee_reward = s.referee_reward WHERE referee_id = ref.referee_id;
-  EXCEPTION WHEN OTHERS THEN
-    RAISE WARNING 'referral reward skipped: %', SQLERRM;
+    r1 := LEAST(s.referrer_reward, (NEW.credits * s.max_reward_pct) / 100);
+    r2 := LEAST(s.referee_reward, (NEW.credits * s.max_reward_pct) / 100);
+    IF r1 > 0 THEN PERFORM credit_apply(ref.referrer_id, r1, 'grant', 'referral reward', 'referral:' || ref.referee_id::text || ':referrer', NULL); END IF;
+    IF r2 > 0 THEN PERFORM credit_apply(ref.referee_id, r2, 'grant', 'referral welcome bonus', 'referral:' || ref.referee_id::text || ':referee', NULL); END IF;
+    UPDATE referrals SET status = 'rewarded', reward_order_id = NEW.id, rewarded_at = now(), referrer_reward = r1, referee_reward = r2 WHERE referee_id = ref.referee_id;
+  EXCEPTION
+    WHEN deadlock_detected OR lock_not_available THEN RAISE;   -- never lose the reward silently: fail the fulfilment so Stripe retries it
+    WHEN OTHERS THEN RAISE WARNING 'referral reward skipped: %', SQLERRM;
   END;
   RETURN NEW;
 END $$;
@@ -230,7 +240,7 @@ END $$;
 -- Reversal: if the order that earned a reward is refunded or disputed, take both rewards back (up to what is left; never negative).
 CREATE OR REPLACE FUNCTION referral_on_reverse() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE ref referrals%ROWTYPE; bal integer; claw integer;
+DECLARE ref referrals%ROWTYPE; bal integer; claw integer; short integer;
 BEGIN
   IF OLD.status <> 'paid' OR NEW.status NOT IN ('refunded', 'disputed') THEN RETURN NEW; END IF;
   BEGIN
@@ -266,7 +276,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     'repeat_buyers', (SELECT count(*) FROM (SELECT user_id FROM orders WHERE status = 'paid' GROUP BY user_id HAVING count(*) >= 2) t),
     'projects_saved', (SELECT count(*) FROM projects),
     'referrals_claimed', (SELECT count(*) FROM referrals),
-    'referrals_rewarded', (SELECT count(*) FROM referrals WHERE status = 'rewarded')
+    'referrals_rewarded', (SELECT count(*) FROM referrals WHERE status = 'rewarded'),
+    'referral_clawback_shortfall', COALESCE((SELECT sum(clawback_shortfall) FROM referrals), 0)
   )
 $$;
 

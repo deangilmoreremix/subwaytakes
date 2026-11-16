@@ -14,6 +14,7 @@ export function projectError(e: { message?: string } | null | undefined): Error 
   if (m.includes('project_limit')) return new Error('You have 50 saved projects. Delete one to save a new one.');
   if (m.includes('check')) return new Error('This project is too large to save. Remove some clips and try again.');
   if (m.includes('not_found')) return new Error('That project no longer exists.');
+  if (m.includes('account_required')) return new Error('Create an account to save projects.');
   if (m.includes('not_authenticated')) return new Error('Sign in to save projects.');
   return new Error('Could not reach your saved projects. Your work is still safe in this browser.');
 }

@@ -6,7 +6,8 @@ import { useBilling } from '../../lib/billing/useBilling';
 import { useAuth } from '../../lib/auth';
 import { CONFIRM_CREDITS, formatCredits } from '../../lib/credits';
 import { DUB_LANGUAGES, MAX_DUB_LANGUAGES, languageOf } from '../../lib/dubbing/languages';
-import { dubProblem, estimateDub, runDub, type DubResult, type DubStage, type DubVoice } from '../../lib/dubbing/pipeline';
+import { dubProblem, estimateDub, resumeFrom, runDub, type DubResult, type DubStage, type DubState, type DubVoice } from '../../lib/dubbing/pipeline';
+import type { ClipJob } from '../../lib/muapi/jobs';
 import { defaultDubDeps } from '../../lib/dubbing/browser';
 import { VOICE_LIPSYNC_MODELS, type VoiceLipsyncModel } from '../../lib/recast/voice';
 import { FALLBACK_ELEVEN, MINIMAX_VOICES } from '../../lib/muapi/voices';
@@ -33,6 +34,8 @@ export function DubPanel({ clip, fps, characters, canGenerate, onAddDub }: {
   const [added, setAdded] = useState<string[]>([]);
   const [error, setError] = useState('');
   const abort = useRef<AbortController | null>(null);
+  /** a cancelled or interrupted run, kept so it can be resumed without paying again for what finished */
+  const [paused, setPaused] = useState<{ job: ClipJob; state: DubState } | null>(null);
 
   const locked = loaded && !has('dubbing');
   const sourceSeconds = (clip.sourceFrames ?? clip.trimStart + clip.duration) / fps;
@@ -47,19 +50,22 @@ export function DubPanel({ clip, fps, characters, canGenerate, onAddDub }: {
   }
   const toggle = (id: string) => setLangs(l => (l.includes(id) ? l.filter(x => x !== id) : l.length >= MAX_DUB_LANGUAGES ? l : [...l, id]));
 
-  async function start() {
-    const voice = resolveVoice();
+  async function start(resume?: { job: ClipJob; state: DubState }) {
+    const voice = resume ? resume.state.voice : resolveVoice();
     if (!clip.src || !voice || langs.length === 0 || problem) { setError(problem ?? 'Pick a voice and at least one language.'); return; }
-    if (typeof profile?.credits_balance === 'number' && profile.credits_balance < est.total) { setError(`You need ${(est.total - profile.credits_balance).toLocaleString('en-US')} more credits (this costs about ${est.total.toLocaleString('en-US')}). Add credits in Settings.`); return; }
-    if (est.total > CONFIRM_CREDITS && !window.confirm(`Dubbing into ${langs.length} language${langs.length === 1 ? '' : 's'} costs about ${formatCredits(est.total)}. Continue?`)) return;
-    setError(''); setResult(null); setAdded([]); setRunning(true);
+    if (!resume && typeof profile?.credits_balance === 'number' && profile.credits_balance < est.total) { setError(`You need ${(est.total - profile.credits_balance).toLocaleString('en-US')} more credits (this costs about ${est.total.toLocaleString('en-US')}). Add credits in Settings.`); return; }
+    if (!resume && est.total > CONFIRM_CREDITS && !window.confirm(`Dubbing into ${langs.length} language${langs.length === 1 ? '' : 's'} costs about ${formatCredits(est.total)}. Continue?`)) return;
+    setError(''); setResult(null); setAdded([]); setPaused(null); setRunning(true);
     setProgress(Object.fromEntries(langs.map(l => [l, { stage: 'translate' as DubStage, status: 'waiting' as Status }])));
     abort.current = new AbortController();
     try {
-      const r = await runDub({ sourceUrl: clip.src, seconds: sourceSeconds, voice, lipsync: model, languages: langs, signal: abort.current.signal,
+      const r = await runDub({ sourceUrl: clip.src, seconds: sourceSeconds, voice, lipsync: model, languages: resume ? resume.state.languages : langs, resume, signal: abort.current.signal,
         onProgress: e => { if (e.language === 'all') return; setProgress(p => ({ ...p, [e.language]: { stage: e.stage, status: e.status === 'running' ? 'running' : e.status === 'failed' ? 'failed' : e.stage === 'lipsync' ? 'done' : 'running', detail: e.detail } })); } }, defaultDubDeps);
       setResult(r);
-    } catch (e) { setError(e instanceof Error && e.message === 'Cancelled' ? 'Cancelled. Finished steps are kept.' : e instanceof Error ? e.message : 'Dubbing failed.'); }
+    } catch (e) {
+      const saved = resumeFrom(e); if (saved) setPaused(saved);
+      setError(e instanceof Error && e.message === 'Cancelled' ? 'Cancelled. Finished steps are kept, so resuming only pays for what is left.' : e instanceof Error ? e.message : 'Dubbing failed.');
+    }
     finally { setRunning(false); abort.current = null; }
   }
 
@@ -90,8 +96,9 @@ export function DubPanel({ clip, fps, characters, canGenerate, onAddDub }: {
         {trimmed && <p className="text-[11px] text-amber-300/90">This clip is trimmed on the timeline. Dubbing uses the whole original clip.</p>}
         {problem && langs.length > 0 && <p className="text-[11px] text-amber-300/90">{problem}</p>}
         <div className="flex items-center justify-between text-[12px]"><span className="text-zinc-500">Estimated cost</span><span className="tnum font-medium text-zinc-200" data-testid="dub-cost">{langs.length ? formatCredits(est.total) : 'pick a language'}</span></div>
-        <button type="button" onClick={start} disabled={!canGenerate || !langs.length || !!problem} className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-accent text-[12px] font-semibold text-black disabled:opacity-40">Dub it</button>
+        <button type="button" onClick={() => { void start(); }} disabled={!canGenerate || !langs.length || !!problem} className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-accent text-[12px] font-semibold text-black disabled:opacity-40">Dub it</button>
       </fieldset>
+      {paused && !running && <button type="button" onClick={() => { void start(paused); }} className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-amber-400/20 text-[12px] font-semibold text-amber-200">Resume dubbing</button>}
       {running && <button type="button" onClick={() => abort.current?.abort()} className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-line text-[12px] text-zinc-300"><X className="h-3.5 w-3.5" />Cancel</button>}
       {Object.keys(progress).length > 0 && (
         <ul className="space-y-1.5" aria-label="Dub progress">

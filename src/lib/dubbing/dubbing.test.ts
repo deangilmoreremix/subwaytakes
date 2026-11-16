@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../supabase', () => ({ supabase: {} }));
-import { dubProblem, estimateDub, newDubState, runDub, type DubDeps, type DubOptions } from './pipeline';
+import { dubProblem, estimateDub, newDubState, resumeFrom, runDub, type DubDeps, type DubOptions } from './pipeline';
 import { buildTranslatePrompt, cleanTranslation, speechBudget, trimToBudget } from './prompts';
 import { DUB_LANGUAGES, MAX_DUB_LANGUAGES } from './languages';
 import { requiredEntitlements } from '../../../supabase/functions/_shared/entitlements';
@@ -107,6 +107,17 @@ describe('runDub', () => {
     const aborting: DubDeps = { ...deps, runModel: (async (slug: string, input: Record<string, unknown>, opts?: { onSubmitted?: (id: string) => void }) => { if (slug.includes('tts')) ctl.abort(); return (deps.runModel as unknown as (...a: unknown[]) => unknown)(slug, input, opts); }) as unknown as DubDeps['runModel'] };
     await expect(runDub({ ...base, signal: ctl.signal }, aborting)).rejects.toThrow('Cancelled');
     expect(patches[patches.length - 1]).toMatchObject({ stage: 'paused' }); expect(patches[patches.length - 1]).not.toHaveProperty('status');
+  });
+  it('hands the saved state back on cancel so the run can be resumed without paying twice', async () => {
+    const ctl = new AbortController();
+    const { deps } = world();
+    const aborting: DubDeps = { ...deps, runModel: (async (slug: string, input: Record<string, unknown>, opts?: { onSubmitted?: (id: string) => void }) => { if (slug.includes('tts')) ctl.abort(); return (deps.runModel as unknown as (...a: unknown[]) => unknown)(slug, input, opts); }) as unknown as DubDeps['runModel'] };
+    let saved: ReturnType<typeof resumeFrom>;
+    try { await runDub({ ...base, signal: ctl.signal }, aborting); } catch (e) { saved = resumeFrom(e); }
+    expect(saved?.state.words).toBeTruthy(); expect(saved?.state.perLang.es?.text).toBeTruthy();
+    const second = world();
+    const r = await runDub({ ...base, resume: saved }, second.deps);
+    expect(slugs(second.calls)).not.toContain('openai-whisper'); expect(r.results.every(x => x.url)).toBe(true);
   });
   it('shortens a line that cannot fit the clip and says so', async () => {
     const { deps, calls } = world();

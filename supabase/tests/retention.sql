@@ -62,6 +62,13 @@ DO $$ BEGIN FOR i IN 1..50 LOOP PERFORM project_create('p' || i, '{}'); END LOOP
 SELECT pg_temp.fails('the 51st project is refused', $q$ SELECT * FROM project_create('one too many', '{}') $q$, 'project_limit');
 RESET ROLE;
 SET ROLE anon;
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000101', false);
+SELECT set_config('request.jwt.claims', '{"is_anonymous":true}', false);
+SELECT pg_temp.fails('guest (anonymous sign-in) accounts cannot store projects', $q$ SELECT * FROM project_create('x', '{}') $q$, 'account_required');
+SELECT set_config('request.jwt.claims', '', false);
+RESET ROLE;
+SET ROLE anon;
 SELECT pg_temp.fails('anonymous callers cannot create projects', $q$ SELECT * FROM project_create('x', '{}') $q$, 'permission denied');
 RESET ROLE;
 
@@ -84,6 +91,8 @@ INSERT INTO brand_kits (user_id, handle, primary_color, logo_url, sponsor_text) 
 SELECT pg_temp.expect('a valid brand kit saves', (SELECT show_watermark FROM brand_kits) = true);
 SELECT pg_temp.fails('a bad colour is refused', $q$ UPDATE brand_kits SET primary_color = 'red' $q$, 'check');
 SELECT pg_temp.fails('a handle with markup characters is refused', $q$ UPDATE brand_kits SET handle = '<script>' $q$, 'check');
+SELECT pg_temp.fails('a logo with a user@host trick is refused', $q$ UPDATE brand_kits SET logo_url = 'https://x.supabase.co@evil.example/storage/v1/object/public/media/00000000-0000-0000-0000-000000000101/logo.png' $q$, 'check');
+SELECT pg_temp.fails('a logo path with dot-dot is refused', $q$ UPDATE brand_kits SET logo_url = 'https://x.supabase.co/storage/v1/object/public/media/00000000-0000-0000-0000-000000000101/..%2f..%2fx.png' $q$, 'check');
 SELECT pg_temp.fails('a logo from someone else''s folder is refused', $q$ UPDATE brand_kits SET logo_url = 'https://x.supabase.co/storage/v1/object/public/media/00000000-0000-0000-0000-000000000102/logo.png' $q$, 'check');
 SELECT pg_temp.fails('an http logo is refused', $q$ UPDATE brand_kits SET logo_url = 'http://x.supabase.co/storage/v1/object/public/media/00000000-0000-0000-0000-000000000101/logo.png' $q$, 'check');
 SELECT pg_temp.fails('a logo outside the media bucket is refused', $q$ UPDATE brand_kits SET logo_url = 'https://evil.example/logo.png' $q$, 'check');
@@ -119,6 +128,7 @@ SELECT pg_temp.fails('an account that already bought cannot claim a code', $q$ S
 -- the reward: first purchase of at least the minimum
 SELECT pg_temp.expect('the first purchase is fulfilled', pg_temp.buy(:e1, 'credits_s', 'cs_ref1', 'pi_ref1') = 'fulfilled');
 SELECT pg_temp.expect('referrer and referee are rewarded from the real purchase', pg_temp.balance(:rr) = 300 AND pg_temp.balance(:e1) = 1000 + 200);
+SELECT pg_temp.expect('rewards are capped by order size (30 percent of 1000 credits = 300)', (SELECT referrer_reward FROM referrals WHERE referee_id = :e1) = 300 AND (SELECT referee_reward FROM referrals WHERE referee_id = :e1) = 200);
 SELECT pg_temp.expect('the referral is marked rewarded against that order', (SELECT status FROM referrals WHERE referee_id = :e1) = 'rewarded' AND (SELECT reward_order_id FROM referrals WHERE referee_id = :e1) = (SELECT id FROM orders WHERE stripe_session_id = 'cs_ref1'));
 SELECT pg_temp.expect('a second purchase earns nothing more', pg_temp.buy(:e1, 'credits_s', 'cs_ref2', 'pi_ref2') = 'fulfilled' AND pg_temp.balance(:rr) = 300 AND pg_temp.balance(:e1) = 2200);
 SELECT pg_temp.expect('a duplicate webhook delivery cannot reward twice', order_fulfil('cs_ref1', 'pi_ref1', 1000, 'usd') = 'already' AND pg_temp.balance(:rr) = 300);
@@ -126,6 +136,18 @@ SELECT pg_temp.expect('a duplicate webhook delivery cannot reward twice', order_
 -- reversal takes the rewards back
 SELECT pg_temp.expect('refunding the rewarded order reverses it', order_reverse('pi_ref1', 'refunded', 'test') = 'reversed');
 SELECT pg_temp.expect('both rewards are taken back, never below zero', pg_temp.balance(:rr) = 0 AND pg_temp.balance(:e1) = 2200 - 1000 - 200 AND (SELECT status FROM referrals WHERE referee_id = :e1) = 'void');
+
+-- a reward can never exceed the sale: a small order caps it
+UPDATE referral_settings SET max_reward_pct = 10;
+SELECT referral_claim(:p3, (SELECT code FROM t_code));
+SELECT pg_temp.buy(:p3, 'credits_s', 'cs_pct', 'pi_pct');
+SELECT pg_temp.expect('with a 10 percent cap a 1000-credit order rewards at most 100 each', (SELECT referrer_reward FROM referrals WHERE referee_id = :p3) = 100 AND (SELECT referee_reward FROM referrals WHERE referee_id = :p3) = 100);
+SELECT pg_temp.expect('refunding it after the credits are spent records the unrecoverable reward', (SELECT order_reverse('pi_pct', 'refunded', 'x')) = 'reversed');
+UPDATE referral_settings SET max_reward_pct = 30;
+
+-- reciprocal claims are refused
+INSERT INTO referral_codes (user_id, code) VALUES (:e1, 'RECIPRO1');
+SELECT pg_temp.fails('A referring B and B referring A is refused', $q$ SELECT referral_claim('00000000-0000-0000-0000-000000000111', 'RECIPRO1') $q$, 'reciprocal_referral');
 
 -- minimum order, cap and switch
 UPDATE referral_settings SET min_order_cents = 5000;
@@ -146,7 +168,7 @@ SELECT pg_temp.fails('users cannot call the reward trigger function', $q$ SELECT
 SELECT pg_temp.fails('users cannot read the stats', $q$ SELECT retention_stats() $q$, 'permission denied');
 SELECT pg_temp.fails('users cannot change reward settings', $q$ UPDATE referral_settings SET referrer_reward = 100000 $q$, 'permission denied');
 SELECT pg_temp.expect('a referee sees their own referral row but not other people''s', (SELECT count(*) FROM referrals WHERE referee_id <> auth.uid() AND referrer_id <> auth.uid()) = 0);
-SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000103', false);
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000101', false);
 SELECT pg_temp.expect('an unrelated user sees no referrals', (SELECT count(*) FROM referrals) = 0);
 RESET ROLE;
 

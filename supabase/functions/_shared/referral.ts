@@ -23,7 +23,7 @@ export async function referralHandle(caller: ReferralCaller | null, body: unknow
   } catch (e) {
     const m = e instanceof Error ? e.message : '';
     if (m.includes('unknown_code')) return reply(404, { error: 'That invite link is not valid.', code: 'unknown_code' });
-    if (m.includes('self_referral')) return reply(400, { error: 'You cannot use your own invite link.', code: 'self_referral' });
+    if (m.includes('self_referral') || m.includes('reciprocal_referral')) return reply(400, { error: 'This invite cannot be used on this account.', code: 'self_referral' });
     if (m.includes('already_claimed')) return reply(409, { error: 'An invite was already applied to this account.', code: 'already_claimed' });
     if (m.includes('not_new_customer')) return reply(400, { error: 'Invites are for new customers.', code: 'not_new_customer' });
     if (m.includes('referrals_disabled')) return reply(503, { error: 'Invites are paused right now.', code: 'referrals_disabled' });

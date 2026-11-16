@@ -113,4 +113,18 @@ RB=$("${PSQL[@]}" -At -c "SELECT credits_balance FROM user_profiles WHERE id = '
 EB=$("${PSQL[@]}" -At -c "SELECT credits_balance FROM user_profiles WHERE id = '$RE'")
 BADR=$("${PSQL[@]}" -At -c "SELECT count(*) FROM user_profiles p WHERE p.credits_balance IS DISTINCT FROM (SELECT COALESCE(sum(delta), 0) FROM credit_ledger l WHERE l.user_id = p.id)")
 if [ "$RB" -eq 300 ] && [ "$EB" -eq 2200 ] && [ "$BADR" -eq 0 ]; then echo "PASS: two simultaneous first purchases reward the referrer once (referrer $RB, referee $EB)"; else echo "FAIL: referral reward race (referrer=$RB referee=$EB drift=$BADR)"; exit 1; fi
+
+# ---- concurrency: the per-referrer reward cap holds when several referred customers pay at the same moment (cap 2, five buyers).
+CR=00000000-0000-0000-0000-0000000001b0
+"${PSQL[@]}" -c "INSERT INTO auth.users (id, email) VALUES ('$CR', 'cap@example.com'); INSERT INTO user_profiles (id) VALUES ('$CR'); UPDATE referral_settings SET max_rewards_per_referrer = 2;" >/dev/null
+CCODE=$("${PSQL[@]}" -At -c "SET request.jwt.claim.sub = '$CR'; SET ROLE authenticated; SELECT my_referral()->>'code';" | tail -1)
+for i in 1 2 3 4 5; do
+  U=00000000-0000-0000-0000-0000000001b$i
+  "${PSQL[@]}" -c "INSERT INTO auth.users (id, email) VALUES ('$U', 'cap$i@example.com'); INSERT INTO user_profiles (id) VALUES ('$U'); SELECT referral_claim('$U', '$CCODE'); SELECT order_attach_session((SELECT order_id FROM order_create_pending('$U', 'credits_s')), 'cs_cap$i');" >/dev/null
+done
+for i in 1 2 3 4 5; do ( "${PSQL[@]}" -At -c "SELECT order_fulfil('cs_cap$i', 'pi_cap$i', 1000, 'usd');" >"$WORK/cap-$i.out" 2>/dev/null || true ) & done
+wait
+RW=$("${PSQL[@]}" -At -c "SELECT count(*) FROM referrals WHERE referrer_id = '$CR' AND status = 'rewarded'")
+CB=$("${PSQL[@]}" -At -c "SELECT credits_balance FROM user_profiles WHERE id = '$CR'")
+if [ "$RW" -eq 2 ] && [ "$CB" -eq 600 ]; then echo "PASS: referral cap holds under concurrent purchases (2 of 5 rewarded, referrer balance $CB)"; else echo "FAIL: referral cap race (rewarded=$RW balance=$CB)"; exit 1; fi
 echo "ALL SQL TESTS PASSED"

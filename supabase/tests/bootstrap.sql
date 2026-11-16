@@ -9,6 +9,9 @@ CREATE TABLE auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email te
 -- auth.uid() reads the JWT subject; tests set it with: SELECT set_config('request.jwt.claim.sub', '<uuid>', false)
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 
+-- auth.jwt() reads the claims; tests set them with: SELECT set_config('request.jwt.claims', '{"is_anonymous":true}', false)
+CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT COALESCE(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
+
 GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 

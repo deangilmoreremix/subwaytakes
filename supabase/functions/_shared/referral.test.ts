@@ -26,7 +26,7 @@ describe('referral claim', () => {
     for (const b of [null, {}, { code: 5 }, { code: '' }, { code: 'short' }, { code: 'TOOLONGCODE1' }, { code: 'AB12-D34' }, { code: "x'; drop" }]) expect((await referralHandle(user, b, deps)).status).toBe(400);
     expect(w.claims).toHaveLength(0);
   });
-  it.each([['unknown_code', 404], ['self_referral', 400], ['already_claimed', 409], ['not_new_customer', 400], ['referrals_disabled', 503], ['boom', 500]])('maps %s to %i', async (code, status) => {
+  it.each([['unknown_code', 404], ['self_referral', 400], ['reciprocal_referral', 400], ['already_claimed', 409], ['not_new_customer', 400], ['referrals_disabled', 503], ['boom', 500]])('maps %s to %i', async (code, status) => {
     const { deps } = world({ claim: async () => { throw new Error(code); } });
     expect((await referralHandle(user, { code: 'AB12CD34' }, deps)).status).toBe(status);
   });

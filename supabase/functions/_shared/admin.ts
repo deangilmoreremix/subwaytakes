@@ -156,8 +156,8 @@ export async function adminHandle(caller: AdminCaller | null, req: unknown, deps
       if ('minOrderCents' in p) { if (!isInt(p.minOrderCents, 100, 1_000_000)) return bad('Minimum order must be at least 100 cents.'); out.min_order_cents = p.minOrderCents; }
       if ('maxRewardsPerReferrer' in p) { if (!isInt(p.maxRewardsPerReferrer, 0, 1000)) return bad('Reward cap must be a whole number from 0 to 1000.'); out.max_rewards_per_referrer = p.maxRewardsPerReferrer; }
       if (!Object.keys(out).length) return bad('Nothing to change.');
+      await deps.audit(caller.id, 'set_referral', { patch: out });   // record first: a change without a record must not exist
       await deps.setReferralSettings(out);
-      await deps.audit(caller.id, 'set_referral', { patch: out });
       return { status: 200, body: { referral: await deps.getReferralSettings() } };
     }
     case 'void_referral': {
