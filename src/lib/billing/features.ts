@@ -2,7 +2,7 @@
  * Paid features, as the app shows them. The gateway enforces the same keys on the server for anything that spends muapi money
  * (supabase/functions/_shared/entitlements.ts). Cities and shows are prompt text, so for those this is a display lock only.
  */
-export type Feature = 'cuts' | 'voices' | 'recast' | 'extra_cities' | 'happiness';
+export type Feature = 'cuts' | 'voices' | 'recast' | 'extra_cities' | 'happiness' | 'brand';
 
 export const PACK_NAMES: Record<string, string> = {
   pro_pack: 'Pro Pack',
@@ -18,6 +18,7 @@ export const FEATURES: Record<Feature, FeatureInfo> = {
   recast: { label: 'Recast', needs: ['recast'], product: 'recast_happiness' },
   extra_cities: { label: 'All 25 cities', needs: ['pro_pack'], product: 'pro_pack' },
   happiness: { label: 'Happiness show', needs: ['happiness'], product: 'recast_happiness' },
+  brand: { label: 'Brand kit and watermark-free exports', needs: ['commercial'], product: 'commercial' },
 };
 
 /** Cities everyone can use. The rest come with the Pro Pack. */

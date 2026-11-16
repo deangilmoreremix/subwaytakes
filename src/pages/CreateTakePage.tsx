@@ -27,6 +27,9 @@ import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
 import { useCloudProject } from '../lib/projects/useCloudProject';
 import { useSearchParams } from 'react-router-dom';
+import { useBrandKit } from '../lib/brand/useBrandKit';
+import { useBilling } from '../lib/billing/useBilling';
+import { sameBrand, snapshotBrand } from '../lib/brand/model';
 import { OnboardingCard } from '../components/OnboardingCard';
 import { useOnboardingFlags } from '../lib/onboarding';
 import { applyTemplate, type Template } from '../lib/templates';
@@ -69,6 +72,19 @@ export function CreateTakePage() {
   const openId = search.get('project');
   const cloud = useCloudProject({ project, setProject, getProject, openId });
   const { flags: onboarding, update: updateOnboarding } = useOnboardingFlags();
+  // keep the project's brand in step with the saved kit (and with whether the licence is owned)
+  const { kit: brandKit, loaded: brandLoaded } = useBrandKit();
+  const { has: hasPack, loaded: billingLoaded } = useBilling();
+  const entitledBrand = hasPack('brand');
+  useEffect(() => {
+    if (!brandLoaded || !billingLoaded) return;
+    const cur = getProject();
+    const snap = snapshotBrand(brandKit, entitledBrand);
+    if (sameBrand(cur.style?.brand, snap)) return;
+    const style = { ...cur.style, brand: snap };
+    if (!snap) delete style.brand;
+    setProject({ ...cur, style }, false);
+  }, [brandKit, brandLoaded, billingLoaded, entitledBrand, getProject, setProject, project.clips.length]);
   const applyTpl = (t: Template) => {
     const r = applyTemplate(spec, t);
     setSpec(r.spec);
