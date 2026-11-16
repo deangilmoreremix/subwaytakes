@@ -23,6 +23,10 @@ function setup(isAdmin = true) {
     paidOrderPayment: async id => (id === ORDER ? { paymentIntent: 'pi_1', userId: 'u-maya' } : null),
     stripeRefund: async pi => { calls.push(['refund', [pi]]); if (pi === 'pi_fail') throw new Error('x'); },
     audit: async (...a) => { calls.push(['audit', a]); },
+    retentionStats: async () => ({ active_users_7d: 3 }),
+    getReferralSettings: async () => ({ enabled: true }),
+    setReferralSettings: async p => { calls.push(['setReferral', [p]]); },
+    voidReferral: async id => { calls.push(['voidReferral', [id]]); return id === 'u-maya'; },
     newRef: () => 'ref-1',
     log: (e, d) => { logs.push([e, d]); },
   };
@@ -165,5 +169,34 @@ describe('billing admin actions', () => {
     const { deps, calls } = setup(); await adminHandle(admin, { action: 'set_settings', patch: { enforceEntitlements: false } }, deps);
     expect(calls.find(c => c[0] === 'setSettings')![1]).toEqual([{ enforce_entitlements: false }]);
     expect((await adminHandle(admin, { action: 'set_settings', patch: { enforceEntitlements: 'no' } }, deps)).status).toBe(400);
+  });
+});
+
+
+describe('retention admin actions', () => {
+  it('shows retention numbers and referral settings', async () => {
+    const { deps } = setup(); expect(await adminHandle(admin, { action: 'retention' }, deps)).toMatchObject({ status: 200, body: { stats: { active_users_7d: 3 }, referral: { enabled: true } } });
+  });
+  it('edits referral settings with validation, and audits the change', async () => {
+    const { deps, calls } = setup();
+    expect((await adminHandle(admin, { action: 'set_referral', patch: { referrerReward: 250, refereeReward: 100, minOrderCents: 1500, maxRewardsPerReferrer: 10, enabled: false } }, deps)).status).toBe(200);
+    expect(calls.find(c => c[0] === 'setReferral')![1]).toEqual([{ referrer_reward: 250, referee_reward: 100, min_order_cents: 1500, max_rewards_per_referrer: 10, enabled: false }]);
+    expect(calls.some(c => c[0] === 'audit' && c[1][1] === 'set_referral')).toBe(true);
+  });
+  it.each([[{ referrerReward: -1 }], [{ referrerReward: 1.5 }], [{ refereeReward: 1e9 }], [{ minOrderCents: 5 }], [{ maxRewardsPerReferrer: 'many' }], [{ enabled: 'yes' }], [{}]])('rejects bad referral patch %j', async patch => {
+    const { deps, calls } = setup(); expect((await adminHandle(admin, { action: 'set_referral', patch }, deps)).status).toBe(400); expect(calls.some(c => c[0] === 'setReferral')).toBe(false);
+  });
+  it('voids a pending referral, audits it, and reports when there is none', async () => {
+    const { deps, calls } = setup();
+    expect((await adminHandle(admin, { action: 'void_referral', email: 'maya@example.com' }, deps)).status).toBe(200);
+    expect(calls.some(c => c[0] === 'audit' && c[1][1] === 'void_referral')).toBe(true);
+    expect((await adminHandle(admin, { action: 'void_referral', email: 'nobody@example.com' }, deps)).status).toBe(404);
+    const w = setup(); w.deps.voidReferral = async () => false;
+    expect((await adminHandle(admin, { action: 'void_referral', email: 'maya@example.com' }, w.deps)).status).toBe(404);
+  });
+  it('only admins can use them', async () => {
+    const { deps, calls } = setup(false);
+    for (const a of ['retention', 'set_referral', 'void_referral']) expect((await adminHandle(admin, { action: a, patch: { enabled: true }, email: 'maya@example.com' }, deps)).status).toBe(403);
+    expect(calls).toHaveLength(0);
   });
 });

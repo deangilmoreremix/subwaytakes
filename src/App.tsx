@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/auth';
 import { StudioShell as AppShell } from './components/studio/StudioShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
+import { captureReferral, useReferralClaim } from './lib/referrals';
 
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
 const CreateTakePage = lazy(() => import('./pages/CreateTakePage').then(m => ({ default: m.CreateTakePage })));
@@ -62,6 +63,8 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
 
 function AppContent() {
   const { loading } = useAuth();
+  useEffect(() => { captureReferral(window.location.search); }, []);   // an invite link is remembered before any sign-in redirect
+  useReferralClaim();
 
   if (loading) return <FullScreenLoader />;
 

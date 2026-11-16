@@ -21,6 +21,11 @@ export interface AdminDeps {
   stripeRefund(paymentIntent: string): Promise<void>;
   /** Permanent record of an operator action that changes money or unlocks (who, what). */
   audit(actorId: string, action: string, detail: Record<string, unknown>): Promise<void>;
+  retentionStats(): Promise<unknown>;
+  getReferralSettings(): Promise<Record<string, unknown>>;
+  setReferralSettings(patch: Record<string, unknown>): Promise<void>;
+  /** Stops a still-unrewarded referral from ever paying out. Returns false when there was nothing to void. */
+  voidReferral(refereeId: string): Promise<boolean>;
   newRef(): string;
   log(event: string, data: Record<string, unknown>): void;
 }
@@ -140,6 +145,30 @@ export async function adminHandle(caller: AdminCaller | null, req: unknown, deps
       deps.log('admin_refund', { orderId, userId: pay.userId, by: caller.id });
       // The credits and unlocks are taken back when Stripe's refund webhook arrives, not here, so there is one path and one record.
       return { status: 200, body: { ok: true, note: 'Refund sent. Credits and unlocks are removed when Stripe confirms it.' } };
+    }
+    case 'retention': return { status: 200, body: { stats: await deps.retentionStats(), referral: await deps.getReferralSettings() } };
+    case 'set_referral': {
+      const p = isObj(req.patch) ? req.patch : {};
+      const out: Record<string, unknown> = {};
+      if ('enabled' in p) { if (typeof p.enabled !== 'boolean') return bad('enabled must be true or false.'); out.enabled = p.enabled; }
+      if ('referrerReward' in p) { if (!isInt(p.referrerReward, 0, 100_000)) return bad('Referrer reward must be a whole number of credits (0 to 100000).'); out.referrer_reward = p.referrerReward; }
+      if ('refereeReward' in p) { if (!isInt(p.refereeReward, 0, 100_000)) return bad('Friend reward must be a whole number of credits (0 to 100000).'); out.referee_reward = p.refereeReward; }
+      if ('minOrderCents' in p) { if (!isInt(p.minOrderCents, 100, 1_000_000)) return bad('Minimum order must be at least 100 cents.'); out.min_order_cents = p.minOrderCents; }
+      if ('maxRewardsPerReferrer' in p) { if (!isInt(p.maxRewardsPerReferrer, 0, 1000)) return bad('Reward cap must be a whole number from 0 to 1000.'); out.max_rewards_per_referrer = p.maxRewardsPerReferrer; }
+      if (!Object.keys(out).length) return bad('Nothing to change.');
+      await deps.setReferralSettings(out);
+      await deps.audit(caller.id, 'set_referral', { patch: out });
+      return { status: 200, body: { referral: await deps.getReferralSettings() } };
+    }
+    case 'void_referral': {
+      const email = String(req.email ?? '').trim();
+      if (!email) return bad('Email is required.');
+      const id = await deps.findUser(email);
+      if (!id) return { status: 404, body: { error: 'No user with that email.' } };
+      const done = await deps.voidReferral(id);
+      if (!done) return { status: 404, body: { error: 'That customer has no pending referral.' } };
+      await deps.audit(caller.id, 'void_referral', { userId: id });
+      return { status: 200, body: { ok: true } };
     }
     case 'set_model': {
       const slug = String(req.slug ?? '');

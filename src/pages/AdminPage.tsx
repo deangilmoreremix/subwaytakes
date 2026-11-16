@@ -4,6 +4,7 @@ import { Loader2, ShieldCheck } from 'lucide-react';
 import { Label, inputCls } from '../components/studio/ui';
 import { adminCall, checkAdmin } from '../lib/admin';
 import { AdminBilling } from '../components/AdminBilling';
+import { AdminRetention } from '../components/AdminRetention';
 
 interface Stats { credits_granted: number; credits_spent_net: number; credits_outstanding: number; est_muapi_usd_completed: number; est_muapi_usd_24h: number; calls_24h: number; failed_24h: number; open_holds: number }
 interface Settings { margin: number; max_credits_per_call: number; max_calls_per_minute: number; max_open_holds: number; daily_credit_cap: number; kill_switch: boolean }
@@ -78,6 +79,7 @@ export function AdminPage() {
       </section>
 
       <AdminBilling />
+      <AdminRetention />
 
       <section className="rounded-2xl border border-line bg-ink-850 p-5" aria-label="Gateway settings">
         <div className="flex items-center justify-between"><Label>Gateway</Label>

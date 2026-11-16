@@ -55,6 +55,14 @@ const deps: AdminDeps = {
   },
   stripeRefund: (pi) => refundPayment((u, init) => fetch(u, { ...init, signal: AbortSignal.timeout(20_000) }), Deno.env.get("STRIPE_SECRET_KEY") ?? "", pi),
   audit: async (actor, action, detail) => { const { error } = await admin.rpc("billing_audit_write", { p_actor: actor, p_action: action, p_detail: detail }); if (error) throw new Error("audit_failed"); },
+  retentionStats: async () => (await admin.rpc("retention_stats")).data,
+  getReferralSettings: async () => (await admin.from("referral_settings").select("enabled, referrer_reward, referee_reward, min_order_cents, max_rewards_per_referrer").eq("id", true).single()).data ?? {},
+  setReferralSettings: async (patch) => { const { error } = await admin.from("referral_settings").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", true); if (error) throw new Error(error.message); },
+  voidReferral: async (refereeId) => {
+    const { data, error } = await admin.from("referrals").update({ status: "void" }).eq("referee_id", refereeId).eq("status", "claimed").select("referee_id");
+    if (error) throw new Error(error.message);
+    return !!data?.length;
+  },
   newRef: () => crypto.randomUUID(),
   log: (event, data) => console.log(JSON.stringify({ event, ...data })),
 };

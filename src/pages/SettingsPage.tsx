@@ -6,6 +6,8 @@ import { CITIES } from '../lib/places';
 import { clsx } from '../lib/format';
 import { CreditsCard } from '../components/CreditsCard';
 import { BrandKitCard } from '../components/BrandKitCard';
+import { UsageCard } from '../components/UsageCard';
+import { ReferralCard } from '../components/ReferralCard';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -77,6 +79,8 @@ export function SettingsPage() {
       <h1 className="text-2xl font-semibold text-zinc-100 mb-8">Settings</h1>
 
       <div className="mb-6"><CreditsCard /></div>
+      <div className="mb-6"><UsageCard /></div>
+      <div className="mb-6"><ReferralCard /></div>
       <div className="mb-6"><BrandKitCard /></div>
 
       <div className="space-y-8">
