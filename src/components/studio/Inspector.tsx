@@ -8,6 +8,7 @@ import { PlacePanel } from './PlacePanel';
 import { IdeasButton } from './IdeasButton';
 import { BatchBox } from './BatchBox';
 import { TemplatePicker } from './TemplatePicker';
+import { DubPanel } from './DubPanel';
 import type { Template } from '../../lib/templates';
 import { SHOWS, TONE_LABEL, showOf, titleFor } from '../../lib/shows';
 import type { StoredTitle } from '../../lib/shows/stored';
@@ -27,8 +28,8 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, canGenerate }: {
-  onTemplate: (t: Template) => void;
+export function Inspector({ onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, canGenerate }: {
+  onTemplate: (t: Template) => void; onAddDub: (url: string, label: string, seconds: number) => Promise<void>;
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
   pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; characters: CharacterBible[]; hostHint?: string; imageRoute: boolean; title?: StoredTitle; onTitle: (t: StoredTitle | undefined) => void; onBestOf: () => void; videoClipCount: number; onBatch: (lines: string[]) => void; batch: { running: boolean; done: number; total: number; failed: string[] } | null;
@@ -236,6 +237,7 @@ export function Inspector({ onTemplate, spec, set, slug, setSlug, jobs, loading,
               {captionCount > 0 && !captionState.error && <p className="text-[11px] text-zinc-500">Captions are on the Captions track; click one to edit its text.</p>}
             </div>
           )}
+          {clip.kind === 'video' && clip.src?.startsWith('https://') && <DubPanel key={clip.id} clip={clip} fps={fps} characters={characters} canGenerate={canGenerate} onAddDub={onAddDub} />}
           <div className="grid grid-cols-2 gap-3 text-[12px]">
             <div><Label>Start</Label><p className="tnum text-zinc-300">{(clip.start / fps).toFixed(2)}s</p></div>
             <div><Label>Length</Label><p className="tnum text-zinc-300">{(clip.duration / fps).toFixed(2)}s</p></div>

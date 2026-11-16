@@ -152,6 +152,18 @@ export function CreateTakePage() {
     setSelectedClip(id);
   }, [getProject, setProject]);
 
+  /** A dubbed version of a clip, added after the last clip. Reads the project after the await (see CLAUDE.md). */
+  const addDubToTimeline = useCallback(async (url: string, label: string, fallbackSeconds: number) => {
+    const secs = await getMediaInfo(url).then(i => i.durationSec).catch(() => fallbackSeconds);
+    const cur = getProject();
+    const frames = Math.max(6, Math.round(secs * cur.fps));
+    const track = cur.tracks.find(t => t.kind === 'video')!;
+    const end = cur.clips.filter(c => c.trackId === track.id).reduce((m, c) => Math.max(m, c.start + c.duration), 0);
+    const id = newId();
+    setProject(addClip(cur, { id, trackId: track.id, kind: 'video', label, start: end, duration: frames, trimStart: 0, sourceFrames: frames, src: url, volume: 1 }));
+    setSelectedClip(id);
+  }, [getProject, setProject]);
+
   const addSfx = useCallback(async (sfx: Sfx) => {
     const fps = project.fps;
     const secs = await getMediaInfo(sfx.url).then(i => i.durationSec).catch(() => 1.5);
@@ -364,7 +376,7 @@ export function CreateTakePage() {
           )}
         </div>
         <div className="min-w-0 lg:min-h-0">
-          <Inspector onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
+          <Inspector onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}

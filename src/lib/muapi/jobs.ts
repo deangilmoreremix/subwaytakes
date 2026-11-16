@@ -5,7 +5,7 @@ import { buildNativePrompt, type TakeSpec } from './prompt';
 
 export interface ClipJob {
   id: string;
-  pipeline: 'native' | 'lipsync' | 'recast';
+  pipeline: 'native' | 'lipsync' | 'recast' | 'dub';
   model: string;
   request_id: string | null;
   stage: string;
