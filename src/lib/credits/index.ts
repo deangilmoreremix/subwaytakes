@@ -8,6 +8,15 @@ export const CREDIT_MARGIN = 2.5;
 /** Ask for confirmation before any action that costs more than this many credits ($1). */
 export const CONFIRM_CREDITS = 100;
 
+/** Below this many credits a typical Two-shot (about 150) no longer fits: nudge the customer to top up. */
+export const LOW_CREDITS = 150;
+export type CreditLevel = 'unknown' | 'empty' | 'low' | 'ok';
+export function creditLevel(balance: number | null | undefined): CreditLevel {
+  if (typeof balance !== 'number' || !Number.isFinite(balance)) return 'unknown';
+  if (balance <= 0) return 'empty';
+  return balance < LOW_CREDITS ? 'low' : 'ok';
+}
+
 export function formatCredits(n: number): string {
   const r = Math.round(n);
   return `${r.toLocaleString('en-US')} credit${r === 1 ? '' : 's'}`;

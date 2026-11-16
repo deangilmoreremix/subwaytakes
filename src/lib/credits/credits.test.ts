@@ -59,3 +59,12 @@ describe('interpretGatewayFailure', () => {
     expect((await interpretGatewayFailure({ message: 'boom' })).message).toBe('boom');
   });
 });
+
+describe('creditLevel', () => {
+  it('nudges below one typical shot and is quiet otherwise', async () => {
+    const { creditLevel, LOW_CREDITS } = await import('./index');
+    expect(creditLevel(null)).toBe('unknown'); expect(creditLevel(undefined)).toBe('unknown'); expect(creditLevel(NaN)).toBe('unknown');
+    expect(creditLevel(0)).toBe('empty'); expect(creditLevel(-5)).toBe('empty');
+    expect(creditLevel(LOW_CREDITS - 1)).toBe('low'); expect(creditLevel(LOW_CREDITS)).toBe('ok'); expect(creditLevel(5000)).toBe('ok');
+  });
+});

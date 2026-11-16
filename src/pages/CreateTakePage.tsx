@@ -25,6 +25,11 @@ import { useAuth } from '../lib/auth';
 import { BLOCK_TEXT, CONFIRM_CREDITS, formatCredits } from '../lib/credits';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
+import { useCloudProject } from '../lib/projects/useCloudProject';
+import { useSearchParams } from 'react-router-dom';
+import { OnboardingCard } from '../components/OnboardingCard';
+import { useOnboardingFlags } from '../lib/onboarding';
+import { applyTemplate, type Template } from '../lib/templates';
 import { addClip, assembleBestOf, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
 import { getMediaInfo } from '../lib/timeline/media';
 import { transcribeClip } from '../lib/captions/transcribe';
@@ -60,6 +65,17 @@ export function CreateTakePage() {
   useEffect(() => { listCharacters().then(l => { setCharacters(l); setSpeakerId(id => id ?? (l.find(c => c.role === 'guest' && c.portrait_url && c.voice_id) ?? l[0])?.id); setHostId(id => id ?? (l.find(c => c.role === 'host') ?? l[0])?.id); }).catch(() => undefined); }, []);
 
   const { project, set: setProject, checkpoint, undo, redo, getProject } = useProject();
+  const [search, setSearch] = useSearchParams();
+  const openId = search.get('project');
+  const cloud = useCloudProject({ project, setProject, getProject, openId });
+  const { flags: onboarding, update: updateOnboarding } = useOnboardingFlags();
+  const applyTpl = (t: Template) => {
+    const r = applyTemplate(spec, t);
+    setSpec(r.spec);
+    const cur = getProject();
+    setProject({ ...cur, style: { ...cur.style, captionFont: r.captionFont } });
+  };
+  useEffect(() => { if (openId) setSearch(prev => { const n = new URLSearchParams(prev); n.delete('project'); return n; }, { replace: true }); }, [openId, setSearch]);
   const [selectedClip, setSelectedClip] = useState<string>();
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -290,6 +306,19 @@ export function CreateTakePage() {
 
   return (
     <div className="flex min-h-full flex-col lg:h-full lg:overflow-hidden">
+      {cloud.conflict && (
+        <div role="alert" className="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3 text-[13px] text-amber-100">
+          <span className="min-w-0 flex-1">This project was changed on another device or tab. Nothing was overwritten. Which copy do you want to continue with?</span>
+          <button onClick={() => { void cloud.useLatest().catch(e => setError(e instanceof Error ? e.message : 'Could not open it.')); }} className="h-8 rounded-lg bg-amber-400/20 px-3 text-[12px] font-semibold text-amber-200 hover:bg-amber-400/30">Use the other copy</button>
+          <button onClick={() => { void cloud.keepMine().catch(e => setError(e instanceof Error ? e.message : 'Could not save a copy.')); }} className="h-8 rounded-lg border border-line px-3 text-[12px] text-zinc-200 hover:bg-white/5">Keep mine as a new project</button>
+        </div>
+      )}
+      {!onboarding.dismissed && (
+        <OnboardingCard onDismiss={() => updateOnboarding({ dismissed: true })} input={{
+          customised: spec.show !== DEFAULT_TAKE.show || spec.place.city !== DEFAULT_TAKE.place.city || spec.place.scene !== DEFAULT_TAKE.place.scene || spec.place.time !== DEFAULT_TAKE.place.time,
+          tookTake: spec.take.trim() !== '' && spec.take !== DEFAULT_TAKE.take, balance: profile?.credits_balance ?? null,
+          videoClips: project.clips.filter(c => c.kind === 'video').length, captionClips: project.clips.filter(c => c.kind === 'caption').length, exported: !!onboarding.exported }} />
+      )}
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-4 p-4 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-h-0 flex-col gap-3">
           <div className="h-[min(56vh,520px)] min-h-[380px] lg:h-auto lg:min-h-0 lg:flex-1">
@@ -319,7 +348,7 @@ export function CreateTakePage() {
           )}
         </div>
         <div className="min-w-0 lg:min-h-0">
-          <Inspector spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
+          <Inspector onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}
@@ -335,7 +364,7 @@ export function CreateTakePage() {
       <TimelineEditor project={project} setProject={setProject} checkpoint={checkpoint} undo={undo} redo={redo}
         frame={Math.min(frame, Math.max(0, projectDuration(project)))} playing={playing} onSeek={seek} onToggle={toggle}
         selectedId={selectedClip} onSelect={setSelectedClip} captionDefault={spec.take} onExport={() => setExporting(true)} />
-      {exporting && <ExportDialog project={project} aspect={spec.aspect} onClose={() => setExporting(false)} />}
+      {exporting && <ExportDialog project={project} aspect={spec.aspect} onClose={() => setExporting(false)} onDone={() => updateOnboarding({ exported: true })} />}
     </div>
   );
 }

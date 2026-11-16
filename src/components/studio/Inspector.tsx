@@ -7,6 +7,8 @@ import { FORMATS } from '../../lib/interview';
 import { PlacePanel } from './PlacePanel';
 import { IdeasButton } from './IdeasButton';
 import { BatchBox } from './BatchBox';
+import { TemplatePicker } from './TemplatePicker';
+import type { Template } from '../../lib/templates';
 import { SHOWS, TONE_LABEL, showOf, titleFor } from '../../lib/shows';
 import type { StoredTitle } from '../../lib/shows/stored';
 import { clsx } from '../../lib/format';
@@ -25,7 +27,8 @@ import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
 
-export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, canGenerate }: {
+export function Inspector({ onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, captionState, onGenerateCaptions, canGenerate }: {
+  onTemplate: (t: Template) => void;
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
   pipeline: Pipeline; onPipeline: (p: Pipeline) => void; lipsyncSlot: ReactNode; cutsSlot: ReactNode; characters: CharacterBible[]; hostHint?: string; imageRoute: boolean; title?: StoredTitle; onTitle: (t: StoredTitle | undefined) => void; onBestOf: () => void; videoClipCount: number; onBatch: (lines: string[]) => void; batch: { running: boolean; done: number; total: number; failed: string[] } | null;
@@ -62,6 +65,7 @@ export function Inspector({ spec, set, slug, setSlug, jobs, loading, onAddJob, u
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {tab === 'take' && (<>
+          <TemplatePicker onPick={onTemplate} />
           <div><Label>Show</Label>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
               {SHOWS.map(sh => (

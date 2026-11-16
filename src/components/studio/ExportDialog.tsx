@@ -8,7 +8,7 @@ import type { Aspect } from '../../lib/muapi/registry';
 
 type Phase = 'idle' | 'checking' | 'rendering' | 'done' | 'error';
 
-export function ExportDialog({ project, aspect, onClose }: { project: Project; aspect: Aspect; onClose: () => void }) {
+export function ExportDialog({ project, aspect, onClose, onDone }: { project: Project; aspect: Aspect; onClose: () => void; onDone?: () => void }) {
   const [container, setContainer] = useState<ExportContainer>('mp4');
   const [resolution, setResolution] = useState<ExportResolution>('1080p');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -42,7 +42,7 @@ export function ExportDialog({ project, aspect, onClose }: { project: Project; a
         onProgress: p => { setProgress(p.progress); setEta(p.renderEstimatedTime > 0 ? p.renderEstimatedTime : null); },
       });
       setResult({ url: URL.createObjectURL(blob), mb: blob.size / 1_048_576 });
-      setPhase('done');
+      setPhase('done'); onDone?.();
     } catch (e) {
       if (abort.current?.signal.aborted) { setPhase('idle'); return; }
       const m = e instanceof Error ? e.message : 'Export failed';
