@@ -24,15 +24,24 @@ echo "migration applied"
 BILLING="$ROOT/supabase/migrations/20261121000000_checkout_entitlements.sql"
 "${PSQL[@]}" -f "$BILLING" >/dev/null
 echo "billing migration applied"
+CLIPJOBS="$ROOT/supabase/migrations/20261111000000_clip_jobs.sql"
+RETENTION="$ROOT/supabase/migrations/20261122000000_retention.sql"
+"${PSQL[@]}" -f "$CLIPJOBS" >/dev/null
+"${PSQL[@]}" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON clip_jobs TO authenticated; GRANT ALL ON clip_jobs TO service_role;" >/dev/null   # what Supabase grants by default
+"${PSQL[@]}" -f "$RETENTION" >/dev/null
+echo "retention migration applied"
 
 # Applying the migrations twice must be safe (idempotent apply).
 "${PSQL[@]}" -f "$BILLING" >/dev/null 2>"$WORK/second-billing.err" || { echo "FAIL: billing migration is not re-runnable"; cat "$WORK/second-billing.err"; exit 1; }
 echo "PASS: billing migration can be re-applied"
+"${PSQL[@]}" -f "$RETENTION" >/dev/null 2>"$WORK/second-retention.err" || { echo "FAIL: retention migration is not re-runnable"; cat "$WORK/second-retention.err"; exit 1; }
+echo "PASS: retention migration can be re-applied"
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20261120000000_credits_ledger.sql" >/dev/null 2>"$WORK/second.err" || { echo "FAIL: migration is not re-runnable"; cat "$WORK/second.err"; exit 1; }
 echo "PASS: migration can be re-applied"
 
 "${PSQL[@]}" -f "$ROOT/supabase/tests/credits.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
 "${PSQL[@]}" -f "$ROOT/supabase/tests/billing.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
+"${PSQL[@]}" -f "$ROOT/supabase/tests/retention.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
 
 # ---- re-applying the migration AFTER launch (users with grants and spends) must not change anyone's balance or add ledger rows.
 BEFORE=$("${PSQL[@]}" -At -c "SELECT (SELECT count(*) FROM credit_ledger) || ',' || (SELECT sum(credits_balance) FROM user_profiles) || ',' || (SELECT count(*) FROM credit_ledger WHERE kind = 'opening')")
@@ -90,4 +99,18 @@ if [ "$NF" -eq 1 ] && [ "$BE" -eq 1000 ]; then echo "PASS: 10 concurrent duplica
 wait
 NEG=$("${PSQL[@]}" -At -c "SELECT count(*) FROM user_profiles p WHERE p.credits_balance < 0 OR p.credits_balance IS DISTINCT FROM (SELECT COALESCE(sum(delta), 0) FROM credit_ledger l WHERE l.user_id = p.id)")
 [ "$NEG" -eq 0 ] && echo "PASS: refund racing a spend keeps balances non-negative and the ledger exact" || { echo "FAIL: refund/spend race left a bad balance"; exit 1; }
+
+# ---- concurrency: a referred customer's TWO orders fulfilled at the same moment reward the referrer exactly once.
+RR=00000000-0000-0000-0000-0000000001a1; RE=00000000-0000-0000-0000-0000000001a2
+"${PSQL[@]}" -c "INSERT INTO auth.users (id, email) VALUES ('$RR', 'rr@example.com'), ('$RE', 're@example.com'); INSERT INTO user_profiles (id) VALUES ('$RR'), ('$RE');" >/dev/null
+CODE=$("${PSQL[@]}" -At -c "SET request.jwt.claim.sub = '$RR'; SET ROLE authenticated; SELECT my_referral()->>'code';" | tail -1)
+"${PSQL[@]}" -c "SELECT referral_claim('$RE', '$CODE');" >/dev/null
+"${PSQL[@]}" -c "SELECT order_attach_session((SELECT order_id FROM order_create_pending('$RE', 'credits_s')), 'cs_rr1'); SELECT order_attach_session((SELECT order_id FROM order_create_pending('$RE', 'credits_s')), 'cs_rr2');" >/dev/null
+( "${PSQL[@]}" -At -c "SELECT order_fulfil('cs_rr1', 'pi_rr1', 1000, 'usd');" >"$WORK/rr1.out" 2>/dev/null || true ) &
+( "${PSQL[@]}" -At -c "SELECT order_fulfil('cs_rr2', 'pi_rr2', 1000, 'usd');" >"$WORK/rr2.out" 2>/dev/null || true ) &
+wait
+RB=$("${PSQL[@]}" -At -c "SELECT credits_balance FROM user_profiles WHERE id = '$RR'")
+EB=$("${PSQL[@]}" -At -c "SELECT credits_balance FROM user_profiles WHERE id = '$RE'")
+BADR=$("${PSQL[@]}" -At -c "SELECT count(*) FROM user_profiles p WHERE p.credits_balance IS DISTINCT FROM (SELECT COALESCE(sum(delta), 0) FROM credit_ledger l WHERE l.user_id = p.id)")
+if [ "$RB" -eq 300 ] && [ "$EB" -eq 2200 ] && [ "$BADR" -eq 0 ]; then echo "PASS: two simultaneous first purchases reward the referrer once (referrer $RB, referee $EB)"; else echo "FAIL: referral reward race (referrer=$RB referee=$EB drift=$BADR)"; exit 1; fi
 echo "ALL SQL TESTS PASSED"
