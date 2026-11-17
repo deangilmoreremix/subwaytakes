@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { extractError, extractMediaUrl, normalizeStatus, pickMessage } from './result';
 export { pickMessage };
+import { checkBody, ContentBlockedError } from '../safety';
 import { AccountRequiredError, InsufficientCreditsError, LockedFeatureError, publishBalance } from '../credits';
 
 export type PredictionStatus = 'queued' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
@@ -33,12 +34,13 @@ export async function interpretGatewayFailure(error: { message?: string; context
   const ctx = error.context as Response | undefined;
   if (ctx && typeof ctx.clone === 'function') {
     try {
-      const b = await ctx.clone().json() as { code?: string; needed?: unknown; balance?: unknown; error?: unknown; entitlement?: unknown };
+      const b = await ctx.clone().json() as { code?: string; needed?: unknown; balance?: unknown; error?: unknown; entitlement?: unknown; category?: unknown };
       if (b.code === 'insufficient_credits') {
         const balance = Number(b.balance) || 0;
         publishBalance(balance);
         return new InsufficientCreditsError(Number(b.needed) || balance + 1, balance);
       }
+      if (b.code === 'blocked' && typeof b.error === 'string') return new ContentBlockedError(typeof b.category === 'string' ? b.category : 'blocked', b.error);
       if (b.code === 'locked' && typeof b.entitlement === 'string') return new LockedFeatureError(b.entitlement, typeof b.error === 'string' ? b.error : 'This feature is not unlocked.');
       if ((b.code === 'account_required' || b.code === 'verify_email') && typeof b.error === 'string') return new AccountRequiredError(b.code, b.error);
     } catch { /* not JSON: fall through to the generic message */ }
@@ -48,6 +50,8 @@ export async function interpretGatewayFailure(error: { message?: string; context
 
 /** Calls the muapi-gateway edge function. The server holds the muapi key and charges credits; nothing secret is sent from here. */
 async function proxy<T>(method: 'GET' | 'POST', path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+  // the same content screen the gateway runs: a clear message before anything is sent (the server still enforces it)
+  if (method === 'POST' && !path.endsWith('/estimate-cost')) { const v = checkBody(body); if (!v.ok) throw new ContentBlockedError(v.category, `${v.message} You were not charged.`); }
   const { data, error } = await supabase.functions.invoke('muapi-gateway', { body: { method, path, body, idempotencyKey } });
   if (error) throw await interpretGatewayFailure(error);
   if (data && typeof data === 'object' && 'error' in data && !('status' in data)) {

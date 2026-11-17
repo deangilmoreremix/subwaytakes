@@ -465,3 +465,36 @@ describe('entitlements', () => {
     expect(r.status).toBe(200);
   });
 });
+
+
+// ================================================================ Phase 10: content safety in the gateway
+describe('content safety', () => {
+  const bad = (prompt: string) => ({ method: 'POST', path: '/api/v1/veo3.1-fast-text-to-video', body: { prompt, duration: 8 } } as const);
+  it('refuses a blocked prompt with 400 "blocked" before quoting, reserving or calling muapi, and says nothing was charged', async () => {
+    const { deps, w } = world();
+    const r = await handle(user, bad('a nude person on a train'), deps);
+    expect(r).toMatchObject({ status: 400, body: { code: 'blocked', category: 'sexual' } }); expect(JSON.stringify(r.body)).toMatch(/not charged/);
+    expect(w.estimates).toBe(0); expect(w.submits).toBe(0); expect(w.holds.size).toBe(0); expect(w.balance).toBe(1000);
+  });
+  it('lets the studio\'s own prompts through', async () => {
+    const { deps, w } = world();
+    expect((await handle(user, bad('Handheld vertical two-shot of two commuters. Both hold a flat yellow plastic card held up to the mouth like a microphone. There is no real microphone.'), deps)).status).toBe(200); expect(w.submits).toBe(1);
+  });
+  it('applies the operator\'s own blocked terms', async () => {
+    const { deps, w } = world(); deps.blockedTerms = async () => ['jane roe'];
+    expect((await handle(user, bad('a video of Jane Roe'), deps)).status).toBe(400); expect(w.submits).toBe(0);
+  });
+  it('if the operator list cannot be read the built-in screen still runs and generation is not blocked', async () => {
+    const { deps, w } = world(); deps.blockedTerms = async () => { throw new Error('db'); };
+    expect((await handle(user, bad('two friends on a train'), deps)).status).toBe(200);
+    expect((await handle(user, bad('a nude person'), deps)).status).toBe(400); expect(w.submits).toBe(1);
+  });
+  it('a blocked attempt still counts against the rate limit', async () => {
+    const { deps, w } = world(); await handle(user, bad('a nude person'), deps);
+    expect(w.hits).toEqual(['submit']);
+  });
+  it('is logged for the operator without the customer\'s text', async () => {
+    const { deps, w } = world(); await handle(user, bad('a nude person'), deps);
+    const log = w.logs.find(([e]) => e === 'content_blocked'); expect(log).toBeTruthy(); expect(JSON.stringify(log)).not.toMatch(/nude person/);
+  });
+});

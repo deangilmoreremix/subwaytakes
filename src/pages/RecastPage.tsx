@@ -8,6 +8,8 @@ import { muapi } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
 import { BLOCK_TEXT, CONFIRM_CREDITS, formatCredits, usdToCredits } from '../lib/credits';
 import { UnlockPrompt } from '../components/UnlockPrompt';
+import { FaceConsent } from '../components/FaceConsent';
+import { useFaceConsent } from '../lib/consent';
 import { useBilling } from '../lib/billing/useBilling';
 import { uploadMedia } from '../lib/storage';
 import { listCharacters } from '../lib/characters';
@@ -29,6 +31,7 @@ const credits = (n: number) => formatCredits(n);
 export function RecastPage() {
   const nav = useNavigate();
   const { generationBlock: block } = useAuth();
+  const consent = useFaceConsent();
   const { has, loaded: billingLoaded } = useBilling();
   const locked = billingLoaded && !has('recast');
   const canGenerate = !block && !locked; // signed in, email confirmed, and Recast unlocked
@@ -184,6 +187,7 @@ export function RecastPage() {
         <p className="text-[13px] text-zinc-500">Replace the performer in a clip with someone new. The motion and camera stay. Give them their own voice, or keep the original soundtrack.</p>
       </div>
       {locked && <UnlockPrompt feature="recast" className="mb-4" />}
+      {!consent.accepted && <div className="mb-4"><FaceConsent onAccept={consent.accept} error={consent.error} /></div>}
       {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} {block === 'guest' && <Link to="/login" className="underline">Sign up or sign in</Link>}</div>}
 
       {resumable.length > 0 && !running && (
@@ -218,7 +222,7 @@ export function RecastPage() {
                   {sourceBusy ? <Loader2 className="h-6 w-6 animate-spin text-accent" /> : <Video className="h-6 w-6 text-zinc-500" />}
                   <span className="mt-2 text-[13px] font-medium text-zinc-200">{sourceBusy ? 'Checking and uploading…' : 'Choose a video'}</span>
                   <span className="text-[11px] text-zinc-600">MP4 or MOV, 4–15 seconds, up to 50 MB</span>
-                  <input type="file" accept="video/mp4,video/quicktime" className="sr-only" aria-label="Upload source video" disabled={sourceBusy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) pickSource(f); }} />
+                  <input type="file" accept="video/mp4,video/quicktime" className="sr-only" aria-label="Upload source video" disabled={sourceBusy || !consent.accepted} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) pickSource(f); }} />
                 </label>
                 {timelineShots.length > 0 && (
                   <div><Label>Or use a shot from your episode</Label>
@@ -249,7 +253,7 @@ export function RecastPage() {
               ))}
               <label className="grid h-[60px] w-[60px] cursor-pointer place-items-center rounded-xl border border-dashed border-white/15 text-zinc-500 hover:border-accent/50 hover:text-accent">
                 {refBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" aria-label="Upload reference photos" onChange={e => { const f = e.target.files; addUploads(f); e.target.value = ''; }} />
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" aria-label="Upload reference photos" disabled={!consent.accepted} onChange={e => { const f = e.target.files; addUploads(f); e.target.value = ''; }} />
               </label>
             </div>
             {characters.length === 0 && <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-600"><UserRound className="h-3.5 w-3.5" />Characters with portraits from <Link to="/cast" className="text-accent underline">Cast</Link> show up here. You can also upload photos.</p>}

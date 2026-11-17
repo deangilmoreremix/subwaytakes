@@ -11,6 +11,7 @@ import { creditsFor, readEstimateUsd } from './pricing.ts';
 import { classify } from './paths.ts';
 import { isFailedBody, normalizeStatus, readRequestId } from './status.ts';
 import { hasAccess, requiredEntitlements } from './entitlements.ts';
+import { checkBody } from './safety.ts';
 import { requestHash } from './hash.ts';
 import { isOurAccountProblem, predictionView, scrub } from './scrub.ts';
 
@@ -38,6 +39,8 @@ export interface Deps {
   release(requestId: string, reason: string): Promise<string>;
   releaseHold(holdId: string, reason: string): Promise<string>;
   balance(userId: string): Promise<number>;
+  /** The operator's own blocked terms (safety_terms table). A failure here must not block generation, the built-in screen still runs. */
+  blockedTerms?(): Promise<string[]>;
   /** Active entitlement keys the user has bought or been given. */
   entitlements(userId: string): Promise<string[]>;
   /** Talks to muapi with the SERVER key. Throws on a network error. */
@@ -160,6 +163,12 @@ export async function handle(caller: Caller | null, req: GatewayRequest, deps: D
     const access = hasAccess(route.slug, owned);
     if (!access.ok) return err(403, 'locked', 'This feature is part of a pack you have not unlocked. You were not charged.', { entitlement: access.needs[0], entitlements: access.needs });
   }
+
+  // Content screen: before anything is quoted, reserved or sent to muapi.
+  let extra: string[] = [];
+  try { extra = (await deps.blockedTerms?.()) ?? []; } catch { /* the built-in screen still runs */ }
+  const verdict = checkBody(req.body, extra);
+  if (!verdict.ok) { deps.log('content_blocked', { category: verdict.category, slug: route.slug }); return err(400, 'blocked', `${verdict.message} You were not charged.`, { category: verdict.category }); }
 
   const q = await quote(route.slug, req.body, deps, settings);
   if ('status' in q) return q;

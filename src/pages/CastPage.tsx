@@ -11,6 +11,8 @@ import { runModel } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
 import { BLOCK_TEXT, usdToCredits } from '../lib/credits';
 import { UnlockPrompt } from '../components/UnlockPrompt';
+import { FaceConsent } from '../components/FaceConsent';
+import { useFaceConsent } from '../lib/consent';
 import { useBilling } from '../lib/billing/useBilling';
 import type { CharacterBible } from '../lib/types';
 
@@ -82,6 +84,7 @@ export function CastPage() {
 }
 
 function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { character: CharacterBible; canGenerate: boolean; onSaved: () => void; onDeleted: () => void }) {
+  const consent = useFaceConsent();
   const { has, loaded: billingLoaded } = useBilling();
   const voicesLocked = billingLoaded && !has('voices');
   const [c, setC] = useState(character);
@@ -128,10 +131,11 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
             {c.portrait_url ? <img src={c.portrait_url} alt={`${c.name} portrait`} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center px-3 text-center text-[11px] text-zinc-600">No portrait yet</div>}
             {(busy === 'upload' || busy === 'generate') && <div className="absolute inset-0 grid place-items-center bg-black/60"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>}
           </div>
+          {!consent.accepted && <div className="mt-2"><FaceConsent onAccept={consent.accept} error={consent.error} /></div>}
           <div className="mt-2 grid gap-1.5">
             <label className="flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-white/5 text-[12px] font-medium text-zinc-200 hover:bg-white/10">
               <Upload className="h-3.5 w-3.5" />Upload
-              <input type="file" accept="image/*" className="sr-only" aria-label="Upload portrait" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run('upload', async () => { await persist({ portrait_url: await uploadPortrait(f) }); }); }} />
+              <input type="file" accept="image/*" className="sr-only" aria-label="Upload portrait" disabled={!consent.accepted} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run('upload', async () => { await persist({ portrait_url: await uploadPortrait(f) }); }); }} />
             </label>
             <button disabled={!canGenerate || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~{usdToCredits(0.03)} credits</button>
           </div>

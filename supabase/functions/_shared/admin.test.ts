@@ -27,6 +27,12 @@ function setup(isAdmin = true) {
     getReferralSettings: async () => ({ enabled: true }),
     setReferralSettings: async p => { calls.push(['setReferral', [p]]); },
     voidReferral: async id => { calls.push(['voidReferral', [id]]); return id === 'u-maya'; },
+    opsOverview: async () => ({ metrics: { drifted_users: 0 }, alerts: [{ id: 7, kind: 'stuck_holds' }] }),
+    resolveAlert: async id => { calls.push(['resolveAlert', [id]]); return id === 7; },
+    listSafetyTerms: async () => ['jane roe'],
+    addSafetyTerm: async (t, a) => { calls.push(['addTerm', [t, a]]); },
+    removeSafetyTerm: async t => { calls.push(['removeTerm', [t]]); return t === 'jane roe'; },
+    recentClientErrors: async () => [{ id: 1, message: 'boom' }],
     newRef: () => 'ref-1',
     log: (e, d) => { logs.push([e, d]); },
   };
@@ -197,6 +203,33 @@ describe('retention admin actions', () => {
   it('only admins can use them', async () => {
     const { deps, calls } = setup(false);
     for (const a of ['retention', 'set_referral', 'void_referral']) expect((await adminHandle(admin, { action: a, patch: { enabled: true }, email: 'maya@example.com' }, deps)).status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+
+describe('operations admin actions', () => {
+  it('shows alerts and metrics, and recent browser errors', async () => {
+    const { deps } = setup();
+    expect(await adminHandle(admin, { action: 'ops' }, deps)).toMatchObject({ status: 200, body: { alerts: [{ id: 7 }] } });
+    expect(await adminHandle(admin, { action: 'client_errors' }, deps)).toMatchObject({ status: 200, body: { errors: [{ message: 'boom' }] } });
+  });
+  it('resolves an open alert (audited) and reports a missing or bad one', async () => {
+    const { deps, calls } = setup();
+    expect((await adminHandle(admin, { action: 'resolve_alert', id: 7 }, deps)).status).toBe(200); expect(calls.some(c => c[0] === 'audit' && c[1][1] === 'resolve_alert')).toBe(true);
+    expect((await adminHandle(admin, { action: 'resolve_alert', id: 8 }, deps)).status).toBe(404);
+    for (const id of [0, -1, 1.5, 'x', null]) expect((await adminHandle(admin, { action: 'resolve_alert', id }, deps)).status).toBe(400);
+  });
+  it('manages the blocked-terms list with validation and an audit trail', async () => {
+    const { deps, calls } = setup();
+    expect((await adminHandle(admin, { action: 'add_safety_term', term: '  Jane Roe ' }, deps)).status).toBe(200); expect(calls.find(c => c[0] === 'addTerm')![1]).toEqual(['jane roe', 'a1']);
+    for (const term of ['', 'x', 'a'.repeat(61), '<script>', 'drop;table']) expect((await adminHandle(admin, { action: 'add_safety_term', term }, deps)).status).toBe(400);
+    expect((await adminHandle(admin, { action: 'remove_safety_term', term: 'jane roe' }, deps)).status).toBe(200); expect((await adminHandle(admin, { action: 'remove_safety_term', term: 'nope' }, deps)).status).toBe(404);
+    expect((await adminHandle(admin, { action: 'safety_terms' }, deps))).toMatchObject({ body: { terms: ['jane roe'] } });
+  });
+  it('only admins can use any of it', async () => {
+    const { deps, calls } = setup(false);
+    for (const a of ['ops', 'resolve_alert', 'client_errors', 'safety_terms', 'add_safety_term', 'remove_safety_term']) expect((await adminHandle(admin, { action: a, id: 7, term: 'jane roe' }, deps)).status).toBe(403);
     expect(calls).toHaveLength(0);
   });
 });

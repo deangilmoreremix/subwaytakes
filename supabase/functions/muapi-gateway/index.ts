@@ -31,6 +31,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+let terms: string[] = []; let termsAt = 0;
 const deps: Deps = {
   settings: async () => {
     const { data, error } = await admin.from("gateway_settings").select("margin, max_credits_per_call, kill_switch, enforce_entitlements").eq("id", true).single();
@@ -55,6 +56,11 @@ const deps: Deps = {
   callOwner: async (requestId) => {
     const { data } = await admin.from("muapi_calls").select("user_id, status").eq("request_id", requestId).maybeSingle();
     return data ? { userId: data.user_id, status: data.status } : null;
+  },
+  blockedTerms: async () => {
+    // cached for a minute: a few rows, read on every paid call
+    if (Date.now() - termsAt > 60_000) { const { data } = await admin.from("safety_terms").select("term").limit(500); terms = (data ?? []).map((r: { term: string }) => r.term); termsAt = Date.now(); }
+    return terms;
   },
   entitlements: async (userId) => (await rpc<string[] | null>("entitlements_for", { p_user: userId })) ?? [],
   settle: (requestId) => rpc<string>("credit_settle", { p_request_id: requestId }),

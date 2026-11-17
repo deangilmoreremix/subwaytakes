@@ -7,6 +7,7 @@ import { clsx } from '../lib/format';
 import { CreditsCard } from '../components/CreditsCard';
 import { BrandKitCard } from '../components/BrandKitCard';
 import { UsageCard } from '../components/UsageCard';
+import { LegalLinks } from './LegalPage';
 import { ReferralCard } from '../components/ReferralCard';
 
 export function SettingsPage() {
@@ -82,6 +83,7 @@ export function SettingsPage() {
       <div className="mb-6"><UsageCard /></div>
       <div className="mb-6"><ReferralCard /></div>
       <div className="mb-6"><BrandKitCard /></div>
+      <LegalLinks className="mb-8" />
 
       <div className="space-y-8">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">

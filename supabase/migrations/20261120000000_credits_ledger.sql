@@ -380,3 +380,6 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION credit_find_user(text), credit_stats() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION credit_find_user(text), credit_stats() TO service_role;
+
+-- Trigger functions are never meant to be called by a client (PostgreSQL refuses to run them outside a trigger, but do not leave the door unlatched).
+REVOKE EXECUTE ON FUNCTION credit_ledger_apply(), credit_ledger_immutable(), user_profiles_guard_balance() FROM PUBLIC, anon, authenticated;

@@ -12,6 +12,7 @@ const CastPage = lazy(() => import('./pages/CastPage').then(m => ({ default: m.C
 const RecastPage = lazy(() => import('./pages/RecastPage').then(m => ({ default: m.RecastPage })));
 const GalleryPage = lazy(() => import('./pages/GalleryPage').then(m => ({ default: m.GalleryPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const LegalPage = lazy(() => import('./pages/LegalPage').then(m => ({ default: m.LegalPage })));
 const BillingSuccessPage = lazy(() => import('./pages/BillingResultPage').then(m => ({ default: m.BillingSuccessPage })));
 const BillingCancelPage = lazy(() => import('./pages/BillingResultPage').then(m => ({ default: m.BillingCancelPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
@@ -77,6 +78,8 @@ function AppContent() {
               <AuthPage />
             </PublicOnlyRoute>
           } />
+          {/* legal pages are public: they must be readable before signing up */}
+          {['terms', 'privacy', 'refunds', 'ai-policy'].map(slug => <Route key={slug} path={`/${slug}`} element={<LegalPage slug={slug} />} />)}
           <Route path="/*" element={
             <ProtectedRoute>
               <AppShell>

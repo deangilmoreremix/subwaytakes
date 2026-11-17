@@ -26,6 +26,12 @@ export interface AdminDeps {
   setReferralSettings(patch: Record<string, unknown>): Promise<void>;
   /** Stops a still-unrewarded referral from ever paying out. Returns false when there was nothing to void. */
   voidReferral(refereeId: string): Promise<boolean>;
+  opsOverview(): Promise<{ metrics: unknown; alerts: Array<Record<string, unknown>> }>;
+  resolveAlert(id: number, actorId: string): Promise<boolean>;
+  listSafetyTerms(): Promise<string[]>;
+  addSafetyTerm(term: string, actorId: string): Promise<void>;
+  removeSafetyTerm(term: string): Promise<boolean>;
+  recentClientErrors(limit: number): Promise<Array<Record<string, unknown>>>;
   newRef(): string;
   log(event: string, data: Record<string, unknown>): void;
 }
@@ -169,6 +175,30 @@ export async function adminHandle(caller: AdminCaller | null, req: unknown, deps
       if (!done) return { status: 404, body: { error: 'That customer has no pending referral.' } };
       await deps.audit(caller.id, 'void_referral', { userId: id });
       return { status: 200, body: { ok: true } };
+    }
+    case 'ops': return { status: 200, body: await deps.opsOverview() };
+    case 'resolve_alert': {
+      if (!isInt(req.id, 1, Number.MAX_SAFE_INTEGER)) return bad('Bad alert id.');
+      const ok = await deps.resolveAlert(req.id, caller.id);
+      if (!ok) return { status: 404, body: { error: 'That alert is not open.' } };
+      await deps.audit(caller.id, 'resolve_alert', { id: req.id });
+      return { status: 200, body: await deps.opsOverview() };
+    }
+    case 'client_errors': return { status: 200, body: { errors: await deps.recentClientErrors(50) } };
+    case 'safety_terms': return { status: 200, body: { terms: await deps.listSafetyTerms() } };
+    case 'add_safety_term': {
+      const term = String(req.term ?? '').trim().toLowerCase();
+      if (term.length < 2 || term.length > 60 || !/^[\p{L}\p{N} .'-]+$/u.test(term)) return bad('A blocked term is 2 to 60 letters, numbers or spaces.');
+      await deps.addSafetyTerm(term, caller.id);
+      await deps.audit(caller.id, 'add_safety_term', { term });
+      return { status: 200, body: { terms: await deps.listSafetyTerms() } };
+    }
+    case 'remove_safety_term': {
+      const term = String(req.term ?? '').trim().toLowerCase();
+      if (!term || term.length > 60) return bad('Bad term.');
+      if (!(await deps.removeSafetyTerm(term))) return { status: 404, body: { error: 'That term is not on the list.' } };
+      await deps.audit(caller.id, 'remove_safety_term', { term });
+      return { status: 200, body: { terms: await deps.listSafetyTerms() } };
     }
     case 'set_model': {
       const slug = String(req.slug ?? '');

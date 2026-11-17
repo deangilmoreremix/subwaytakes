@@ -191,3 +191,42 @@ describe('stripe calls', () => {
     await expect(refundPayment(fakeFetch(402, {}), 'sk', 'pi_1')).rejects.toThrow();
   });
 });
+
+
+// ---------------------------------------------------------------- abuse: the webhook cannot be talked into granting anything unsigned
+describe('webhook abuse', () => {
+  const body = () => evt('checkout.session.completed', paid);
+  it('rejects every single-character change to the body, the timestamp or the signature', async () => {
+    const good = body(); const sig = await sign(good);
+    const { deps, w } = hookWorld();
+    for (let i = 0; i < good.length; i += 7) {
+      const tampered = good.slice(0, i) + (good[i] === 'x' ? 'y' : 'x') + good.slice(i + 1);
+      expect((await webhookHandle(tampered, sig, SECRET, NOW, deps)).status, `body char ${i}`).toBe(400);
+    }
+    for (let i = 0; i < sig.length; i += 5) {
+      const bad = sig.slice(0, i) + (sig[i] === '0' ? '1' : '0') + sig.slice(i + 1);
+      if (bad === sig) continue;
+      expect((await webhookHandle(good, bad, SECRET, NOW, deps)).status, `sig char ${i}`).toBe(400);
+    }
+    expect(w.fulfils).toHaveLength(0); expect(w.records).toHaveLength(0);
+  });
+  it('rejects odd header shapes without throwing', async () => {
+    const good = body(); const { deps, w } = hookWorld(); const v1 = (await sign(good)).split('v1=')[1];
+    for (const h of ['', ' ', 't=,v1=', `t=abc,v1=${v1}`, `v1=${v1}`, `t=${NOW}`, `t=${NOW},v0=${v1}`, `t=${NOW},v1=`, `t=-1,v1=${v1}`, `t=${NOW};v1=${v1}`, 'x'.repeat(5000), `t=${NOW},v1=${'0'.repeat(64)}`, `t=${NOW},v1=${v1}x`]) {
+      const r = await webhookHandle(good, h, SECRET, NOW, deps); expect(r.status, h.slice(0, 40)).toBe(400);
+    }
+    expect(w.fulfils).toHaveLength(0);
+  });
+  it('a valid signature from a DIFFERENT secret (another Stripe account) is refused', async () => {
+    const { deps, w } = hookWorld(); const good = body();
+    expect((await webhookHandle(good, await sign(good, NOW, 'whsec_other_account'), SECRET, NOW, deps)).status).toBe(400); expect(w.fulfils).toHaveLength(0);
+  });
+  it('a captured valid delivery replayed after the tolerance window is refused', async () => {
+    const { deps, w } = hookWorld(); const good = body(); const sig = await sign(good);
+    expect((await webhookHandle(good, sig, SECRET, NOW + 301, deps)).status).toBe(400); expect(w.fulfils).toHaveLength(0);
+  });
+  it('an empty or unset secret never accepts anything (fails closed)', async () => {
+    const { deps } = hookWorld(); const good = body();
+    expect((await webhookHandle(good, `t=${NOW},v1=${'a'.repeat(64)}`, '', NOW, deps)).status).toBe(400);
+  });
+});

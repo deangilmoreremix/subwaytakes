@@ -4,11 +4,14 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
+import { installErrorReporting } from './lib/errors/report';
 
 window.addEventListener('unhandledrejection', (event) => {
   console.error('Unhandled promise rejection:', event.reason);
   event.preventDefault();
 });
+
+installErrorReporting();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {

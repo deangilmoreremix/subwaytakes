@@ -58,7 +58,7 @@ export function EpisodeComposition({ project }: EpisodeProps) {
         </Sequence>
       ))}
       {resolveTitle(project.style?.title) && <TitleOverlay title={applyBrandToTitle(resolveTitle(project.style?.title)!, project.style?.brand)} fontFamily={titleFont.family} fontWeight={titleFont.weight} />}
-      <BrandLayer brand={project.style?.brand} fontFamily={titleFont.family} fontWeight={titleFont.weight} />
+      <BrandLayer brand={project.style?.brand} aiLabel={project.style?.aiLabel !== false} fontFamily={titleFont.family} fontWeight={titleFont.weight} />
       {captions.map(c => (
         <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
           <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', padding: '0 7% 14%' }}>

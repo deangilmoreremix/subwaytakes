@@ -376,7 +376,7 @@ export function CreateTakePage() {
           )}
         </div>
         <div className="min-w-0 lg:min-h-0">
-          <Inspector onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
+          <Inspector aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}

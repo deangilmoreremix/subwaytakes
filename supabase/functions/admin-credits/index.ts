@@ -63,6 +63,15 @@ const deps: AdminDeps = {
     if (error) throw new Error(error.message);
     return !!data?.length;
   },
+  opsOverview: async () => ({
+    metrics: (await admin.rpc("ops_metrics")).data,
+    alerts: (await admin.from("ops_alerts").select("id, kind, severity, message, created_at, last_seen_at, resolved_at").is("resolved_at", null).order("created_at", { ascending: false }).limit(50)).data ?? [],
+  }),
+  resolveAlert: async (id, actor) => !!(await admin.rpc("ops_alert_resolve", { p_id: id, p_actor: actor })).data,
+  listSafetyTerms: async () => ((await admin.from("safety_terms").select("term").order("term")).data ?? []).map((r: { term: string }) => r.term),
+  addSafetyTerm: async (term, actor) => { const { error } = await admin.from("safety_terms").upsert({ term, added_by: actor }, { onConflict: "term" }); if (error) throw new Error(error.message); },
+  removeSafetyTerm: async (term) => !!(await admin.from("safety_terms").delete().eq("term", term).select("term")).data?.length,
+  recentClientErrors: async (limit) => (await admin.from("client_errors").select("id, message, url, created_at").order("id", { ascending: false }).limit(limit)).data ?? [],
   newRef: () => crypto.randomUUID(),
   log: (event, data) => console.log(JSON.stringify({ event, ...data })),
 };

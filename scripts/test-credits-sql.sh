@@ -30,18 +30,25 @@ RETENTION="$ROOT/supabase/migrations/20261122000000_retention.sql"
 "${PSQL[@]}" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON clip_jobs TO authenticated; GRANT ALL ON clip_jobs TO service_role;" >/dev/null   # what Supabase grants by default
 "${PSQL[@]}" -f "$RETENTION" >/dev/null
 echo "retention migration applied"
+OPS="$ROOT/supabase/migrations/20261123000000_launch_ops.sql"
+"${PSQL[@]}" -f "$OPS" >/dev/null
+echo "launch-ops migration applied"
 
 # Applying the migrations twice must be safe (idempotent apply).
 "${PSQL[@]}" -f "$BILLING" >/dev/null 2>"$WORK/second-billing.err" || { echo "FAIL: billing migration is not re-runnable"; cat "$WORK/second-billing.err"; exit 1; }
 echo "PASS: billing migration can be re-applied"
 "${PSQL[@]}" -f "$RETENTION" >/dev/null 2>"$WORK/second-retention.err" || { echo "FAIL: retention migration is not re-runnable"; cat "$WORK/second-retention.err"; exit 1; }
 echo "PASS: retention migration can be re-applied"
+"${PSQL[@]}" -f "$OPS" >/dev/null 2>"$WORK/second-ops.err" || { echo "FAIL: launch-ops migration is not re-runnable"; cat "$WORK/second-ops.err"; exit 1; }
+echo "PASS: launch-ops migration can be re-applied"
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20261120000000_credits_ledger.sql" >/dev/null 2>"$WORK/second.err" || { echo "FAIL: migration is not re-runnable"; cat "$WORK/second.err"; exit 1; }
 echo "PASS: migration can be re-applied"
 
 "${PSQL[@]}" -f "$ROOT/supabase/tests/credits.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
 "${PSQL[@]}" -f "$ROOT/supabase/tests/billing.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
 "${PSQL[@]}" -f "$ROOT/supabase/tests/retention.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
+"${PSQL[@]}" -f "$ROOT/supabase/tests/ops.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
+"${PSQL[@]}" -f "$ROOT/supabase/tests/abuse.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" | sed 's/^psql:[^ ]* //'
 
 # ---- re-applying the migration AFTER launch (users with grants and spends) must not change anyone's balance or add ledger rows.
 BEFORE=$("${PSQL[@]}" -At -c "SELECT (SELECT count(*) FROM credit_ledger) || ',' || (SELECT sum(credits_balance) FROM user_profiles) || ',' || (SELECT count(*) FROM credit_ledger WHERE kind = 'opening')")

@@ -284,3 +284,5 @@ $$;
 REVOKE EXECUTE ON FUNCTION my_referral(), referral_claim(uuid, text), referral_on_paid(), referral_on_reverse(), retention_stats() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION referral_claim(uuid, text), referral_on_paid(), referral_on_reverse(), retention_stats() TO service_role;
 GRANT EXECUTE ON FUNCTION my_referral() TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION projects_cap() FROM PUBLIC, anon, authenticated;

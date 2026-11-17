@@ -7,6 +7,8 @@ export interface BrandSnapshot { handle: string; primary: string; accent: string
 
 export const DEFAULT_BRAND_KIT: BrandKit = { handle: '', primaryColor: '#ffb000', accentColor: '#ffffff', logoUrl: null, sponsorText: '', showWatermark: true };
 export const WATERMARK_TEXT = 'Made with SubwayTakes Studio';
+/** Drawn small in the corner of exports unless the customer turns it off: the video is made with AI, and many platforms ask for that to be said. */
+export const AI_LABEL_TEXT = 'AI-generated';
 export const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 export const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
