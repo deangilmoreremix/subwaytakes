@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS safety_terms (
 CREATE TABLE IF NOT EXISTS consents (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   kind text NOT NULL CHECK (kind IN ('face_upload')),
-  version text NOT NULL CHECK (char_length(version) BETWEEN 1 AND 20),
+  version text NOT NULL CHECK (version ~ '^[0-9]{1,3}$'),   -- wording versions are small numbers, so a user cannot add unlimited junk rows
   accepted_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, kind, version)
 );
@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS client_errors (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS client_errors_created_idx ON client_errors (created_at DESC);
+CREATE INDEX IF NOT EXISTS client_errors_message_idx ON client_errors (message, created_at DESC);
 
 -- ---------------------------------------------------------------- access
 
@@ -62,13 +63,19 @@ GRANT ALL ON safety_terms, consents, ops_alerts, client_errors TO service_role;
 
 CREATE OR REPLACE FUNCTION client_error_log(p_message text, p_stack text DEFAULT NULL, p_url text DEFAULT NULL) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE uid uuid := auth.uid();
+DECLARE uid uuid := auth.uid(); msg text; stk text; u text;
 BEGIN
-  IF p_message IS NULL OR btrim(p_message) = '' THEN RETURN false; END IF;
-  -- a flood from anywhere is dropped silently (never an error the page would report again): global and per-signed-in-user caps
-  IF (SELECT count(*) FROM client_errors WHERE created_at > now() - interval '1 minute') >= 120 THEN RETURN false; END IF;
+  -- control characters (including newlines) become spaces, so a report cannot forge log lines
+  msg := left(btrim(regexp_replace(COALESCE(p_message, ''), '[\x00-\x1f\x7f]', ' ', 'g')), 300);
+  IF msg = '' THEN RETURN false; END IF;
+  stk := left(regexp_replace(COALESCE(p_stack, ''), '[\x00-\x08\x0b-\x1f\x7f]', ' ', 'g'), 2000);
+  u := CASE WHEN p_url ~ '^https?://[^[:space:]]{1,255}$' THEN p_url ELSE NULL END;
+  -- the table is bounded, a flood is dropped silently (never an error the page would report again), and a repeat of the same message is not stored twice
+  IF (SELECT count(*) FROM (SELECT 1 FROM client_errors LIMIT 20001) t) > 20000 THEN RETURN false; END IF;
+  IF (SELECT count(*) FROM client_errors WHERE created_at > now() - interval '1 minute') >= 60 THEN RETURN false; END IF;
   IF uid IS NOT NULL AND (SELECT count(*) FROM client_errors WHERE user_id = uid AND created_at > now() - interval '1 minute') >= 10 THEN RETURN false; END IF;
-  INSERT INTO client_errors (user_id, message, stack, url) VALUES (uid, left(p_message, 300), left(p_stack, 2000), left(p_url, 300));
+  IF EXISTS (SELECT 1 FROM client_errors WHERE message = msg AND created_at > now() - interval '10 minutes') THEN RETURN false; END IF;
+  INSERT INTO client_errors (user_id, message, stack, url) VALUES (uid, msg, NULLIF(stk, ''), u);
   RETURN true;
 END $$;
 
@@ -87,7 +94,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     'paid_orders_24h', (SELECT count(*) FROM orders WHERE paid_at > now() - interval '24 hours'),
     'reversed_orders_24h', (SELECT count(*) FROM orders WHERE reversed_at > now() - interval '24 hours'),
     'needs_attention_24h', (SELECT count(*) FROM stripe_events WHERE outcome = 'needs_attention' AND processed_at > now() - interval '24 hours'),
-    'client_errors_1h', (SELECT count(*) FROM client_errors WHERE created_at > now() - interval '1 hour'),
+    'client_errors_1h', (SELECT count(DISTINCT message) FROM client_errors WHERE created_at > now() - interval '1 hour'),   -- distinct problems, so one noisy page cannot trip the alert
     'open_alerts', (SELECT count(*) FROM ops_alerts WHERE resolved_at IS NULL)
   )
 $$;

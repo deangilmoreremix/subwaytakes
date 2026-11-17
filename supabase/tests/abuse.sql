@@ -24,7 +24,8 @@ SELECT pg_temp.expect('the legacy client-callable balance functions are gone fro
 -- ================================================================ 2. which tables can clients write?
 CREATE TEMP TABLE t_writes AS
   SELECT grantee, table_name, privilege_type FROM information_schema.table_privileges
-  WHERE table_schema = 'public' AND grantee IN ('authenticated', 'anon') AND privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER');
+  WHERE table_schema = 'public' AND grantee IN ('authenticated', 'anon', 'PUBLIC') AND privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER');
+SELECT pg_temp.expect('no table grants write access to PUBLIC (everyone)', NOT EXISTS (SELECT 1 FROM t_writes WHERE grantee = 'PUBLIC'));
 
 SELECT pg_temp.expect('visitors have no write privilege on any table (found: ' || COALESCE((SELECT string_agg(table_name || ':' || privilege_type, ', ') FROM t_writes WHERE grantee = 'anon'), 'none') || ')',
   NOT EXISTS (SELECT 1 FROM t_writes WHERE grantee = 'anon'));
@@ -41,9 +42,9 @@ SELECT pg_temp.expect('no client can write the credit balance or the plan tier',
 
 -- ================================================================ 3. every table clients can read is protected by row-level security
 SELECT pg_temp.expect('every table a client can read has row-level security on (missing: ' || COALESCE((SELECT string_agg(DISTINCT tp.table_name, ', ') FROM information_schema.table_privileges tp JOIN pg_class c ON c.relname = tp.table_name AND c.relnamespace = 'public'::regnamespace
-    WHERE tp.table_schema = 'public' AND tp.grantee IN ('authenticated', 'anon') AND tp.privilege_type = 'SELECT' AND NOT c.relrowsecurity), 'none') || ')',
+    WHERE tp.table_schema = 'public' AND tp.grantee IN ('authenticated', 'anon', 'PUBLIC') AND tp.privilege_type = 'SELECT' AND NOT c.relrowsecurity), 'none') || ')',
   NOT EXISTS (SELECT 1 FROM information_schema.table_privileges tp JOIN pg_class c ON c.relname = tp.table_name AND c.relnamespace = 'public'::regnamespace
-    WHERE tp.table_schema = 'public' AND tp.grantee IN ('authenticated', 'anon') AND tp.privilege_type = 'SELECT' AND NOT c.relrowsecurity));
+    WHERE tp.table_schema = 'public' AND tp.grantee IN ('authenticated', 'anon', 'PUBLIC') AND tp.privilege_type = 'SELECT' AND NOT c.relrowsecurity));
 SELECT pg_temp.expect('money, order, reward and operations tables are invisible to clients (visible: ' || COALESCE((SELECT string_agg(DISTINCT table_name, ', ') FROM information_schema.table_privileges WHERE table_schema = 'public' AND grantee IN ('authenticated', 'anon') AND privilege_type = 'SELECT'
     AND table_name IN ('credit_holds', 'muapi_calls', 'gateway_hits', 'gateway_settings', 'model_prices', 'admin_users', 'stripe_events', 'pending_reversals', 'billing_audit', 'referral_settings', 'ops_alerts', 'client_errors', 'safety_terms')), 'none') || ')',
   NOT EXISTS (SELECT 1 FROM information_schema.table_privileges WHERE table_schema = 'public' AND grantee IN ('authenticated', 'anon') AND privilege_type = 'SELECT'
@@ -74,3 +75,7 @@ END $$;
 
 -- a fresh account gets no credits for existing: nothing to spend
 SELECT pg_temp.expect('farmed accounts start at zero credits and cannot reserve anything', (SELECT sum(credits_balance) FROM user_profiles WHERE id::text LIKE '00000000-0000-0000-0000-0000000003%') = 0);
+
+-- ================================================================ 5. every SECURITY DEFINER function pins its search_path (otherwise a client-created object could shadow a name it uses)
+SELECT pg_temp.expect('every SECURITY DEFINER function in public pins search_path (unpinned: ' || COALESCE((SELECT string_agg(p.proname, ', ') FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND NOT EXISTS (SELECT 1 FROM unnest(COALESCE(p.proconfig, '{}')) c WHERE c LIKE 'search_path=%') AND p.proname NOT IN ('deduct_credits', 'atomic_deduct_tokens')), 'none') || ')',
+  NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND NOT EXISTS (SELECT 1 FROM unnest(COALESCE(p.proconfig, '{}')) c WHERE c LIKE 'search_path=%') AND p.proname NOT IN ('deduct_credits', 'atomic_deduct_tokens')));

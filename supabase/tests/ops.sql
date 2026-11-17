@@ -39,12 +39,34 @@ SELECT pg_temp.expect('an empty report is ignored, not an error', NOT client_err
 SELECT pg_temp.fails('visitors cannot read the log', $q$ SELECT * FROM client_errors $q$, 'permission denied');
 SELECT pg_temp.fails('visitors cannot write to it directly', $q$ INSERT INTO client_errors (message) VALUES ('x') $q$, 'permission denied');
 RESET ROLE;
-SELECT client_error_log(repeat('m', 5000), repeat('s', 9000), repeat('u', 2000));
-SELECT pg_temp.expect('long fields are cut to size', (SELECT max(char_length(message)) FROM client_errors) = 300 AND (SELECT max(char_length(stack)) FROM client_errors) = 2000 AND (SELECT max(char_length(url)) FROM client_errors) = 300);
+SELECT client_error_log(repeat('m', 5000), repeat('s', 9000), 'https://app.test/' || repeat('u', 400));
+SELECT pg_temp.expect('long messages and stacks are cut to size, and an absurd page address is dropped', (SELECT max(char_length(message)) FROM client_errors) = 300 AND (SELECT max(char_length(stack)) FROM client_errors) = 2000 AND (SELECT url FROM client_errors WHERE message LIKE 'mmmm%') IS NULL);
+SELECT client_error_log('with address', NULL, 'https://app.test/create');
+SELECT client_error_log('bad address', NULL, 'javascript:alert(1)');
+SELECT pg_temp.expect('a normal https address is kept and a non-http one is dropped', (SELECT url FROM client_errors WHERE message = 'with address') = 'https://app.test/create' AND (SELECT url FROM client_errors WHERE message = 'bad address') IS NULL);
+SELECT client_error_log(E'line one\nFORGED: admin logged in\r\n' || chr(7) || 'end');
+SELECT pg_temp.expect('control characters and newlines in a report become spaces (no forged log lines)', NOT EXISTS (SELECT 1 FROM client_errors WHERE message ~ '[\x00-\x1f]') AND EXISTS (SELECT 1 FROM client_errors WHERE message LIKE 'line one FORGED%'));
+SELECT pg_temp.expect('a new message is stored', client_error_log('dupe message'));
+SELECT pg_temp.expect('the same message again within ten minutes is not stored twice', NOT client_error_log('dupe message'));
+SELECT pg_temp.expect('exactly one copy exists', (SELECT count(*) FROM client_errors WHERE message = 'dupe message') = 1);
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000202', false);
 DO $$ DECLARE ok integer := 0; i integer; BEGIN FOR i IN 1..14 LOOP IF client_error_log('flood ' || i) THEN ok := ok + 1; END IF; END LOOP; IF ok <> 10 THEN RAISE EXCEPTION 'FAIL: per-user cap allowed % reports', ok; END IF; RAISE NOTICE 'PASS: one signed-in user can file at most 10 reports a minute'; END $$;
 SELECT pg_temp.fails('signed-in users cannot read other people''s error reports', $q$ SELECT * FROM client_errors $q$, 'permission denied');
+RESET ROLE;
+
+SELECT set_config('request.jwt.claim.sub', '', false);   -- reports from here on are anonymous
+-- the table is bounded: once it is full, new reports are dropped instead of growing the database
+INSERT INTO client_errors (message, created_at) SELECT 'filler ' || g, now() - interval '3 days' FROM generate_series(1, 20001) g;
+SELECT pg_temp.expect('a full table drops new reports silently', NOT client_error_log('one more when full'));
+DELETE FROM client_errors WHERE message LIKE 'filler %';
+SELECT pg_temp.expect('and accepts them again once there is room', client_error_log('after pruning'));
+SELECT pg_temp.expect('the spike metric counts distinct problems, not repeats', (ops_metrics()->>'client_errors_1h')::int = (SELECT count(DISTINCT message) FROM client_errors WHERE created_at > now() - interval '1 hour'));
+
+-- consent versions are small numbers
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000201', false);
+SELECT pg_temp.fails('a consent version must be a small number (no junk rows)', $q$ INSERT INTO consents (user_id, kind, version) VALUES (auth.uid(), 'face_upload', 'abc') $q$, 'check');
 RESET ROLE;
 
 -- ================================================================ alerts: one open per kind, refreshed, cleared, resolved

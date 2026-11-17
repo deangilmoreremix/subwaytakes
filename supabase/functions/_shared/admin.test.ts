@@ -223,7 +223,7 @@ describe('operations admin actions', () => {
   it('manages the blocked-terms list with validation and an audit trail', async () => {
     const { deps, calls } = setup();
     expect((await adminHandle(admin, { action: 'add_safety_term', term: '  Jane Roe ' }, deps)).status).toBe(200); expect(calls.find(c => c[0] === 'addTerm')![1]).toEqual(['jane roe', 'a1']);
-    for (const term of ['', 'x', 'a'.repeat(61), '<script>', 'drop;table']) expect((await adminHandle(admin, { action: 'add_safety_term', term }, deps)).status).toBe(400);
+    for (const term of ['', 'x', 'a'.repeat(61), '<script>', 'drop;table', 'тест', '禁止']) expect((await adminHandle(admin, { action: 'add_safety_term', term }, deps)).status).toBe(400);
     expect((await adminHandle(admin, { action: 'remove_safety_term', term: 'jane roe' }, deps)).status).toBe(200); expect((await adminHandle(admin, { action: 'remove_safety_term', term: 'nope' }, deps)).status).toBe(404);
     expect((await adminHandle(admin, { action: 'safety_terms' }, deps))).toMatchObject({ body: { terms: ['jane roe'] } });
   });

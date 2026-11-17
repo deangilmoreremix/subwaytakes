@@ -38,7 +38,7 @@ describe('safety: ordinary takes and prompts are not blocked', () => {
 
 describe('safety: whole request bodies', () => {
   it('reads prompts and nested text but not URLs or settings', () => {
-    expect(collectText({ prompt: 'hello there', image_url: 'https://x/a.png', aspect_ratio: '9:16', nested: { script: 'a b c' }, list: ['xyz'] }).sort()).toEqual(['a b c', 'hello there', 'xyz']);
+    expect(collectText({ prompt: 'hello there', image_url: 'https://x/a.png', aspect_ratio: '9:16', nested: { script: 'a b c' }, list: ['xyz'] }).texts.sort()).toEqual(['a b c', 'hello there', 'xyz']);
   });
   it('refuses a body whose prompt is blocked and passes a clean one', () => {
     expect(checkBody({ prompt: 'a nude person', duration: 8 }).ok).toBe(false); expect(checkBody({ prompt: 'two friends on a train', duration: 8 }).ok).toBe(true);
@@ -51,4 +51,32 @@ describe('safety: whole request bodies', () => {
   it('returns a friendly message, never the matched word', () => {
     const r = checkText('a naked woman'); expect(r.ok).toBe(false); if (!r.ok) { expect(r.message).not.toMatch(/naked/i); expect(r.message.length).toBeGreaterThan(20); }
   });
+});
+
+
+// ================================================================ regressions from the independent review: the screen must not fail open
+describe('safety: no way around the screen through the shape of the request', () => {
+  const body = (o: unknown) => checkBody(o).ok;
+  it('a string that merely STARTS with a URL is still screened', () => { expect(body({ prompt: 'https://x.co nude woman' })).toBe(false); expect(body({ prompt: 'http://a.b/c then a naked person' })).toBe(false); });
+  it('a whole-URL value is skipped (it is not text the customer wrote)', () => { expect(body({ prompt: 'two friends', image_url: 'https://x.co/nude.png', images_list: ['https://x.co/naked.png'] })).toBe(true); });
+  it('field names that merely CONTAIN image, video, audio, model or format are screened', () => {
+    for (const k of ['image_description', 'model_notes', 'format_text', 'video_prompt', 'audio_script', 'image_prompt']) expect(body({ [k]: 'a nude woman' }), k).toBe(false);
+  });
+  it('known enum fields with short values are not screened', () => { expect(body({ prompt: 'two friends', aspect_ratio: '9:16', resolution: '720p', model: 'kling', voice_id: 'abc123' })).toBe(true); });
+  it('a long text hidden in an enum-named field is still screened', () => { expect(body({ format: 'x'.repeat(50) + ' nude' })).toBe(false); });
+  it('the limits fail CLOSED: padding, many fields, many objects, deep nesting and long arrays are refused, not waved through', () => {
+    const pad = 'a '.repeat(10001) + 'nude'; expect(checkText(pad).ok).toBe(false);
+    const many: Record<string, string> = {}; for (let i = 0; i < 250; i++) many['k' + i] = 'fine text'; many.last = 'a nude woman'; expect(body(many)).toBe(false);
+    expect(body({ items: [...Array.from({ length: 150 }, () => ({ a: 'fine text' })), { bad: 'a nude woman' }] })).toBe(false);
+    let deep: unknown = 'a nude woman'; for (let i = 0; i < 12; i++) deep = { a: deep }; expect(body(deep)).toBe(false);
+    expect(body({ list: [...Array.from({ length: 300 }, () => 'fine text'), 'a nude woman'] })).toBe(false);
+    const r = checkBody(deep); expect(!r.ok && r.category).toBe('oversize');
+  });
+  it('an ordinary request is far below every limit', () => { expect(body({ prompt: 'two friends on a train '.repeat(40), images_list: Array.from({ length: 30 }, (_, i) => `https://x.co/${i}.png`), duration: 8 })).toBe(true); });
+});
+
+describe('safety: look-alike and filler tricks', () => {
+  it.each(['n\u0443de', 'nu\u00adde', 'nu\u{e0001}de', 'nuuude', 'nnnuuudddeee', 'nаked', 'ñude', 'nude\ufe0f', 'p\u043erno', 'S\u0435x scene'.replace('S\u0435x scene', 'sex scene'), 'g\u043ere'.replace('g\u043ere', 'gore')])('catches %s', t => { const text = t.replace(/\\u\{e0001\}/, '\u{e0001}'); expect(checkText(`a scene with ${text}`).ok, t).toBe(false); });
+  it('catches spelled-out ages', () => { for (const t of ['a twelve year old girl', 'thirteen years old boy', 'a seven year old child']) expect(checkText(t).ok, t).toBe(false); });
+  it('does not turn ordinary doubled letters into false positives', () => { for (const t of ['a green book about a committee', 'coffee please', 'the balloon needs tape']) expect(checkText(t).ok, t).toBe(true); });
 });

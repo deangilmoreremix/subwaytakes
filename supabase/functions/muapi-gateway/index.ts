@@ -59,7 +59,10 @@ const deps: Deps = {
   },
   blockedTerms: async () => {
     // cached for a minute: a few rows, read on every paid call
-    if (Date.now() - termsAt > 60_000) { const { data } = await admin.from("safety_terms").select("term").limit(500); terms = (data ?? []).map((r: { term: string }) => r.term); termsAt = Date.now(); }
+    if (Date.now() - termsAt > 60_000) {
+      const { data, error } = await admin.from("safety_terms").select("term").limit(500);
+      if (!error && data) { terms = data.map((r: { term: string }) => r.term); termsAt = Date.now(); }   // on a read error keep the last good list and retry next call
+    }
     return terms;
   },
   entitlements: async (userId) => (await rpc<string[] | null>("entitlements_for", { p_user: userId })) ?? [],

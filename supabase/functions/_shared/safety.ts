@@ -4,7 +4,7 @@
 // Honest limits: this is a deterministic phrase and pattern screen, not a classifier. It stops the obvious and the lazily obfuscated
 // (leetspeak, spacing, punctuation, accents), it does not understand intent. The operator can add blocked terms in the safety_terms table.
 
-export type SafetyCategory = 'minors' | 'sexual' | 'violence' | 'self_harm' | 'likeness' | 'hate' | 'medical';
+export type SafetyCategory = 'minors' | 'sexual' | 'violence' | 'self_harm' | 'likeness' | 'hate' | 'medical' | 'oversize';
 export type SafetyResult = { ok: true } | { ok: false; category: SafetyCategory; message: string };
 
 const MESSAGES: Record<SafetyCategory, string> = {
@@ -15,19 +15,30 @@ const MESSAGES: Record<SafetyCategory, string> = {
   likeness: 'This studio does not create videos of real, named people or celebrity look-alikes. Describe an original character instead.',
   hate: 'This studio does not create hateful content.',
   medical: 'This studio does not make medical or health-treatment claims.',
+  oversize: 'This request is too long or too complicated to check. Shorten it and try again.',
 };
 
 /** Lower-case, strip accents and zero-width characters, undo common letter swaps, and turn separators into single spaces. */
+const HOMOGLYPHS: Record<string, string> = {
+  '\u0430': 'a', '\u0435': 'e', '\u043e': 'o', '\u0440': 'p', '\u0441': 'c', '\u0443': 'y', '\u0445': 'x', '\u0456': 'i', '\u0455': 's', '\u0458': 'j', '\u04bb': 'h', '\u043d': 'h', '\u043a': 'k', '\u043c': 'm', '\u0442': 't', '\u0432': 'b',
+  '\u03bf': 'o', '\u03b1': 'a', '\u03b5': 'e', '\u03b9': 'i', '\u03bd': 'v', '\u03c1': 'p', '\u03c4': 't', '\u03ba': 'k', '\u03c5': 'u', '\u03c7': 'x', '\u0131': 'i',
+};
+
+/** Lower-case, strip accents, format characters and zero-width characters, map look-alike letters to Latin, undo common letter swaps, and turn separators into single spaces. */
 export function normalize(input: string, leet = true): string {
-  let t = input.normalize('NFKD').replace(/[\u0300-\u036f\u200b-\u200f\u2060\ufeff]/g, '').toLowerCase();
+  let t = input.normalize('NFKD').replace(/[\p{M}\p{Cf}\ufe00-\ufe0f]/gu, '').toLowerCase();
+  t = t.replace(/[\u0370-\u04ff\u0131]/g, c => HOMOGLYPHS[c] ?? c);
   if (leet) t = t.replace(/[@4]/g, 'a').replace(/3/g, 'e').replace(/1/g, 'i').replace(/0/g, 'o').replace(/[5$]/g, 's').replace(/7/g, 't');
   t = t.replace(/[^a-z0-9\s]/g, ' ');                       // punctuation between letters becomes a space ("n.u.d.e" -> "n u d e")
   t = t.replace(/\b([a-z])(?:\s+(?=[a-z]\b)([a-z]))+\b/g, m => m.replace(/\s+/g, ''));   // collapse spaced-out single letters
   return t.replace(/\s+/g, ' ').trim();
 }
 
+/** Runs of the same letter collapse to one ("nuuude" -> "nude"). Matching also runs on this form, against terms collapsed the same way. */
+const squash = (t: string): string => t.replace(/([a-z])\1+/g, '$1');
+
 // Words are matched on whole-word boundaries after normalisation, so "class" never trips "ass" and "Essex" never trips "sex".
-const TERMS: Record<Exclude<SafetyCategory, 'likeness'>, string[]> = {
+const TERMS: Record<Exclude<SafetyCategory, 'likeness' | 'oversize'>, string[]> = {
   // Unambiguous words for children. Ordinary words like "kids" or "baby" are only blocked next to sexual or violent words (see WEAK_MINOR).
   minors: ['toddler', 'infant', 'newborn', 'preteen', 'preteens', 'teenager', 'teenagers', 'underage', 'schoolboy', 'schoolgirl', 'little boy', 'little girl', 'young boy', 'young girl', 'tween', 'tweens'],
   sexual: ['nude', 'nudes', 'naked', 'nsfw', 'porn', 'porno', 'pornographic', 'erotic', 'sex scene', 'sexual intercourse', 'topless', 'lingerie model', 'explicit sex', 'sexually explicit', 'strip tease', 'stripper', 'orgy', 'fetish'],
@@ -42,6 +53,7 @@ const PATTERNS: Array<{ category: SafetyCategory; re: RegExp; plain?: boolean }>
   { category: 'likeness', re: /\b(deepfake|deep fake|face swap|faceswap|swap (?:the )?face|lookalike|look alike|impersonat\w*|likeness of|in the likeness|resembl\w+ (?:the )?(?:real|actual))\b/ },
   { category: 'likeness', re: /\b(?:looks? like|looking like|dressed as|portrayed as|playing the role of|as if (?:he|she) were) (?:the )?(?:president|prime minister|king|queen|pope|celebrity|actor|actress|singer|rapper|politician|famous)\b/ },
   { category: 'likeness', re: /\b(?:a |an |the )?(?:celebrity|famous (?:person|actor|actress|singer|rapper|politician|athlete)|real person)\b/ },
+  { category: 'minors', re: /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen) ?(?:year|yr)s? ?old (?:boy|girl|child|kid|son|daughter|student|person|guy|baby|brother|sister|youth)\b/ },
   { category: 'minors', plain: true, re: /\b(?:[1-9]|1[0-7]) ?(?:year|yr)s? ?old (?:boy|girl|child|kid|son|daughter|student|person|guy|baby|brother|sister|youth)\b|\b(?:boy|girl|child|kid|son|daughter|student|baby|brother|sister) (?:aged|age) (?:[1-9]|1[0-7])\b|\b(?:[1-9]|1[0-7]) ?yo\b/ },
   { category: 'minors', plain: true, re: /\b(?:under ?18|under ?age|high school (?:student|girl|boy)|middle school|elementary school)\b/ },
 ];
@@ -55,43 +67,77 @@ const NAMES = [
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const wordRe = (term: string) => new RegExp(`(?:^| )${esc(normalize(term))}(?: |$)`);
-const COMPILED = (Object.entries(TERMS) as Array<[Exclude<SafetyCategory, 'likeness'>, string[]]>).flatMap(([category, list]) => list.map(t => ({ category, re: wordRe(t) })));
-const NAME_RES = NAMES.map(n => wordRe(n));
-const WEAK_MINOR = ['child', 'children', 'kid', 'kids', 'baby', 'babies', 'teen', 'teens', 'minor', 'boy', 'girl', 'son', 'daughter', 'student'].map(wordRe);
+const wordReSquashed = (term: string) => new RegExp(`(?:^| )${esc(squash(normalize(term)))}(?: |$)`);
+const test = (re: RegExp, reSq: RegExp, t: string, tSq: string): boolean => re.test(t) || reSq.test(tSq);
+const COMPILED = (Object.entries(TERMS) as Array<[Exclude<SafetyCategory, 'likeness' | 'oversize'>, string[]]>).flatMap(([category, list]) => list.map(t => ({ category, re: wordRe(t), reSq: wordReSquashed(t) })));
+const NAME_RES = NAMES.map(n => ({ re: wordRe(n), reSq: wordReSquashed(n) }));
+const WEAK_MINOR = ['child', 'children', 'kid', 'kids', 'baby', 'babies', 'teen', 'teens', 'minor', 'boy', 'girl', 'son', 'daughter', 'student'].map(w => ({ re: wordRe(w), reSq: wordReSquashed(w) }));
 const ADULT_HARM = COMPILED.filter(c => c.category === 'sexual' || c.category === 'violence');
 
-/** Check one piece of text. `extraTerms` are the operator's own blocked words and names (category: likeness unless they look like hate/sexual words). */
+export const MAX_TEXT = 20_000;
+const OVERSIZE: SafetyResult = { ok: false, category: 'oversize', message: MESSAGES.oversize };
+
+/** Check one piece of text. `extraTerms` are the operator's own blocked words and names (Latin letters; category: likeness). Text over the limit is refused, never half-checked. */
 export function checkText(text: string, extraTerms: readonly string[] = []): SafetyResult {
   if (!text || typeof text !== 'string') return { ok: true };
-  const raw = text.slice(0, 20_000);
-  const t = normalize(raw);
+  if (text.length > MAX_TEXT) return OVERSIZE;
+  const first = scan(text, extraTerms);
+  // the Cyrillic \u0443 looks like both "y" and "u": try it as a "u" too
+  if (first.ok && text.includes('\u0443')) return scan(text.replace(/\u0443/g, 'u'), extraTerms);
+  return first;
+}
+
+function scan(text: string, extraTerms: readonly string[]): SafetyResult {
+  const t = normalize(text);
   if (!t) return { ok: true };
-  const plain = normalize(raw, false);   // digits kept, for age statements
+  const tSq = squash(t);
+  const plain = normalize(text, false);   // digits kept, for age statements
   for (const p of PATTERNS) if (p.re.test(p.plain ? plain : t)) return { ok: false, category: p.category, message: MESSAGES[p.category] };
   // a word for a young person next to a sexual or violent word is always refused
-  if (WEAK_MINOR.some(re => re.test(t)) && ADULT_HARM.some(c => c.re.test(t))) return { ok: false, category: 'minors', message: MESSAGES.minors };
-  for (const c of COMPILED) if (c.re.test(t)) return { ok: false, category: c.category, message: MESSAGES[c.category] };
-  for (const re of NAME_RES) if (re.test(t)) return { ok: false, category: 'likeness', message: MESSAGES.likeness };
+  if (WEAK_MINOR.some(w => test(w.re, w.reSq, t, tSq)) && ADULT_HARM.some(c => test(c.re, c.reSq, t, tSq))) return { ok: false, category: 'minors', message: MESSAGES.minors };
+  for (const c of COMPILED) if (test(c.re, c.reSq, t, tSq)) return { ok: false, category: c.category, message: MESSAGES[c.category] };
+  for (const n of NAME_RES) if (test(n.re, n.reSq, t, tSq)) return { ok: false, category: 'likeness', message: MESSAGES.likeness };
   for (const term of extraTerms) {
-    const n = normalize(term);
-    if (n && wordRe(term).test(t)) return { ok: false, category: 'likeness', message: MESSAGES.likeness };
+    if (normalize(term) && test(wordRe(term), wordReSquashed(term), t, tSq)) return { ok: false, category: 'likeness', message: MESSAGES.likeness };
   }
   return { ok: true };
 }
 
-/** Every string the customer wrote that will reach a model: prompts, scripts, descriptions. URLs and short identifiers are skipped. */
-export function collectText(body: unknown, depth = 0, out: string[] = []): string[] {
-  if (depth > 6 || out.length > 200) return out;
-  if (typeof body === 'string') { if (!/^https?:\/\//.test(body) && body.length >= 3) out.push(body); }
-  else if (Array.isArray(body)) for (const v of body.slice(0, 100)) collectText(v, depth + 1, out);
-  else if (body && typeof body === 'object') for (const [k, v] of Object.entries(body as Record<string, unknown>)) { if (!/(?:url|image|video|audio|voice_id|aspect|resolution|format|model)/i.test(k)) collectText(v, depth + 1, out); }
-  return out;
+// Values that are known not to be free text. Everything else the customer sends is screened, whatever the field is called.
+const ENUM_KEYS = new Set(['aspect_ratio', 'resolution', 'output_format', 'response_format', 'format', 'voice_id', 'model', 'quality', 'mode', 'speed', 'duration', 'seed', 'language', 'thinking_mode', 'enable_audio']);
+const URL_KEY = /(?:^|_)urls?$|^(?:images?|videos?|audios?)_list$/;
+const WHOLE_URL = /^https?:\/\/\S+$/;
+
+export interface Collected { texts: string[]; truncated: boolean }
+const LIMITS = { depth: 8, strings: 300, items: 200 };
+
+/** Every string the customer wrote that will reach a model. A value that is entirely one URL is skipped; any other string is screened, even if it starts with "http". If a limit is hit, `truncated` says so and the caller refuses the request. */
+export function collectText(body: unknown, c: Collected = { texts: [], truncated: false }, depth = 0): Collected {
+  if (depth > LIMITS.depth) { c.truncated = true; return c; }
+  if (typeof body === 'string') {
+    if (WHOLE_URL.test(body.trim()) || body.length < 3) return c;
+    if (c.texts.length >= LIMITS.strings) { c.truncated = true; return c; }
+    c.texts.push(body);
+  } else if (Array.isArray(body)) {
+    if (body.length > LIMITS.items) c.truncated = true;
+    for (const v of body.slice(0, LIMITS.items)) collectText(v, c, depth + 1);
+  } else if (body && typeof body === 'object') {
+    const entries = Object.entries(body as Record<string, unknown>);
+    if (entries.length > LIMITS.items) c.truncated = true;
+    for (const [k, v] of entries.slice(0, LIMITS.items)) {
+      const key = k.toLowerCase();
+      if (typeof v === 'string' && (ENUM_KEYS.has(key) || URL_KEY.test(key)) && (WHOLE_URL.test(v.trim()) || v.length <= 40)) continue;   // a URL or a short enum value
+      collectText(v, c, depth + 1);
+    }
+  }
+  return c;
 }
 
-/** Check a whole request body. The first problem wins. */
+/** Check a whole request body. The first problem wins; a body too big or too deep to check completely is refused. */
 export function checkBody(body: unknown, extraTerms: readonly string[] = []): SafetyResult {
-  for (const s of collectText(body)) { const r = checkText(s, extraTerms); if (!r.ok) return r; }
-  return { ok: true };
+  const c = collectText(body);
+  for (const s of c.texts) { const r = checkText(s, extraTerms); if (!r.ok) return r; }
+  return c.truncated ? OVERSIZE : { ok: true };
 }
 
 export const SAFETY_CATEGORIES = Object.keys(MESSAGES) as SafetyCategory[];

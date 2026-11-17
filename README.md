@@ -47,7 +47,7 @@ npm run dev
    supabase functions deploy admin-credits
    supabase functions deploy reap-holds --no-verify-jwt
    supabase functions deploy referral-claim
-   supabase functions deploy health
+   supabase functions deploy health --no-verify-jwt
    supabase functions deploy ops-alerts --no-verify-jwt
    ```
 
@@ -79,7 +79,7 @@ npm run dev
 - **Consent for faces:** Cast portrait uploads and Recast source clips and reference photos are off until the customer agrees that they have the right, the person is an adult and has agreed. The agreement is recorded with the time and wording version (`consents`). It is evidence plus a gate in the page, not a server-side block on uploads.
 - **AI label:** exports carry a small "AI-generated" label by default (the customer can turn it off in Output).
 - **Legal pages:** `/terms`, `/privacy`, `/refunds`, `/ai-policy` are public and linked from sign-in, sign-up and Settings. They are **drafts that describe what the product does**, with `[bracketed]` decisions for you. Have a lawyer review them before launch. Edit them in `src/lib/legal/documents.ts`.
-- **Monitoring:** apply `20261123000000_launch_ops.sql`, deploy `health` and `ops-alerts` (`supabase functions deploy health` and `supabase functions deploy ops-alerts --no-verify-jwt`), and schedule `POST .../ops-alerts` with `x-cron-secret` every 10 minutes. It raises one alert per problem (ledger drift, negative balances, Stripe events needing a human, low muapi balance, stuck holds, high failure rate, refund spikes, browser error spikes), shows them in `/admin`, and optionally posts new ones to a Slack-compatible webhook. Optional secrets: `MUAPI_LOW_BALANCE_USD` (default 20), `ALERT_WEBHOOK_URL`. Point an uptime monitor at the public `health` URL (it returns only `{ok}`).
+- **Monitoring:** apply `20261123000000_launch_ops.sql`, deploy `health` and `ops-alerts` (`supabase functions deploy health --no-verify-jwt` and `supabase functions deploy ops-alerts --no-verify-jwt`), and schedule `POST .../ops-alerts` with `x-cron-secret` every 10 minutes. It raises one alert per problem (ledger drift, negative balances, Stripe events needing a human, low muapi balance, stuck holds, high failure rate, refund spikes, browser error spikes), shows them in `/admin`, and optionally posts new ones to a Slack-compatible webhook. Optional secrets: `MUAPI_LOW_BALANCE_USD` (default 20), `ALERT_WEBHOOK_URL`. Point an uptime monitor at the public `health` URL (it returns only `{ok}`).
 - **Abuse tests:** `supabase/tests/abuse.sql` audits the whole database from a hostile user's point of view (which functions and tables clients can touch, row-level security everywhere, per-account rate limits under a simulated signup farm). Run it with `scripts/test-credits-sql.sh`; any new table or function that opens a door fails it.
 
 ### How selling works

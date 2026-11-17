@@ -188,7 +188,7 @@ export async function adminHandle(caller: AdminCaller | null, req: unknown, deps
     case 'safety_terms': return { status: 200, body: { terms: await deps.listSafetyTerms() } };
     case 'add_safety_term': {
       const term = String(req.term ?? '').trim().toLowerCase();
-      if (term.length < 2 || term.length > 60 || !/^[\p{L}\p{N} .'-]+$/u.test(term)) return bad('A blocked term is 2 to 60 letters, numbers or spaces.');
+      if (term.length < 2 || term.length > 60 || !/^[\p{Script=Latin}0-9 .'-]+$/u.test(term)) return bad('A blocked term is 2 to 60 Latin letters, numbers or spaces (the screen reads Latin script; other alphabets are not matched).');
       await deps.addSafetyTerm(term, caller.id);
       await deps.audit(caller.id, 'add_safety_term', { term });
       return { status: 200, body: { terms: await deps.listSafetyTerms() } };

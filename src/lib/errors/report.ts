@@ -20,7 +20,11 @@ export function shouldSend(message: string, now = Date.now()): boolean {
 }
 export function resetReporter(): void { sent = []; last = ''; }
 
-export function reportError(message: string, stack?: string): void {
+/** Remove query strings and hashes from any URL inside a message or stack, and cap the length (a rejection reason can carry a signed URL or a prompt). */
+export function scrub(text: string, max: number): string { return text.replace(/(https?:\/\/[^\s)'"]+?)[?#][^\s)'"]*/g, '$1').slice(0, max); }
+
+export function reportError(rawMessage: string, rawStack?: string): void {
+  const message = scrub(rawMessage, 300); const stack = rawStack ? scrub(rawStack, 2000) : undefined;
   if (!shouldSend(message)) return;
   try { void Promise.resolve(supabase.rpc('client_error_log', { p_message: message, p_stack: stack ?? null, p_url: cleanUrl(window.location.href) })).then(() => undefined, () => undefined); } catch { /* reporting must never throw */ }
 }
