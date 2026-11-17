@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.2",
     "@remotion/captions": "4.0.542",
     "@remotion/google-fonts": "4.0.542",
     "@remotion/light-leaks": "4.0.542",
@@ -20,6 +21,7 @@
     "@remotion/sfx": "4.0.542",
     "@remotion/transitions": "4.0.542",
     "@remotion/web-renderer": "4.0.542",
+    "@remotion/whisper-web": "4.0.542",
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.344.0",
     "mediabunny": "1.64.0",

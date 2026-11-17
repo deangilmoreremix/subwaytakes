@@ -1,4 +1,5 @@
 import type { BrandSnapshot } from '../brand/model';
+import type { CaptionStyle, CaptionWord } from '../captions/model';
 import type { TitleData } from '../shows';
 export const FPS = 30;
 
@@ -21,6 +22,8 @@ export interface Clip {
   volume?: number;
   /** caption text */
   text?: string;
+  /** caption: word timings in frames, relative to the start of this clip. Absent on older captions (text is spread evenly). */
+  words?: CaptionWord[];
   /** caption: id of the video clip it was auto-generated from (lets us regenerate cleanly) */
   sourceClipId?: string;
   /**
@@ -39,7 +42,7 @@ export interface Track { id: string; kind: TrackKind; name: string }
 export interface Project {
   fps: number;
   /** project-wide look */
-  style?: { /** label exports as AI-generated (default on) */ aiLabel?: boolean; /** the customer's brand (logo, colours, handle, sponsor); copied from their brand kit */ brand?: BrandSnapshot; captionFont?: 'inter' | 'anton' | 'bangers'; /** on-screen title; also accepts the older { take, guest, badge } shape (see resolveTitle) */ title?: { data?: TitleData; take?: string; guest?: string; badge?: boolean; showBadge?: boolean; series?: { name: string; episode: number } } };
+  style?: { /** how captions look and move (preset, motion engine, font, colours, position) */ captions?: CaptionStyle; /** label exports as AI-generated (default on) */ aiLabel?: boolean; /** the customer's brand (logo, colours, handle, sponsor); copied from their brand kit */ brand?: BrandSnapshot; captionFont?: 'inter' | 'anton' | 'bangers'; /** on-screen title; also accepts the older { take, guest, badge } shape (see resolveTitle) */ title?: { data?: TitleData; take?: string; guest?: string; badge?: boolean; showBadge?: boolean; series?: { name: string; episode: number } } };
   tracks: Track[];
   clips: Clip[];
 }

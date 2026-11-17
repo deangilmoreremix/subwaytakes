@@ -8,6 +8,7 @@ import { transitionDef } from '../../lib/timeline/transitions';
 import type { Project } from '../../lib/timeline/types';
 import { useCaptionFont } from '../../lib/captions/fonts';
 import { BrandLayer } from './BrandLayer';
+import { CaptionsLayer } from './captions/CaptionRenderer';
 import { applyBrandToTitle } from '../../lib/brand/model';
 import { TitleOverlay } from './TitleOverlay';
 import { resolveTitle } from '../../lib/shows/stored';
@@ -59,16 +60,18 @@ export function EpisodeComposition({ project }: EpisodeProps) {
       ))}
       {resolveTitle(project.style?.title) && <TitleOverlay title={applyBrandToTitle(resolveTitle(project.style?.title)!, project.style?.brand)} fontFamily={titleFont.family} fontWeight={titleFont.weight} />}
       <BrandLayer brand={project.style?.brand} aiLabel={project.style?.aiLabel !== false} fontFamily={titleFont.family} fontWeight={titleFont.weight} />
-      {captions.map(c => (
-        <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
-          <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', padding: '0 7% 14%' }}>
-            <div style={{
-              fontFamily: font.family, fontWeight: font.weight, fontSize: 60, lineHeight: 1.2, textAlign: 'center',
-              color: '#fff', background: 'rgba(0,0,0,0.62)', padding: '14px 28px', borderRadius: 24,
-            }}>{c.text}</div>
-          </AbsoluteFill>
-        </Sequence>
-      ))}
+      {project.style?.captions
+        ? <CaptionsLayer clips={captions} style={project.style.captions} />
+        : captions.map(c => (
+          <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
+            <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', padding: '0 7% 14%' }}>
+              <div style={{
+                fontFamily: font.family, fontWeight: font.weight, fontSize: 60, lineHeight: 1.2, textAlign: 'center',
+                color: '#fff', background: 'rgba(0,0,0,0.62)', padding: '14px 28px', borderRadius: 24,
+              }}>{c.text}</div>
+            </AbsoluteFill>
+          </Sequence>
+        ))}
     </AbsoluteFill>
   );
 }

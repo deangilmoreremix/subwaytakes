@@ -30,6 +30,7 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 - `lib/billing/`: products, orders, entitlements store (`useBilling`), `features.ts` (which feature needs which unlock), `startCheckout`. `supabase/functions/`: `checkout-create`, `stripe-webhook`; logic in `_shared/billing.ts`, `stripeSig.ts`, `stripe.ts`, `entitlements.ts`; migration `20261121000000_checkout_entitlements.sql`.
 - `lib/projects/` (cloud save + `useCloudProject`), `lib/templates/`, `lib/onboarding/`, `lib/brand/` (`model.ts` pure, used by the renderer), `lib/usage/`, `lib/referrals/`, `lib/dubbing/` (`pipeline.ts`, `prompts.ts`, `browser.ts`); migration `20261122000000_retention.sql`; function `referral-claim`.
 - `lib/safety/` (re-exports the shared screen), `lib/consent/`, `lib/errors/`, `lib/legal/`; functions `health`, `ops-alerts` (rules in `_shared/ops.ts`); migration `20261123000000_launch_ops.sql`.
+- `lib/captions/`: caption studio. Pure: `model.ts`, `presets.ts` (33), `words.ts` (lines, `wordsToClips`), `edit.ts`, `exports.ts` (SRT/VTT/TXT/ASS/JSON), `scripts.ts`, `motion.ts` (CSS per engine), `cache.ts`; `engines/` (Transformers.js worker, whisper.cpp, cloud, Web Speech, auto-fallback). UI in `components/studio/captions/`. Caption clips keep `words` (frames relative to the clip); `project.style.captions` is the look.
 - `lib/ideas.ts` + `lib/questionBank.ts`: take ideas for the Take tab.
 
 ## Rules that matter
@@ -45,6 +46,7 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 - **Say what is verified.** Tests and stubbed browser runs prove plumbing, not video quality. Label stubbed screenshots as stubbed.
 - Prompts: the transit card is the only microphone; no real mic, no logos. Each city has its own card (`places/cities.ts`); never hard-code "MetroCard".
 - The web renderer supports only a CSS subset (no `backdrop-filter`, 3D transforms, inset shadows). Verify any new overlay with a real export (`scripts/export-show-test.mjs` drives the UI to pick a show and exports a real frame; the graphic is computed by the app, so tests must choose the show through the UI).
+- **Captions rules.** The paid cloud Whisper is never an automatic fallback. Motion engines stay inside the web renderer's CSS subset (a test checks); any new engine needs a real export frame. Transcribe awaits must re-read `getProject()` before writing. Model files come from the Hugging Face hub; never bundle them.
 - Anything that adds clips from a long async loop must read the timeline with `getProject()` after the await, never from a captured `project` (a stale copy drops earlier clips).
 
 ## Sandbox gotchas

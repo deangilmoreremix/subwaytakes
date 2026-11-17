@@ -33,10 +33,13 @@ import { sameBrand, snapshotBrand } from '../lib/brand/model';
 import { OnboardingCard } from '../components/OnboardingCard';
 import { useOnboardingFlags } from '../lib/onboarding';
 import { applyTemplate, type Template } from '../lib/templates';
+import type { Clip } from '../lib/timeline/types';
 import { addClip, assembleBestOf, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
 import { getMediaInfo } from '../lib/timeline/media';
-import { transcribeClip } from '../lib/captions/transcribe';
-import { captionsToClips } from '../lib/captions/captions';
+import { GenerateCaptionsModal } from '../components/studio/captions/GenerateCaptionsModal';
+import { CaptionStudioModal } from '../components/studio/captions/CaptionStudioModal';
+import { DEFAULT_CAPTION_STYLE } from '../lib/captions/presets';
+import type { CaptionStyle } from '../lib/captions/model';
 import { DEFAULT_FONT } from '../lib/captions/fonts';
 import type { Sfx } from '../lib/timeline/sfx';
 
@@ -49,7 +52,7 @@ export function CreateTakePage() {
   const [running, setRunning] = useState<Running | null>(null);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
-  const [captionState, setCaptionState] = useState<{ busy: boolean; error: string }>({ busy: false, error: '' });
+  const [capModal, setCapModal] = useState<'generate' | 'studio' | null>(null);
   const { generationBlock: block, profile } = useAuth();
   const canGenerate = !block;
   /** Say so up front when the balance cannot cover a plan, so nothing starts that cannot finish. Returns true when it is fine to go on. */
@@ -181,22 +184,17 @@ export function CreateTakePage() {
     setSelectedClip(id);
   }, [project, frame, setProject]);
 
-  async function generateCaptions(clipId: string) {
-    const c = project.clips.find(x => x.id === clipId);
-    if (!c || c.kind !== 'video' || !c.src || captionState.busy) return;
-    setCaptionState({ busy: true, error: '' });
-    try {
-      const sourceMs = ((c.sourceFrames ?? c.trimStart + c.duration) / project.fps) * 1000;
-      const caps = await transcribeClip(c.src, sourceMs);
-      const track = project.tracks.find(t => t.kind === 'caption')!;
-      const fresh = captionsToClips(caps, c, track.id, project.fps, () => newId('cap'));
-      if (!fresh.length) throw new Error('No speech found inside the visible part of this clip.');
-      const kept = project.clips.filter(x => x.sourceClipId !== c.id); // regenerate cleanly
-      setProject({ ...project, clips: [...kept, ...fresh] });
-      setCaptionState({ busy: false, error: '' });
-    } catch (e) {
-      setCaptionState({ busy: false, error: e instanceof Error ? e.message : 'Caption generation failed' });
-    }
+  /** Captions from the Generate modal: replaces that shot's captions. Reads the newest project (the transcription ran for a while). */
+  function applyGenerated(a: { clip: Clip; captions: Clip[]; style: CaptionStyle }) {
+    const cur = getProject();
+    const kept = cur.clips.filter(x => x.sourceClipId !== a.clip.id);
+    setProject({ ...cur, clips: [...kept, ...a.captions], style: { ...cur.style, captions: a.style } });
+    setCapModal('studio');
+  }
+  /** Studio Apply: the edited caption lines and look replace the Captions track. */
+  function applyStudio(caps: Clip[], style: CaptionStyle) {
+    const cur = getProject();
+    setProject({ ...cur, clips: [...cur.clips.filter(x => x.kind !== 'caption'), ...caps], style: { ...cur.style, captions: style } });
   }
 
   const LIPSYNC_STAGES = ['Writing the voice', 'Preparing audio', 'Rendering the video'];
@@ -386,12 +384,15 @@ export function CreateTakePage() {
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => setProject({ ...project, style: { ...project.style, captionFont: f } })}
-            captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} captionState={captionState} onGenerateCaptions={() => clip && generateCaptions(clip.id)} canGenerate={canGenerate} />
+            captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} hasCaptions={project.clips.some(x => x.kind === 'caption')} onGenerateCaptions={() => setCapModal('generate')} onOpenStudio={() => setCapModal('studio')} canGenerate={canGenerate} />
         </div>
       </div>
       <TimelineEditor project={project} setProject={setProject} checkpoint={checkpoint} undo={undo} redo={redo}
         frame={Math.min(frame, Math.max(0, projectDuration(project)))} playing={playing} onSeek={seek} onToggle={toggle}
         selectedId={selectedClip} onSelect={setSelectedClip} captionDefault={spec.take} onExport={() => setExporting(true)} />
+      {capModal === 'generate' && <GenerateCaptionsModal project={project} aspect={spec.aspect} videoClips={project.clips.filter(c => c.kind === 'video' && c.src?.startsWith('http'))} initialClipId={clip?.kind === 'video' ? clip.id : undefined}
+        initialStyle={project.style?.captions ?? DEFAULT_CAPTION_STYLE} canUseCloud={canGenerate} onClose={() => setCapModal(null)} onDone={applyGenerated} />}
+      {capModal === 'studio' && <CaptionStudioModal project={project} aspect={spec.aspect} projectKey={openId ?? 'local'} onApply={applyStudio} onClose={() => setCapModal(null)} onBurn={(caps, st) => { applyStudio(caps, st); setCapModal(null); setExporting(true); }} />}
       {exporting && <ExportDialog project={project} aspect={spec.aspect} onClose={() => setExporting(false)} onDone={() => updateOnboarding({ exported: true })} />}
     </div>
   );
