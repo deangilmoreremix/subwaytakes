@@ -1,5 +1,7 @@
 import { VERSES, type VerseRecord, type VerseTheme } from './verses.generated';
 import type { PickedVerse } from './types';
+import { fitWords, wordCount as words } from '../compose';
+import { rank, type Ranked, type Searchable } from '../search/rank';
 
 // The verse library (KJV and WEB, public domain; see verses.generated.ts for the sources and how every verse was cross-checked).
 // RULE: verse text comes ONLY from this library or from what the customer types. It is never written by a model, and the on-screen text is never trimmed.
@@ -17,7 +19,6 @@ export const MAX_TYPED_VERSE = 300;
 
 export const allVerses = (): readonly VerseRecord[] => VERSES;
 export const textOf = (v: VerseRecord, t: Translation): string => (t === 'KJV' ? v.kjv : t === 'WEB' ? v.web : v.bsb);
-const words = (s: string): number => s.split(/\s+/).filter(Boolean).length;
 const norm = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 /** Look a verse up by reference, forgiving about case, punctuation and "Psalms". "john 3 16", "John 3:16" and "Jn" style full names all work. */
@@ -27,17 +28,14 @@ export function findVerse(ref: string): VerseRecord | undefined {
 }
 
 export interface VerseQuery { query?: string; theme?: VerseTheme | 'all'; translation?: Translation }
-/** Search by reference, a word in the verse, or a theme. Results keep the library order (grouped by theme). */
-export function searchVerses({ query = '', theme = 'all', translation = 'KJV' }: VerseQuery = {}): VerseRecord[] {
-  const q = norm(query);
-  return VERSES.filter(v => {
-    if (theme !== 'all' && v.theme !== theme) return false;
-    if (!q) return true;
-    if (norm(v.ref).includes(q)) return true;
-    const hay = ` ${norm(textOf(v, translation))} ${v.theme} `;
-    return q.split(' ').every(w => hay.includes(w));
-  });
+const searchable = (v: VerseRecord, t: Translation): Searchable => ({ id: v.ref, title: v.ref, text: textOf(v, t), tags: [v.theme, THEME_LABELS[v.theme]] });
+/** Search by reference ("john 3 16"), a word in the verse, a theme, or an everyday need ("scared", "can't sleep"). Best match first; with no query, library order. */
+export function searchVersesRanked({ query = '', theme = 'all', translation = 'KJV' }: VerseQuery = {}): Array<Ranked<VerseRecord>> {
+  const pool = theme === 'all' ? VERSES : VERSES.filter(v => v.theme === theme);
+  const byId = new Map(pool.map(v => [v.ref, v]));
+  return rank(pool.map(v => searchable(v, translation)), query).map(r => ({ item: byId.get(r.item.id)!, score: r.score, hits: r.hits }));
 }
+export const searchVerses = (q: VerseQuery = {}): VerseRecord[] => searchVersesRanked(q).map(r => r.item);
 
 export const pickVerse = (v: VerseRecord, t: Translation): PickedVerse => ({ ref: v.ref, translation: t, text: textOf(v, t), source: 'library' });
 
@@ -51,11 +49,6 @@ export function typedVerse(text: string, ref = 'Scripture'): PickedVerse {
 export const spokenRef = (ref: string): string => ref.replace(/(\d+):(\d+)/, '$1 verse $2');
 
 export interface Composed { line: string; /** the whole verse is spoken (it fit the clip) */ readsVerse: boolean; verseWords: number; budget: number }
-
-function fitWords(text: string, max: number): string {
-  const w = text.trim().split(/\s+/).filter(Boolean);
-  return w.length <= max ? w.join(' ') : w.slice(0, max).join(' ').replace(/[,;:-]+$/, '') + (/[.!?]$/.test(w[max - 1] ?? '') ? '' : '.');
-}
 
 /**
  * What the guest says. If the verse fits the clip it is spoken word for word ("Psalm 23 verse 1 says: ..."), then as much of the reflection as fits.

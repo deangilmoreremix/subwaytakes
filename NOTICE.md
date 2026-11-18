@@ -19,6 +19,10 @@ The 33 presets in `src/lib/captions/presets.ts` are this app's own colour, font 
 - **Web Speech API** (browser built-in) for optional dictation.
 - Fonts: Google Fonts families through `@remotion/google-fonts` (SIL Open Font Licence / Apache-2.0).
 
+## Quote library
+
+Quotes in `src/lib/quotes/quotes.generated.ts` are sentences found verbatim in public-domain books from Project Gutenberg (https://www.gutenberg.org): Marcus Aurelius, *Meditations* (Casaubon translation, 1634); Epictetus, *Discourses and Enchiridion* (George Long translation); James Allen, *As a Man Thinketh*; Ralph Waldo Emerson, *Essays: First Series*; Henry David Thoreau, *Walden*; Samuel Smiles, *Self-Help*; Benjamin Franklin, *The Autobiography*. Project Gutenberg texts used here are in the public domain; the Gutenberg trademark and licence apply to their distribution of the ebooks, and we do not reproduce their boilerplate or ebook formatting.
+
 ## Scripture and verse library
 
 - Bible texts in `src/lib/bible/verses.generated.ts`: **King James Version** and **World English Bible** (public domain) and the **Berean Standard Bible** (placed in the public domain by its publisher on 30 April 2023, https://berean.bible/licensing.htm).

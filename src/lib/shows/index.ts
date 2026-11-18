@@ -5,6 +5,7 @@
  */
 import type { PlaceSpec } from '../places';
 import type { PickedVerse } from '../bible/types';
+import type { PickedQuote } from '../quotes/types';
 import { BIBLE_IDEAS, BIBLE_SAMPLE, MOTIVATION_IDEAS, MOTIVATION_SAMPLE } from './packs';
 
 export type ShowId =
@@ -35,7 +36,7 @@ export const TONE_LABEL: Record<Tone, string> = {
 };
 
 /** How the on-screen graphic is drawn. */
-export type TitleVariant = 'take' | 'number' | 'vs' | 'ab' | 'score' | 'verse';
+export type TitleVariant = 'take' | 'number' | 'vs' | 'ab' | 'score' | 'verse' | 'quote';
 
 export interface Show {
   id: ShowId;
@@ -148,7 +149,7 @@ export const SHOWS: Show[] = [
     variant: 'take', titleFromTake: true, badge: 'MOTIVATION', badgeBg: '#ff5a1f', badgeFg: '#ffffff', reaction: 'The host nods, clearly fired up, and gives the guest a fist bump.', guests: 1,
     place: { time: 'early_morning', crowd: 'moderate' },
     ideas: MOTIVATION_IDEAS,
-    guard: 'Original advice in the guest\'s own words. Never attribute a quote to anyone by name. No medical claims and no promises about outcomes or money.',
+    guard: 'Original advice in the guest\'s own words, or one quote the studio supplies with its real author. Never invent a quote or attribute any other words to a named person. No medical claims and no promises about outcomes or money.',
   },
 ];
 
@@ -204,7 +205,7 @@ export interface TitleData {
 }
 
 export interface TitleInput {
-  show?: ShowId; question?: string; take: string; take2?: string; verse?: PickedVerse;
+  show?: ShowId; question?: string; take: string; take2?: string; verse?: PickedVerse; quote?: PickedQuote;
 }
 
 /** Everything the on-screen graphic needs, from the spec. Pure. */
@@ -212,6 +213,7 @@ export function titleFor(t: TitleInput): TitleData {
   const show = showOf(t.show);
   const base = { variant: show.variant, badge: show.badge, badgeBg: show.badgeBg, badgeFg: show.badgeFg };
   const question = questionFor(show, t.question);
+  if (show.id === 'motivation' && t.quote?.text) return { ...base, variant: 'quote', headline: t.quote.text, value: `${t.quote.author}, ${t.quote.work}` };
   switch (show.variant) {
     case 'number': return { ...base, headline: question, value: extractNumber(t.take) ?? undefined };
     case 'score': return { ...base, headline: question, value: extractScore(t.take) ?? undefined };
@@ -247,7 +249,7 @@ export const SAMPLE_ANSWERS: Record<ShowId, string[]> = {
 
 const ALL_SAMPLES = new Set(Object.values(SAMPLE_ANSWERS).flat());
 
-interface ShowSwitchable { show: ShowId; question?: string; tone: Tone; place: PlaceSpec; take: string; take2?: string; verse?: PickedVerse; reflection?: string }
+interface ShowSwitchable { show: ShowId; question?: string; tone: Tone; place: PlaceSpec; take: string; take2?: string; verse?: PickedVerse; quote?: PickedQuote; reflection?: string }
 
 /** Switch show: its question, an allowed tone, place defaults, and a matching sample answer if the user has not written one. Pure. */
 export function applyShow<T extends ShowSwitchable>(spec: T, id: ShowId): T {
@@ -258,6 +260,10 @@ export function applyShow<T extends ShowSwitchable>(spec: T, id: ShowId): T {
   // carry the composed line along as if the customer had typed it, and coming back must not resurrect an old reflection over newer typing.
   if (spec.show === 'bible' && id !== 'bible') {
     return { ...spec, show: id, verse: undefined, reflection: undefined, question: show.editableQuestion ? show.question : undefined, tone: show.tones.includes(spec.tone) ? spec.tone : show.defaultTone,
+      place: { ...spec.place, ...show.place }, take: samples[0], take2: show.guests === 2 ? samples[1] : spec.take2 };
+  }
+  if (spec.show === 'motivation' && id !== 'motivation' && spec.quote) {
+    return { ...spec, show: id, quote: undefined, reflection: undefined, question: show.editableQuestion ? show.question : undefined, tone: show.tones.includes(spec.tone) ? spec.tone : show.defaultTone,
       place: { ...spec.place, ...show.place }, take: samples[0], take2: show.guests === 2 ? samples[1] : spec.take2 };
   }
   if (id === 'bible' && spec.show !== 'bible') {

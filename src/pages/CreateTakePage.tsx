@@ -9,7 +9,7 @@ import { Kbd } from '../components/studio/ui';
 import { ExportDialog } from '../components/studio/ExportDialog';
 import { DEFAULT_TAKE, cutsPlan, cutsProblem, type TakeSpec } from '../lib/muapi/prompt';
 import { placePrompt } from '../lib/places';
-import { applyShow, showOf, titleFor, type ShowId } from '../lib/shows';
+import { SAMPLE_ANSWERS, applyShow, showOf, titleFor, type ShowId } from '../lib/shows';
 import { resolveTitle } from '../lib/shows/stored';
 import { twoShotRoute, describeCharacter, buildNativePrompt, spokenLines } from '../lib/interview';
 import { batchSpecs } from '../lib/interview/batch';
@@ -139,7 +139,8 @@ export function CreateTakePage() {
     if (k === 'aspect' && !NATIVE_MODELS.find(m => m.slug === slug)?.aspects.includes(v as TakeSpec['aspect'])) {
       setSlug(chooseNativeModel('fast', 'text', v as TakeSpec['aspect']).slug);
     }
-    if (['show', 'verse', 'reflection', 'durationSeconds', 'question'].includes(k)) next = recomposeBible(next);   // Scripture: keep the spoken line in step
+    if (k === 'quote' && !v && s.show === 'motivation') next = { ...next, take: s.reflection?.trim() || SAMPLE_ANSWERS.motivation[0], reflection: undefined };   // clearing the quote goes back to the guest's own advice
+    if (['show', 'verse', 'quote', 'reflection', 'durationSeconds', 'question'].includes(k)) next = recomposeBible(next);   // Scripture: keep the spoken line in step
     return next;
   });
 

@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { DictateButton } from './DictateButton';
 import { VersePicker } from './VersePicker';
-import { bibleComposition } from '../../lib/bible/spec';
+import { QuotePicker } from './QuotePicker';
+import { bibleComposition, quoteComposition } from '../../lib/bible/spec';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { FORMATS } from '../../lib/interview';
@@ -41,6 +42,17 @@ function BibleNote({ spec }: { spec: TakeSpec }) {
         ? <p>The whole verse ({c.verseWords} words) fits this clip and is spoken.</p>
         : <p>This verse ({c.verseWords} words) is too long to speak in this clip, so the guest names it and reflects; the exact verse is on screen. Use a longer clip to speak it.</p>)}
       <p>Video models can still garble spoken words. The on-screen verse is always exact. For word-for-word audio, use the Cuts format (the voice reads the text exactly).</p>
+    </div>
+  );
+}
+
+function QuoteNote({ spec }: { spec: TakeSpec }) {
+  const c = quoteComposition(spec);
+  return (
+    <div className="space-y-1 rounded-xl border border-line bg-ink-950 p-2.5 text-[11px] text-zinc-400" data-testid="quote-note">
+      <p><b className="text-zinc-200">The guest says:</b> {c.line || '(nothing yet)'}</p>
+      {c.readsQuote ? <p>The whole quote ({c.quoteWords} words) fits this clip and is spoken.</p> : <p>This quote ({c.quoteWords} words) is too long to speak in this clip, so the guest names the author and comments; the exact quote is on screen. Use a longer clip to speak it.</p>}
+      <p>Video models can still garble spoken words. The on-screen quote is always exact. For word-for-word audio, use the Cuts format.</p>
     </div>
   );
 }
@@ -101,12 +113,20 @@ export function Inspector({ aiLabel, onAiLabel, onAddDub, onTemplate, spec, set,
             <div><Label hint={<IdeasButton ideas={show.ideas} onPick={t => set('question', t.slice(0, 160))} />}>The host asks</Label>
               <input className={inputCls} maxLength={160} value={spec.question ?? show.question} onChange={e => set('question', e.target.value)} /></div>
           )}
+          {show.id === 'motivation' && (<>
+            <QuotePicker quote={spec.quote} onQuote={q => set('quote', q)} />
+            {spec.quote && (<>
+              <div><Label hint={<span className="flex items-center gap-3"><DictateButton value={spec.reflection ?? ''} onChange={v => set('reflection', v)} />{(spec.reflection ?? '').length}/220</span>}>Your comment on it</Label>
+                <textarea className={inputCls} rows={3} maxLength={220} value={spec.reflection ?? ''} onChange={e => set('reflection', e.target.value)} aria-label="Comment" /></div>
+              <QuoteNote spec={spec} />
+            </>)}
+          </>)}
           {show.id === 'bible' ? (<>
             <VersePicker verse={spec.verse} onVerse={v => set('verse', v)} />
             <div><Label hint={<span className="flex items-center gap-3"><DictateButton value={spec.reflection ?? ''} onChange={v => set('reflection', v)} />{(spec.reflection ?? '').length}/220</span>}>What it means to them</Label>
               <textarea className={inputCls} rows={3} maxLength={220} value={spec.reflection ?? ''} onChange={e => set('reflection', e.target.value)} aria-label="Reflection" /></div>
             <BibleNote spec={spec} />
-          </>) : (
+          </>) : show.id === 'motivation' && spec.quote ? null : (
           <div><Label hint={<span className="flex items-center gap-3"><DictateButton value={spec.take} onChange={v => set('take', v)} />{!show.editableQuestion && <IdeasButton onPick={t => set('take', t.slice(0, 220))} />}{spec.take.length}/220</span>}>{show.id === 'hot_take' ? 'The take' : show.answerLabel}</Label>
             <textarea className={inputCls} rows={4} maxLength={220} value={spec.take} onChange={e => set('take', e.target.value)} /></div>
           )}

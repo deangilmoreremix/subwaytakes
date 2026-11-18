@@ -11,6 +11,7 @@
  */
 import type { Aspect } from '../muapi/registry';
 import type { PickedVerse } from '../bible/types';
+import type { PickedQuote } from '../quotes/types';
 import { DEFAULT_PLACE, cardMicPhrase, cityOf, placePrompt, type PlaceSpec } from '../places';
 import { TONE_TEXT, questionFor, showOf, type ShowId, type Tone } from '../shows';
 
@@ -28,6 +29,8 @@ export interface TakeSpec {
   take2?: string;
   /** Scripture show: the verse shown on screen (word for word, from the verified library or typed by the customer). */
   verse?: PickedVerse;
+  /** Motivation show: a library quote shown on screen with its author (optional: without one the guest gives their own advice). */
+  quote?: PickedQuote;
   /** Scripture show: the guest's own reflection on the verse. `take` (what is spoken) is composed from the verse and this. */
   reflection?: string;
   /** Duel only: how guest B looks. */

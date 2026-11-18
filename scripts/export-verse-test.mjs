@@ -41,6 +41,11 @@ if (showLabel === 'Scripture') {
   await picker.getByRole('button', { name: tr, exact: true }).click();
   await page.getByLabel('Search verses').fill(ref);
   await picker.locator(`[data-verse="${ref}"]`).first().click();
+} else if (process.env.QUOTE_SEARCH) {
+  await page.getByTestId('find-quote').click();
+  const d = page.getByRole('dialog', { name: 'Find a quote' }); await d.getByTestId('find-input').fill(process.env.QUOTE_SEARCH); await page.waitForTimeout(300);
+  await d.locator('[data-result]').first().click(); await page.waitForTimeout(300);
+  await page.getByLabel('Comment').fill('It helps me when I feel flat on a Monday.');
 } else {
   await page.locator('textarea').first().fill(process.env.ANSWER || 'Do the next small thing. Nobody quits from one hard hour, they quit from a hundred skipped ones.');
 }

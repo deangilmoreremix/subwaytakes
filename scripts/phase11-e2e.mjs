@@ -61,45 +61,82 @@ await session(['bible'], async page => {
   check('owning Bible does not unlock Motivation', await page.getByRole('group', { name: /Unlock Motivation Pack/ }).isVisible());
 });
 
-// ---- 2. Owned: Scripture flow
+// ---- 2. Owned: Scripture flow with the full-size search
 await session(['bible', 'motivation'], async page => {
   await show(page, 'Scripture').click();
   const picker = page.getByTestId('verse-picker'); await picker.waitFor();
-  check('verse picker appears for Scripture only', true);
-  check('library has many verses to search', await picker.locator('[data-verse]').count() >= 40);
-  await page.getByLabel('Search verses').fill('Psalm 23');
-  check('search by reference narrows the list', await picker.locator('[data-verse]').count() >= 1 && await picker.locator('[data-verse]').count() < 10);
-  await page.getByLabel('Search verses').fill('');
-  await picker.getByRole('button', { name: 'Peace', exact: true }).click();
-  const first = picker.locator('[data-verse]').first(); const ref = await first.getAttribute('data-verse'); await first.click();
-  check('picking a verse shows what will be on screen', (await picker.innerText()).includes(`On screen: ${ref}`));
-  const kjv = await first.innerText();
-  await picker.getByRole('button', { name: 'WEB', exact: true }).click(); await page.waitForTimeout(300);
-  check('switching translation keeps the reference and changes the text', (await picker.locator(`[data-verse="${ref}"]`).first().innerText()) !== kjv && (await picker.innerText()).includes('(WEB)'));
-  await picker.getByRole('button', { name: 'BSB', exact: true }).click(); await page.waitForTimeout(300);
-  check('BSB is offered and its licence line is shown', (await picker.innerText()).includes('(BSB)') && /public domain/i.test(await picker.innerText()));
+  check('verse picker shows a Find button (no list crammed into the side panel)', await page.getByTestId('find-verse').isVisible() && await picker.locator('[data-verse]').count() === 0);
+  await page.getByTestId('find-verse').click();
+  const dlg = page.getByRole('dialog', { name: 'Find a verse' }); await dlg.waitFor();
+  const input = dlg.getByTestId('find-input');
+  check('search box is focused and the whole library is listed', await input.evaluate(el => el === document.activeElement) && /^\d+ verses/.test(await dlg.getByTestId('find-count').innerText()));
+  await page.screenshot({ path: `${out}/p11-find-verse-empty.png` });
+  const count = async () => Number((await dlg.getByTestId('find-count').innerText()).match(/^(\d+)/)?.[1] ?? 0);
+  await input.fill('strength'); await page.waitForTimeout(250);
+  const nStrength = await count(); check('typing a word narrows the list and highlights it', nStrength > 3 && nStrength < 300 && await dlg.locator('mark').count() > 0, `${nStrength} results`);
+  await page.screenshot({ path: `${out}/p11-find-verse-word.png` });
+  await input.fill('John 3:16'); await page.waitForTimeout(250);
+  check('a reference finds exactly that verse first', (await dlg.locator('[data-result]').first().getAttribute('data-result')) === 'John 3:16');
+  await input.fill('scared'); await page.waitForTimeout(250);
+  const nScared = await count(); check('everyday words work ("scared" finds fear and courage verses)', nScared > 3, `${nScared} results`);
+  await page.screenshot({ path: `${out}/p11-find-verse-intent.png` });
+  await input.fill("can't sleep"); await page.waitForTimeout(250);
+  check('"can\'t sleep" finds rest and peace verses', await count() > 0);
+  await input.fill('zzzzqqq'); await page.waitForTimeout(250);
+  check('no match shows a friendly empty state with example searches', /No verses found/.test(await dlg.getByTestId('find-count').innerText()) && await dlg.locator('button', { hasText: /^strength$/ }).count() > 0);
+  await page.screenshot({ path: `${out}/p11-find-verse-none.png` });
+  await dlg.locator('button', { hasText: /^strength$/ }).first().click(); await page.waitForTimeout(250);
+  check('an example search fills the box', (await input.inputValue()) === 'strength');
+  await input.fill(''); await dlg.getByRole('group', { name: 'Themes' }).getByRole('button', { name: /^Comfort/ }).click(); await page.waitForTimeout(250);
+  const nComfort = await count(); check('theme chips filter the list', nComfort > 5 && nComfort < 80, `${nComfort} results`);
+  await dlg.getByRole('group', { name: 'Translation in search' }).getByRole('button', { name: 'BSB', exact: true }).click(); await page.waitForTimeout(200);
+  await page.screenshot({ path: `${out}/p11-find-verse-theme.png` });
+  // keyboard: arrow down then Enter chooses the second result
+  const second = await dlg.locator('[data-result]').nth(1).getAttribute('data-result');
+  await input.press('ArrowDown'); await input.press('Enter'); await page.waitForTimeout(300);
+  check('arrow keys and Enter choose a verse and close the dialog', await dlg.count() === 0 && (await page.getByTestId('picked-verse').innerText()).includes(second));
+  check('the picked verse is shown on a card with its translation', (await page.getByTestId('picked-verse').innerText()).includes('BSB'));
+  await page.getByRole('button', { name: 'WEB', exact: true }).first().click(); await page.waitForTimeout(250);
+  check('switching translation keeps the reference and changes the text', (await page.getByTestId('picked-verse').innerText()).includes('WEB') && (await page.getByTestId('picked-verse').innerText()).includes(second));
   await page.getByLabel('Reflection').fill('It slows me down when the week gets loud.');
-  const note = page.getByTestId('bible-note'); const noteText = await note.innerText();
-  check('the note shows the composed line, the verse reading status and the Cuts recommendation', /The guest says:/.test(noteText) && /Cuts/.test(noteText) && /(fits this clip|too long)/.test(noteText), noteText.slice(0, 120));
-  // type my own
-  await picker.getByRole('button', { name: 'Type my own' }).click();
+  const noteText = await page.getByTestId('bible-note').innerText();
+  check('the note shows the composed line, the verse reading status and the Cuts recommendation', /The guest says:/.test(noteText) && /Cuts/.test(noteText) && /(fits this clip|too long)/.test(noteText));
+  await page.getByRole('button', { name: 'Remove verse' }).click();
+  check('a picked verse can be removed', await page.getByTestId('picked-verse').count() === 0);
+  await page.getByRole('button', { name: 'Type my own' }).click();
   await page.getByLabel('Verse reference').fill('Psalm 46:10'); await page.getByLabel('Verse text').fill('Be still, and know that I am God.');
   check('typed verse is labelled as the customer\'s own text', (await picker.innerText()).includes('your text'));
-  await picker.getByRole('button', { name: 'Type my own' }).click();
-  // the 12 second template length so a short verse is spoken
-  await page.getByRole('button', { name: 'Output', exact: true }).click(); await page.waitForTimeout(300);
-  await page.screenshot({ path: `${out}/p11-scripture-output.png` });
-  await page.getByRole('button', { name: 'Take', exact: true }).click();
-  await page.screenshot({ path: `${out}/p11-scripture-take.png` });
+  await page.getByRole('button', { name: 'Type my own' }).click();
+  await page.getByTestId('find-verse').click(); await dlg.waitFor(); await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  check('Escape closes the dialog', await dlg.count() === 0);
 
-  // ---- 3. Motivation: the take is edited directly and there is no verse picker
+  // ---- 3. Motivation: quote search
   await show(page, 'Motivation').click();
-  check('verse picker is gone on Motivation', await page.getByTestId('verse-picker').count() === 0);
-  check('Motivation switches the host question', (await page.getByLabel('The host asks').or(page.locator('input[maxlength="160"]')).first().inputValue()).includes('hardest day'));
-  await page.screenshot({ path: `${out}/p11-motivation.png` });
-  // switching back to Hot Take leaves the normal take box
+  check('verse picker is gone on Motivation, quote picker is there', await page.getByTestId('verse-picker').count() === 0 && await page.getByTestId('quote-picker').isVisible());
+  check('the guest can still write their own advice with no quote', await page.locator('textarea').first().isVisible());
+  await page.getByTestId('find-quote').click();
+  const qd = page.getByRole('dialog', { name: 'Find a quote' }); await qd.waitFor();
+  const qin = qd.getByTestId('find-input');
+  const qcount = async () => Number((await qd.getByTestId('find-count').innerText()).match(/^(\d+)/)?.[1] ?? 0);
+  check('the quote library is listed with authors', (await qcount()) >= 35 && (await qd.locator('[data-result]').first().innerText()).length > 20);
+  await page.screenshot({ path: `${out}/p11-find-quote-empty.png` });
+  await qin.fill('dreams'); await page.waitForTimeout(250); check('search by word', await qcount() > 0 && await qd.locator('mark').count() > 0);
+  await page.screenshot({ path: `${out}/p11-find-quote-word.png` });
+  await qin.fill('Emerson'); await page.waitForTimeout(250); const names = await qd.locator('[data-result]').allInnerTexts(); check('search by author', names.length > 3 && names.every(t => t.includes('Ralph Waldo Emerson')));
+  await qin.fill('I want to quit'); await page.waitForTimeout(250); check('"I want to quit" finds quotes about perseverance and strength', await qcount() > 0);
+  await page.screenshot({ path: `${out}/p11-find-quote-intent.png` });
+  await qin.fill('Nothing great'); await page.waitForTimeout(250);
+  await qd.locator('[data-result]').first().click(); await page.waitForTimeout(300);
+  const pq = await page.getByTestId('picked-quote').innerText();
+  check('a picked quote shows its exact text and author', /Nothing great was ever achieved without enthusiasm\./.test(pq) && /Ralph Waldo Emerson/.test(pq));
+  await page.getByLabel('Comment').fill('It helps me when I feel flat on a Monday.');
+  const qn = await page.getByTestId('quote-note').innerText();
+  check('the note shows the spoken line with the author and the Cuts recommendation', /Ralph Waldo Emerson wrote:/.test(qn) && /Cuts/.test(qn), qn.slice(0, 100));
+  await page.screenshot({ path: `${out}/p11-motivation-quote.png` });
+  await page.getByRole('button', { name: 'Remove quote' }).click();
+  check('removing the quote returns to the guest\'s own advice', await page.getByTestId('picked-quote').count() === 0 && await page.locator('textarea').first().isVisible());
   await show(page, 'Hot Take').click();
-  check('Hot Take has the normal take box again', await page.getByLabel('Reflection').count() === 0);
+  check('Hot Take has the normal take box again', await page.getByLabel('Reflection').count() === 0 && await page.getByTestId('quote-picker').count() === 0);
 });
 
 console.log(failures ? `${failures} FAILED` : 'ALL PASSED (stubbed backend and checkout)');
