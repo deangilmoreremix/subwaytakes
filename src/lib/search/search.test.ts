@@ -48,13 +48,28 @@ describe('verse search finds what people look for', () => {
 
 describe('quote library', () => {
   it('has real, attributed quotes with sources and no duplicates', () => {
-    expect(QUOTES.length).toBeGreaterThanOrEqual(35); expect(new Set(QUOTES.map(q => q.id)).size).toBe(QUOTES.length); expect(new Set(QUOTES.map(q => q.text)).size).toBe(QUOTES.length);
+    expect(QUOTES.length).toBeGreaterThanOrEqual(80); expect(new Set(QUOTES.map(q => q.id)).size).toBe(QUOTES.length); expect(new Set(QUOTES.map(q => q.text)).size).toBe(QUOTES.length);
     for (const q of QUOTES) { expect(q.author, q.id).toBeTruthy(); expect(q.work, q.id).toBeTruthy(); expect(q.gutenberg, q.id).toBeGreaterThan(0); expect(q.text.length, q.id).toBeGreaterThanOrEqual(25); expect(q.text.length, q.id).toBeLessThanOrEqual(260); expect(QUOTE_THEMES).toContain(q.theme); }
   });
   it('quotes read as clean sentences: start with a capital, end with punctuation, no markup, no one else quoted', () => {
     for (const q of QUOTES) { expect(q.text, q.id).toMatch(/^[A-Z]/); expect(q.text, q.id).toMatch(/[.!]$/); expect(q.text, q.id).not.toMatch(/[<>{}_[\]]|[“”]/); expect(q.text, q.id).not.toMatch(/\b(?:said|says|wrote|maxim|proverb)\b/i); }
   });
-  it('is only from authors who died long ago (public domain)', () => { const ok = new Set(['Marcus Aurelius', 'Epictetus', 'James Allen', 'Ralph Waldo Emerson', 'Henry David Thoreau', 'Samuel Smiles', 'Benjamin Franklin']); for (const q of QUOTES) expect(ok.has(q.author), q.author).toBe(true); });
+  it('quotes carry no stray quote marks, speaker labels or stage directions, and no text is a longer or shorter copy of another', () => {
+    for (const q of QUOTES) { expect(q.text, q.id).not.toMatch(/['\u2018\u2019]$|^['\u2018]|[()]|^[A-Z]{3,}\b/); }
+    for (const a of QUOTES) for (const b of QUOTES) if (a !== b) expect(b.text.includes(a.text), `${a.id} inside ${b.id}`).toBe(false);
+  });
+  it('every theme has at least 5 quotes and the library has many voices', () => {
+    for (const t of QUOTE_THEMES) expect(QUOTES.filter(q => q.theme === t).length, t).toBeGreaterThanOrEqual(5);
+    expect(new Set(QUOTES.map(q => q.author)).size).toBeGreaterThanOrEqual(12);
+    const per: Record<string, number> = {}; for (const q of QUOTES) per[q.author] = (per[q.author] ?? 0) + 1; expect(Math.max(...Object.values(per))).toBeLessThanOrEqual(22);
+  });
+  it('books with plays or sayings are cleaned (no "The Master said", no speaker labels) and known lines are exact', () => {
+    const has = (s: string) => QUOTES.some(q => q.text === s);
+    expect(has('We are all in the gutter, but some of us are looking at the stars.')).toBe(true); expect(has('The journey of a thousand li commenced with a single step.')).toBe(true);
+    expect(has('He who has conquered doubt and fear has conquered failure.')).toBe(true); expect(has('Learning without thought is labour lost; thought without learning is perilous.')).toBe(true);
+    for (const q of QUOTES) expect(q.text, q.id).not.toMatch(/^The Master|^(?:LORD|LADY|MRS|MR)\b/);
+  });
+  it('is only from authors who died long ago (public domain)', () => { const ok = new Set(['Marcus Aurelius', 'Epictetus', 'James Allen', 'Ralph Waldo Emerson', 'Henry David Thoreau', 'Samuel Smiles', 'Benjamin Franklin', 'Mark Twain', 'Oscar Wilde', 'William James', 'Friedrich Nietzsche', 'Confucius', 'Lao Tzu', 'Booker T. Washington', 'Thomas Carlyle', 'Kahlil Gibran']); for (const q of QUOTES) expect(ok.has(q.author), q.author).toBe(true); });
   it('known lines are exact (hand-written here, not copied from the library)', () => {
     const has = (s: string) => QUOTES.some(q => q.text === s);
     expect(has('Nothing great was ever achieved without enthusiasm.')).toBe(true); expect(has('To be great is to be misunderstood.')).toBe(true); expect(has('Dream lofty dreams, and as you dream, so shall you become.')).toBe(true); expect(has('The mass of men lead lives of quiet desperation.')).toBe(true);
@@ -62,7 +77,7 @@ describe('quote library', () => {
   it('no quote trips the content screen, with or without its author line', () => { for (const q of QUOTES) { expect(checkText(q.text).ok, q.id).toBe(true); expect(checkText(`${q.author} wrote: ${q.text}`).ok, q.id).toBe(true); } });
   it('is searchable by author, work, word, theme and intent', () => {
     expect(searchQuotes({ query: 'Emerson' }).every(q => q.author.includes('Emerson'))).toBe(true); expect(searchQuotes({ query: 'Walden' }).length).toBeGreaterThan(3);
-    for (const q of ['dreams', 'calm', 'courage', 'I want to quit', 'focus', 'work', 'failure']) expect(searchQuotes({ query: q }).length, q).toBeGreaterThan(0);
+    for (const q of ['dreams', 'calm', 'courage', 'I want to quit', 'focus', 'work', 'failure', 'Twain', 'Confucius', 'habit', 'truth', 'fear']) expect(searchQuotes({ query: q }).length, q).toBeGreaterThan(0);
     expect(searchQuotes({ query: 'zzzzqqqq' })).toEqual([]); expect(searchQuotesRanked({ query: 'enthusiasm' })[0].item.text).toContain('enthusiasm');
     for (const t of QUOTE_THEMES) expect(searchQuotes({ theme: t }).length, t).toBeGreaterThan(0);
   });

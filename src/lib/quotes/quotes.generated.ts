@@ -5,17 +5,7 @@ export type QuoteTheme = 'mindset' | 'discipline' | 'courage' | 'perseverance' |
 export interface QuoteRecord { id: string; text: string; author: string; work: string; /** translator or edition note */ note: string; year: string; gutenberg: number; theme: QuoteTheme }
 export const QUOTES: QuoteRecord[] = [
  {
-  "id": "2680-1",
-  "text": "Thou must be like a promontory of the sea, against which though the waves beat continually, yet it both itself stands, and about it are those swelling waves stilled and quieted.",
-  "author": "Marcus Aurelius",
-  "work": "Meditations",
-  "note": "trans. Meric Casaubon, 1634",
-  "year": "2nd c.",
-  "gutenberg": 2680,
-  "theme": "courage"
- },
- {
-  "id": "10661-2",
+  "id": "10661-1",
   "text": "Every habit and faculty is maintained and increased by the corresponding actions: the habit of walking by walking, the habit of running by running.",
   "author": "Epictetus",
   "work": "Discourses and Enchiridion",
@@ -25,8 +15,18 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "action"
  },
  {
-  "id": "4507-3",
+  "id": "4507-2",
   "text": "A man is literally what he thinks, his character being the complete sum of all his thoughts.",
+  "author": "James Allen",
+  "work": "As a Man Thinketh",
+  "note": "",
+  "year": "1903",
+  "gutenberg": 4507,
+  "theme": "mindset"
+ },
+ {
+  "id": "4507-3",
+  "text": "Circumstance does not make the man; it reveals him to himself.",
   "author": "James Allen",
   "work": "As a Man Thinketh",
   "note": "",
@@ -76,6 +76,16 @@ export const QUOTES: QuoteRecord[] = [
  },
  {
   "id": "4507-8",
+  "text": "Cherish your visions; cherish your ideals; cherish the music that stirs in your heart.",
+  "author": "James Allen",
+  "work": "As a Man Thinketh",
+  "note": "",
+  "year": "1903",
+  "gutenberg": 4507,
+  "theme": "purpose"
+ },
+ {
+  "id": "4507-9",
   "text": "Calmness of mind is one of the beautiful jewels of wisdom.",
   "author": "James Allen",
   "work": "As a Man Thinketh",
@@ -85,7 +95,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "calm"
  },
  {
-  "id": "4507-9",
+  "id": "4507-10",
   "text": "The strong, calm man is always loved and revered.",
   "author": "James Allen",
   "work": "As a Man Thinketh",
@@ -95,7 +105,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "discipline"
  },
  {
-  "id": "4507-10",
+  "id": "4507-11",
   "text": "He who would accomplish little must sacrifice little; he who would achieve much must sacrifice much; he who would attain highly must sacrifice greatly.",
   "author": "James Allen",
   "work": "As a Man Thinketh",
@@ -105,7 +115,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "perseverance"
  },
  {
-  "id": "2944-11",
+  "id": "2944-12",
   "text": "Trust thyself: every heart vibrates to that iron string.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -115,7 +125,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "courage"
  },
  {
-  "id": "2944-12",
+  "id": "2944-13",
   "text": "Whoso would be a man, must be a nonconformist.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -125,7 +135,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "courage"
  },
  {
-  "id": "2944-13",
+  "id": "2944-14",
   "text": "Nothing can bring you peace but yourself.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -135,7 +145,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "calm"
  },
  {
-  "id": "2944-14",
+  "id": "2944-15",
   "text": "Nothing great was ever achieved without enthusiasm.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -145,7 +155,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "action"
  },
  {
-  "id": "2944-15",
+  "id": "2944-16",
   "text": "To be great is to be misunderstood.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -155,7 +165,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "courage"
  },
  {
-  "id": "2944-16",
+  "id": "2944-17",
   "text": "A foolish consistency is the hobgoblin of little minds, adored by little statesmen and philosophers and divines.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -165,7 +175,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "mindset"
  },
  {
-  "id": "2944-17",
+  "id": "2944-18",
   "text": "Insist on yourself; never imitate.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -175,7 +185,17 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "growth"
  },
  {
-  "id": "2944-18",
+  "id": "2944-19",
+  "text": "The only way to have a friend is to be one.",
+  "author": "Ralph Waldo Emerson",
+  "work": "Essays: First Series",
+  "note": "",
+  "year": "1841",
+  "gutenberg": 2944,
+  "theme": "mindset"
+ },
+ {
+  "id": "2944-20",
   "text": "What I must do is all that concerns me, not what the people think.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -185,7 +205,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "courage"
  },
  {
-  "id": "205-19",
+  "id": "205-21",
   "text": "I learned this, at least, by my experiment; that if one advances confidently in the direction of his dreams, and endeavors to live the life which he has imagined, he will meet with a success unexpected in common hours.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -195,7 +215,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "purpose"
  },
  {
-  "id": "205-20",
+  "id": "205-22",
   "text": "The mass of men lead lives of quiet desperation.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -205,7 +225,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "mindset"
  },
  {
-  "id": "205-21",
+  "id": "205-23",
   "text": "How many a man has dated a new era in his life from the reading of a book.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -215,7 +235,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "purpose"
  },
  {
-  "id": "205-22",
+  "id": "205-24",
   "text": "Every morning was a cheerful invitation to make my life of equal simplicity, and I may say innocence, with Nature herself.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -225,7 +245,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "action"
  },
  {
-  "id": "205-23",
+  "id": "205-25",
   "text": "I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -235,7 +255,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "purpose"
  },
  {
-  "id": "205-24",
+  "id": "205-26",
   "text": "Our life is frittered away by detail.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -245,7 +265,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "growth"
  },
  {
-  "id": "205-25",
+  "id": "205-27",
   "text": "Time is but the stream I go a-fishing in.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -255,7 +275,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "calm"
  },
  {
-  "id": "205-26",
+  "id": "205-28",
   "text": "I know of no more encouraging fact than the unquestionable ability of man to elevate his life by a conscious endeavor.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -265,7 +285,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "courage"
  },
  {
-  "id": "935-27",
+  "id": "935-29",
   "text": "The spirit of self-help is the root of all genuine growth in the individual.",
   "author": "Samuel Smiles",
   "work": "Self-Help",
@@ -275,17 +295,17 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "perseverance"
  },
  {
-  "id": "935-28",
+  "id": "935-30",
   "text": "We learn wisdom from failure much more than from success.",
   "author": "Samuel Smiles",
   "work": "Self-Help",
   "note": "",
   "year": "1859",
   "gutenberg": 935,
-  "theme": "growth"
+  "theme": "perseverance"
  },
  {
-  "id": "935-29",
+  "id": "935-31",
   "text": "Cheerfulness is an excellent working quality, imparting great elasticity to the character.",
   "author": "Samuel Smiles",
   "work": "Self-Help",
@@ -295,7 +315,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "growth"
  },
  {
-  "id": "2680-30",
+  "id": "2680-32",
   "text": "Let opinion be taken away, and no man will think himself wronged.",
   "author": "Marcus Aurelius",
   "work": "Meditations",
@@ -305,7 +325,17 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "mindset"
  },
  {
-  "id": "2680-31",
+  "id": "2680-33",
+  "text": "The best kind of revenge is, not to become like unto them.",
+  "author": "Marcus Aurelius",
+  "work": "Meditations",
+  "note": "trans. Meric Casaubon, 1634",
+  "year": "2nd c.",
+  "gutenberg": 2680,
+  "theme": "mindset"
+ },
+ {
+  "id": "2680-34",
   "text": "Look within; within is the fountain of all good.",
   "author": "Marcus Aurelius",
   "work": "Meditations",
@@ -315,7 +345,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "mindset"
  },
  {
-  "id": "10661-32",
+  "id": "10661-35",
   "text": "Men are disturbed not by the things which happen, but by the opinions about the things.",
   "author": "Epictetus",
   "work": "Discourses and Enchiridion",
@@ -325,7 +355,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "mindset"
  },
  {
-  "id": "4507-33",
+  "id": "4507-36",
   "text": "Good thoughts and actions can never produce bad results; bad thoughts and actions can never produce good results.",
   "author": "James Allen",
   "work": "As a Man Thinketh",
@@ -335,7 +365,17 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "mindset"
  },
  {
-  "id": "4507-34",
+  "id": "4507-37",
+  "text": "You will become as small as your controlling desire; as great as your dominant aspiration.",
+  "author": "James Allen",
+  "work": "As a Man Thinketh",
+  "note": "",
+  "year": "1903",
+  "gutenberg": 4507,
+  "theme": "purpose"
+ },
+ {
+  "id": "4507-38",
   "text": "The Vision that you glorify in your mind, the Ideal that you enthrone in your heart--this you will build your life by, this you will become.",
   "author": "James Allen",
   "work": "As a Man Thinketh",
@@ -345,7 +385,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "purpose"
  },
  {
-  "id": "4507-35",
+  "id": "4507-39",
   "text": "Self-control is strength; Right Thought is mastery; Calmness is power.",
   "author": "James Allen",
   "work": "As a Man Thinketh",
@@ -355,7 +395,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "discipline"
  },
  {
-  "id": "2944-36",
+  "id": "2944-40",
   "text": "The law of nature is, Do the thing, and you shall have the Power; but they who do not the thing have not the power.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -365,7 +405,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "action"
  },
  {
-  "id": "2944-37",
+  "id": "2944-41",
   "text": "Nothing is at last sacred but the integrity of your own mind.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -375,7 +415,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "courage"
  },
  {
-  "id": "2944-38",
+  "id": "2944-42",
   "text": "Society everywhere is in conspiracy against the manhood of every one of its members.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -385,7 +425,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "courage"
  },
  {
-  "id": "2944-39",
+  "id": "2944-43",
   "text": "Our strength grows out of our weakness.",
   "author": "Ralph Waldo Emerson",
   "work": "Essays: First Series",
@@ -395,7 +435,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "growth"
  },
  {
-  "id": "205-40",
+  "id": "205-44",
   "text": "Things do not change; we change.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -405,7 +445,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "mindset"
  },
  {
-  "id": "205-41",
+  "id": "205-45",
   "text": "I never found the companion that was so companionable as solitude.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -415,7 +455,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "calm"
  },
  {
-  "id": "205-42",
+  "id": "205-46",
   "text": "However mean your life is, meet it and live it; do not shun it and call it hard names.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -425,7 +465,17 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "courage"
  },
  {
-  "id": "205-43",
+  "id": "205-47",
+  "text": "I wanted to live deep and suck out all the marrow of life.",
+  "author": "Henry David Thoreau",
+  "work": "Walden",
+  "note": "",
+  "year": "1854",
+  "gutenberg": 205,
+  "theme": "purpose"
+ },
+ {
+  "id": "205-48",
   "text": "Rather than love, than money, than fame, give me truth.",
   "author": "Henry David Thoreau",
   "work": "Walden",
@@ -435,7 +485,197 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "purpose"
  },
  {
-  "id": "148-44",
+  "id": "2376-49",
+  "text": "No man who continues to add something to the material, intellectual, and moral well-being of the place in which he lives is long left without proper reward.",
+  "author": "Booker T. Washington",
+  "work": "Up from Slavery",
+  "note": "",
+  "year": "1901",
+  "gutenberg": 2376,
+  "theme": "action"
+ },
+ {
+  "id": "1091-50",
+  "text": "The first duty for a man is still that of subduing Fear.",
+  "author": "Thomas Carlyle",
+  "work": "On Heroes, Hero-Worship, and the Heroic in History",
+  "note": "",
+  "year": "1841",
+  "gutenberg": 1091,
+  "theme": "courage"
+ },
+ {
+  "id": "102-51",
+  "text": "Habit is habit, and not to be flung out of the window by any man, but coaxed down-stairs a step at a time.",
+  "author": "Mark Twain",
+  "work": "Pudd'nhead Wilson",
+  "note": "",
+  "year": "1894",
+  "gutenberg": 102,
+  "theme": "discipline"
+ },
+ {
+  "id": "2895-52",
+  "text": "Make it a point to do something every day that you don't want to do. This is the golden rule for acquiring the habit of doing your duty without pain.",
+  "author": "Mark Twain",
+  "work": "Following the Equator",
+  "note": "",
+  "year": "1897",
+  "gutenberg": 2895,
+  "theme": "discipline"
+ },
+ {
+  "id": "174-53",
+  "text": "Nowadays people know the price of everything and the value of nothing.",
+  "author": "Oscar Wilde",
+  "work": "The Picture of Dorian Gray",
+  "note": "",
+  "year": "1890",
+  "gutenberg": 174,
+  "theme": "mindset"
+ },
+ {
+  "id": "174-54",
+  "text": "Experience was of no ethical value. It was merely the name men gave to their mistakes.",
+  "author": "Oscar Wilde",
+  "work": "The Picture of Dorian Gray",
+  "note": "",
+  "year": "1890",
+  "gutenberg": 174,
+  "theme": "growth"
+ },
+ {
+  "id": "790-55",
+  "text": "We are all in the gutter, but some of us are looking at the stars.",
+  "author": "Oscar Wilde",
+  "work": "Lady Windermere's Fan",
+  "note": "",
+  "year": "1893",
+  "gutenberg": 790,
+  "theme": "purpose"
+ },
+ {
+  "id": "26659-56",
+  "text": "These, then, are my last words to you: Be not afraid of life.",
+  "author": "William James",
+  "work": "The Will to Believe",
+  "note": "",
+  "year": "1897",
+  "gutenberg": 26659,
+  "theme": "courage"
+ },
+ {
+  "id": "1998-57",
+  "text": "I tell you: one must still have chaos in one, to give birth to a dancing star.",
+  "author": "Friedrich Nietzsche",
+  "work": "Thus Spake Zarathustra",
+  "note": "trans. Thomas Common, 1909",
+  "year": "1883",
+  "gutenberg": 1998,
+  "theme": "purpose"
+ },
+ {
+  "id": "4363-58",
+  "text": "He who fights with monsters should be careful lest he thereby become a monster.",
+  "author": "Friedrich Nietzsche",
+  "work": "Beyond Good and Evil",
+  "note": "trans. Helen Zimmern, 1907",
+  "year": "1886",
+  "gutenberg": 4363,
+  "theme": "courage"
+ },
+ {
+  "id": "3330-59",
+  "text": "Learning without thought is labour lost; thought without learning is perilous.",
+  "author": "Confucius",
+  "work": "The Analects",
+  "note": "trans. James Legge",
+  "year": "5th c. BC",
+  "gutenberg": 3330,
+  "theme": "growth"
+ },
+ {
+  "id": "3330-60",
+  "text": "To see what is right and not to do it is want of courage.",
+  "author": "Confucius",
+  "work": "The Analects",
+  "note": "trans. James Legge",
+  "year": "5th c. BC",
+  "gutenberg": 3330,
+  "theme": "courage"
+ },
+ {
+  "id": "3330-61",
+  "text": "The superior man is modest in his speech, but exceeds in his actions.",
+  "author": "Confucius",
+  "work": "The Analects",
+  "note": "trans. James Legge",
+  "year": "5th c. BC",
+  "gutenberg": 3330,
+  "theme": "action"
+ },
+ {
+  "id": "216-62",
+  "text": "He who overcomes others is strong; he who overcomes himself is mighty.",
+  "author": "Lao Tzu",
+  "work": "Tao Te Ching",
+  "note": "trans. James Legge",
+  "year": "6th c. BC",
+  "gutenberg": 216,
+  "theme": "growth"
+ },
+ {
+  "id": "216-63",
+  "text": "The journey of a thousand li commenced with a single step.",
+  "author": "Lao Tzu",
+  "work": "Tao Te Ching",
+  "note": "trans. James Legge",
+  "year": "6th c. BC",
+  "gutenberg": 216,
+  "theme": "perseverance"
+ },
+ {
+  "id": "216-64",
+  "text": "He who is satisfied with his lot is rich.",
+  "author": "Lao Tzu",
+  "work": "Tao Te Ching",
+  "note": "trans. James Legge",
+  "year": "6th c. BC",
+  "gutenberg": 216,
+  "theme": "calm"
+ },
+ {
+  "id": "148-65",
+  "text": "Resolve to perform what you ought; perform without fail what you resolve.",
+  "author": "Benjamin Franklin",
+  "work": "The Autobiography of Benjamin Franklin",
+  "note": "",
+  "year": "1791",
+  "gutenberg": 148,
+  "theme": "discipline"
+ },
+ {
+  "id": "148-66",
+  "text": "Speak not but what may benefit others or yourself; avoid trifling conversation.",
+  "author": "Benjamin Franklin",
+  "work": "The Autobiography of Benjamin Franklin",
+  "note": "",
+  "year": "1791",
+  "gutenberg": 148,
+  "theme": "calm"
+ },
+ {
+  "id": "2944-67",
+  "text": "Accept the place the divine providence has found for you, the society of your contemporaries, the connection of events.",
+  "author": "Ralph Waldo Emerson",
+  "work": "Essays: First Series",
+  "note": "",
+  "year": "1841",
+  "gutenberg": 2944,
+  "theme": "courage"
+ },
+ {
+  "id": "148-68",
   "text": "Lose no time; be always employ'd in something useful; cut off all unnecessary actions.",
   "author": "Benjamin Franklin",
   "work": "The Autobiography of Benjamin Franklin",
@@ -445,7 +685,7 @@ export const QUOTES: QuoteRecord[] = [
   "theme": "discipline"
  },
  {
-  "id": "148-45",
+  "id": "148-69",
   "text": "Let all your things have their places; let each part of your business have its time.",
   "author": "Benjamin Franklin",
   "work": "The Autobiography of Benjamin Franklin",
@@ -453,5 +693,235 @@ export const QUOTES: QuoteRecord[] = [
   "year": "1791",
   "gutenberg": 148,
   "theme": "discipline"
+ },
+ {
+  "id": "2895-70",
+  "text": "When in doubt, tell the truth.",
+  "author": "Mark Twain",
+  "work": "Following the Equator",
+  "note": "",
+  "year": "1897",
+  "gutenberg": 2895,
+  "theme": "mindset"
+ },
+ {
+  "id": "844-71",
+  "text": "The truth is rarely pure and never simple.",
+  "author": "Oscar Wilde",
+  "work": "The Importance of Being Earnest",
+  "note": "",
+  "year": "1895",
+  "gutenberg": 844,
+  "theme": "mindset"
+ },
+ {
+  "id": "2944-72",
+  "text": "A great man is always willing to be little.",
+  "author": "Ralph Waldo Emerson",
+  "work": "Essays: First Series",
+  "note": "",
+  "year": "1841",
+  "gutenberg": 2944,
+  "theme": "mindset"
+ },
+ {
+  "id": "2944-73",
+  "text": "Our faith comes in moments; our vice is habitual.",
+  "author": "Ralph Waldo Emerson",
+  "work": "Essays: First Series",
+  "note": "",
+  "year": "1841",
+  "gutenberg": 2944,
+  "theme": "mindset"
+ },
+ {
+  "id": "4507-74",
+  "text": "He who has conquered doubt and fear has conquered failure.",
+  "author": "James Allen",
+  "work": "As a Man Thinketh",
+  "note": "",
+  "year": "1903",
+  "gutenberg": 4507,
+  "theme": "perseverance"
+ },
+ {
+  "id": "3330-75",
+  "text": "The object of the superior man is truth.",
+  "author": "Confucius",
+  "work": "The Analects",
+  "note": "trans. James Legge",
+  "year": "5th c. BC",
+  "gutenberg": 3330,
+  "theme": "mindset"
+ },
+ {
+  "id": "2944-76",
+  "text": "Trust the instinct to the end, though you can render no reason.",
+  "author": "Ralph Waldo Emerson",
+  "work": "Essays: First Series",
+  "note": "",
+  "year": "1841",
+  "gutenberg": 2944,
+  "theme": "courage"
+ },
+ {
+  "id": "102-77",
+  "text": "Courage is resistance to fear, mastery of fear--not absence of fear.",
+  "author": "Mark Twain",
+  "work": "Pudd'nhead Wilson",
+  "note": "",
+  "year": "1894",
+  "gutenberg": 102,
+  "theme": "courage"
+ },
+ {
+  "id": "621-78",
+  "text": "A chain is no stronger than its weakest link, and life is after all a chain.",
+  "author": "William James",
+  "work": "The Varieties of Religious Experience",
+  "note": "",
+  "year": "1902",
+  "gutenberg": 621,
+  "theme": "purpose"
+ },
+ {
+  "id": "26659-79",
+  "text": "Believe that life is worth living, and your belief will help create the fact.",
+  "author": "William James",
+  "work": "The Will to Believe",
+  "note": "",
+  "year": "1897",
+  "gutenberg": 26659,
+  "theme": "purpose"
+ },
+ {
+  "id": "2895-80",
+  "text": "To be good is noble; but to show others how to be good is nobler and no trouble.",
+  "author": "Mark Twain",
+  "work": "Following the Equator",
+  "note": "",
+  "year": "1897",
+  "gutenberg": 2895,
+  "theme": "mindset"
+ },
+ {
+  "id": "2376-81",
+  "text": "Nothing ever comes to me, that is worth having, except as the result of hard work.",
+  "author": "Booker T. Washington",
+  "work": "Up from Slavery",
+  "note": "",
+  "year": "1901",
+  "gutenberg": 2376,
+  "theme": "perseverance"
+ },
+ {
+  "id": "2376-82",
+  "text": "Few things help an individual more than to place responsibility upon him, and to let him know that you trust him.",
+  "author": "Booker T. Washington",
+  "work": "Up from Slavery",
+  "note": "",
+  "year": "1901",
+  "gutenberg": 2376,
+  "theme": "action"
+ },
+ {
+  "id": "4507-83",
+  "text": "In all human affairs there are efforts, and there are results, and the strength of the effort is the measure of the result.",
+  "author": "James Allen",
+  "work": "As a Man Thinketh",
+  "note": "",
+  "year": "1903",
+  "gutenberg": 4507,
+  "theme": "perseverance"
+ },
+ {
+  "id": "2376-84",
+  "text": "I have learned that success is to be measured not so much by the position that one has reached in life as by the obstacles which he has overcome while trying to succeed.",
+  "author": "Booker T. Washington",
+  "work": "Up from Slavery",
+  "note": "",
+  "year": "1901",
+  "gutenberg": 2376,
+  "theme": "perseverance"
+ },
+ {
+  "id": "935-85",
+  "text": "The very greatest things—great thoughts, discoveries, inventions—have usually been nurtured in hardship, often pondered over in sorrow, and at length established with difficulty.",
+  "author": "Samuel Smiles",
+  "work": "Self-Help",
+  "note": "",
+  "year": "1859",
+  "gutenberg": 935,
+  "theme": "perseverance"
+ },
+ {
+  "id": "1051-86",
+  "text": "Silence is the element in which great things fashion themselves together.",
+  "author": "Thomas Carlyle",
+  "work": "Sartor Resartus",
+  "note": "",
+  "year": "1836",
+  "gutenberg": 1051,
+  "theme": "calm"
+ },
+ {
+  "id": "2944-87",
+  "text": "We are by nature observers, and thereby learners. That is our permanent state.",
+  "author": "Ralph Waldo Emerson",
+  "work": "Essays: First Series",
+  "note": "",
+  "year": "1841",
+  "gutenberg": 2944,
+  "theme": "calm"
+ },
+ {
+  "id": "205-88",
+  "text": "No face which we can give to a matter will stead us so well at last as the truth. This alone wears well.",
+  "author": "Henry David Thoreau",
+  "work": "Walden",
+  "note": "",
+  "year": "1854",
+  "gutenberg": 205,
+  "theme": "calm"
+ },
+ {
+  "id": "205-89",
+  "text": "If you have built castles in the air, your work need not be lost; that is where they should be. Now put the foundations under them.",
+  "author": "Henry David Thoreau",
+  "work": "Walden",
+  "note": "",
+  "year": "1854",
+  "gutenberg": 205,
+  "theme": "action"
+ },
+ {
+  "id": "935-90",
+  "text": "Progress, however, of the best kind, is comparatively slow. Great results cannot be achieved at once; and we must be satisfied to advance in life as we walk, step by step.",
+  "author": "Samuel Smiles",
+  "work": "Self-Help",
+  "note": "",
+  "year": "1859",
+  "gutenberg": 935,
+  "theme": "perseverance"
+ },
+ {
+  "id": "148-91",
+  "text": "Human felicity is produc'd not so much by great pieces of good fortune that seldom happen, as by little advantages that occur every day.",
+  "author": "Benjamin Franklin",
+  "work": "The Autobiography of Benjamin Franklin",
+  "note": "",
+  "year": "1791",
+  "gutenberg": 148,
+  "theme": "mindset"
+ },
+ {
+  "id": "58585-92",
+  "text": "If he is indeed wise he does not bid you enter the house of his wisdom, but rather leads you to the threshold of your own mind.",
+  "author": "Kahlil Gibran",
+  "work": "The Prophet",
+  "note": "",
+  "year": "1923",
+  "gutenberg": 58585,
+  "theme": "growth"
  }
 ];

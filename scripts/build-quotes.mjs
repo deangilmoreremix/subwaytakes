@@ -8,16 +8,52 @@ import { join } from 'node:path';
 
 const DATA = process.env.QUOTE_DATA; if (!DATA) { console.error('Set QUOTE_DATA to the folder holding the Gutenberg text files (g2680.txt, ...).'); process.exit(1); }
 
-// id = Project Gutenberg ebook number. year = first publication (all authors died before 1930 and all translations are public domain).
+// id = Project Gutenberg ebook number. Every text here is public domain (published before 1929, or an old translation) and was checked by reading the ebook's own header.
+// `aliases` are the author names used by the open quote lists (see DATASET below), so a list row is only ever matched against that author's own books.
+const A = (author, aliases = [author]) => ({ author, aliases });
 const WORKS = {
-  2680: { author: 'Marcus Aurelius', work: 'Meditations', note: 'trans. Meric Casaubon, 1634', year: '2nd c.' },
-  10661: { author: 'Epictetus', work: 'Discourses and Enchiridion', note: 'trans. George Long, 1877', year: '2nd c.' },
-  4507: { author: 'James Allen', work: 'As a Man Thinketh', note: '', year: '1903' },
-  2944: { author: 'Ralph Waldo Emerson', work: 'Essays: First Series', note: '', year: '1841' },
-  205: { author: 'Henry David Thoreau', work: 'Walden', note: '', year: '1854' },
-  935: { author: 'Samuel Smiles', work: 'Self-Help', note: '', year: '1859' },
-  148: { author: 'Benjamin Franklin', work: 'The Autobiography of Benjamin Franklin', note: '', year: '1791' },
+  2680: { ...A('Marcus Aurelius'), work: 'Meditations', note: 'trans. Meric Casaubon, 1634', year: '2nd c.' },
+  10661: { ...A('Epictetus'), work: 'Discourses and Enchiridion', note: 'trans. George Long, 1877', year: '2nd c.' },
+  4507: { ...A('James Allen'), work: 'As a Man Thinketh', note: '', year: '1903' },
+  2944: { ...A('Ralph Waldo Emerson'), work: 'Essays: First Series', note: '', year: '1841' },
+  16643: { ...A('Ralph Waldo Emerson'), work: 'Essays', note: '', year: '1844' },
+  205: { ...A('Henry David Thoreau'), work: 'Walden', note: '', year: '1854' },
+  935: { ...A('Samuel Smiles'), work: 'Self-Help', note: '', year: '1859' },
+  148: { ...A('Benjamin Franklin'), work: 'The Autobiography of Benjamin Franklin', note: '', year: '1791' },
+  102: { ...A('Mark Twain'), work: "Pudd'nhead Wilson", note: '', year: '1894' },
+  3176: { ...A('Mark Twain'), work: 'The Innocents Abroad', note: '', year: '1869' },
+  245: { ...A('Mark Twain'), work: 'Life on the Mississippi', note: '', year: '1883' },
+  2895: { ...A('Mark Twain'), work: 'Following the Equator', note: '', year: '1897' },
+  86: { ...A('Mark Twain'), work: "A Connecticut Yankee in King Arthur's Court", note: '', year: '1889' },
+  174: { ...A('Oscar Wilde'), work: 'The Picture of Dorian Gray', note: '', year: '1890' },
+  790: { ...A('Oscar Wilde'), work: "Lady Windermere's Fan", note: '', year: '1893' },
+  844: { ...A('Oscar Wilde'), work: 'The Importance of Being Earnest', note: '', year: '1895' },
+  885: { ...A('Oscar Wilde'), work: 'An Ideal Husband', note: '', year: '1895' },
+  921: { ...A('Oscar Wilde'), work: 'De Profundis', note: '', year: '1905' },
+  774: { ...A('Oscar Wilde'), work: 'Intentions', note: '', year: '1891' },
+  46: { ...A('Charles Dickens'), work: 'A Christmas Carol', note: '', year: '1843' },
+  98: { ...A('Charles Dickens'), work: 'A Tale of Two Cities', note: '', year: '1859' },
+  1400: { ...A('Charles Dickens'), work: 'Great Expectations', note: '', year: '1861' },
+  26659: { ...A('William James'), work: 'The Will to Believe', note: '', year: '1897' },
+  16287: { ...A('William James'), work: 'Talks to Teachers on Psychology', note: '', year: '1899' },
+  621: { ...A('William James'), work: 'The Varieties of Religious Experience', note: '', year: '1902' },
+  5116: { ...A('William James'), work: 'Pragmatism', note: '', year: '1907' },
+  1998: { ...A('Friedrich Nietzsche'), work: 'Thus Spake Zarathustra', note: 'trans. Thomas Common, 1909', year: '1883' },
+  4363: { ...A('Friedrich Nietzsche'), work: 'Beyond Good and Evil', note: 'trans. Helen Zimmern, 1907', year: '1886' },
+  132: { ...A('Sun Tzu'), work: 'The Art of War', note: 'trans. Lionel Giles, 1910', year: '5th c. BC' },
+  3330: { ...A('Confucius'), work: 'The Analects', note: 'trans. James Legge', year: '5th c. BC' },
+  216: { ...A('Lao Tzu', ['Lao Tzu', 'Laozi']), work: 'Tao Te Ching', note: 'trans. James Legge', year: '6th c. BC' },
+  1497: { ...A('Plato'), work: 'The Republic', note: 'trans. Benjamin Jowett', year: '4th c. BC' },
+  8438: { ...A('Aristotle'), work: 'Nicomachean Ethics', note: 'trans. D. P. Chase, 1847', year: '4th c. BC' },
+  2376: { ...A('Booker T. Washington'), work: 'Up from Slavery', note: '', year: '1901' },
+  23: { ...A('Frederick Douglass'), work: 'Narrative of the Life of Frederick Douglass', note: '', year: '1845' },
+  1051: { ...A('Thomas Carlyle'), work: 'Sartor Resartus', note: '', year: '1836' },
+  1091: { ...A('Thomas Carlyle'), work: 'On Heroes, Hero-Worship, and the Heroic in History', note: '', year: '1841' },
+  1293: { ...A('John Ruskin'), work: 'Sesame and Lilies', note: '', year: '1865' },
+  58585: { ...A('Kahlil Gibran', ['Khalil Gibran', 'Kahlil Gibran']), work: 'The Prophet', note: '', year: '1923' },
 };
+const AUTHOR_WORKS = new Map();   // dataset author name -> work ids
+for (const [id, w] of Object.entries(WORKS)) for (const al of w.aliases) AUTHOR_WORKS.set(al, [...(AUTHOR_WORKS.get(al) ?? []), id]);
 const THEMES = ['mindset', 'discipline', 'courage', 'perseverance', 'action', 'calm', 'purpose', 'growth'];
 
 // [work id, theme, rough hint]. The hint only has to share most of its key words with the real sentence.
@@ -117,6 +153,45 @@ const HINTS = [
   [935, 'perseverance', 'Difficulties act as a bracing tonic'],
   [935, 'growth', 'Resolution is the great thing'],
   [935, 'action', 'No man is useless while he has a friend'],
+
+  // ---- more authors (each hint is verified against the book; one that matches nothing is dropped)
+  [2376, 'courage', 'I resolved that I would permit no man to narrow and degrade my soul by making me hate him'],
+  [2376, 'growth', 'There are two ways of exerting one\'s strength: one is pushing down, the other is pulling up'],
+  [2376, 'mindset', 'Character, not circumstances, makes the man'],
+  [2376, 'action', 'No man who continues to add something to the material, intellectual, and moral well-being of the place in which he lives is left long without proper reward'],
+  [1051, 'action', 'Do the Duty which lies nearest thee, which thou knowest to be a Duty! Thy second Duty will already have become clearer'],
+  [1051, 'action', 'Work while it is called To-day; for the Night cometh, wherein no man can work'],
+  [1091, 'courage', 'The first duty for a man is still that of subduing Fear'],
+  [[102, 2895], 'discipline', 'Habit is habit, and not to be flung out of the window by any man, but coaxed down-stairs a step at a time'],
+  [[102, 2895], 'discipline', 'Do something every day that you do not want to do; this is the golden rule for acquiring the habit of doing your duty without pain'],
+  [[102, 2895], 'mindset', 'Always do right. This will gratify some people, and astonish the rest'],
+  [[102, 2895, 245], 'perseverance', 'Few things are impossible to diligence and skill'],
+  [[174, 790, 844, 885, 921, 774], 'mindset', 'Nowadays people know the price of everything and the value of nothing'],
+  [[174, 790, 844, 885, 921, 774], 'growth', 'Experience is merely the name men gave to their mistakes'],
+  [[174, 790, 844, 885, 921, 774], 'purpose', 'We are all in the gutter, but some of us are looking at the stars'],
+  [[174, 790, 844, 885, 921, 774], 'purpose', 'Ambition is the last refuge of the failure'],
+  [[16287, 26659, 5116, 621], 'discipline', 'Habit is the enormous fly-wheel of society, its most precious conservative agent'],
+  [[16287, 26659, 5116, 621], 'action', 'Nothing is so fatiguing as the eternal hanging on of an uncompleted task'],
+  [[16287, 26659, 5116, 621], 'growth', 'The art of being wise is the art of knowing what to overlook'],
+  [[16287, 26659, 5116, 621], 'mindset', 'The greatest discovery of my generation is that human beings can alter their lives by altering their attitudes of mind'],
+  [[16287, 26659, 5116, 621], 'courage', 'Be not afraid of life'],
+  [1998, 'purpose', 'One must still have chaos in oneself to be able to give birth to a dancing star'],
+  [4363, 'courage', 'He who fights with monsters should be careful lest he thereby become a monster'],
+  [3330, 'growth', 'Learning without thought is labour lost; thought without learning is perilous'],
+  [3330, 'courage', 'To see what is right and not to do it is want of courage'],
+  [3330, 'action', 'The superior man is modest in his speech, but exceeds in his actions'],
+  [3330, 'mindset', 'Virtue is not left to stand alone. He who practises it will have neighbours'],
+  [216, 'growth', 'He who overcomes others is strong; he who overcomes himself is mighty'],
+  [216, 'action', 'The journey of a thousand li commenced with a single step'],
+  [216, 'calm', 'He who is satisfied with his lot is rich'],
+  [8438, 'perseverance', 'For as it is not one swallow or one fine day that makes a spring, so it is not one day or a short time that makes a man blessed and happy'],
+  [8438, 'discipline', 'It makes no small difference then whether we form habits of one kind or another from our very youth; it makes a very great difference, or rather all the difference'],
+  [148, 'discipline', 'Resolve to perform what you ought; perform without fail what you resolve'],
+  [148, 'calm', 'Speak not but what may benefit others or yourself; avoid trifling conversation'],
+  [2944, 'courage', 'Envy is ignorance; imitation is suicide'],
+  [2944, 'courage', 'Accept the place the divine providence has found for you'],
+  [205, 'purpose', 'Rather than love, than money, than fame, give me truth'],
+  [205, 'purpose', 'I wanted to live deep and suck out all the marrow of life'],
   [148, 'discipline', 'Lose no time; be always employed in something useful'],
   [148, 'growth', 'I made a little book in which I allotted a page for each of the virtues'],
   [148, 'discipline', 'Order. Let all your things have their places; let each part of your business have its time'],
@@ -141,41 +216,134 @@ const words = s => s.toLowerCase().replace(/[^a-z0-9\s']/g, ' ').split(/\s+/).fi
 const sim = (hint, cand) => { const H = new Set(hint), C = new Set(cand); if (!H.size || !C.size) return 0; let i = 0; for (const x of H) if (C.has(x)) i++; return i / H.size; };
 
 const books = {};
-for (const id of Object.keys(WORKS)) { const f = join(DATA, `g${id}.txt`); if (!existsSync(f)) { console.error('missing', f); process.exit(1); } books[id] = sentencesOf(cleanBook(readFileSync(f, 'utf8'))); }
+for (const id of Object.keys(WORKS)) { const f = join(DATA, `g${id}.txt`); if (!existsSync(f)) { console.error('missing', f); process.exit(1); } books[id] = sentencesOf(cleanBook(readFileSync(f, 'utf8'))).map(x => ({ ...x, w: new Set(words(x.s)) })); }
 
-const quotes = []; const dropped = [];
-for (const [id, theme, hint] of HINTS) {
-  const hw = words(hint); const sents = books[id];
-  let best = null;
-  // try single sentences, sentence pairs within a paragraph, and the ';' clauses of a long sentence (a hint can be a part of a sentence)
-  const consider = (text, penaltySpan) => {
+// ---- the open quote list: its rows are only HINTS, matched against the author's own books --------------------------------------------------------------
+// DATASET = a CSV "QUOTE;AUTHOR;GENRE" (akhiltak/inspirational-quotes, MIT). Only rows by authors we have books for are used; the list's wording is never shipped.
+const DATASET = process.env.QUOTE_DATASET; const PER_AUTHOR = Number(process.env.PER_AUTHOR || 9);
+const SKIP_GENRE = new Set(['death', 'war', 'politics', 'government', 'religion', 'god', 'sex', 'women', 'men', 'mom', 'dad', 'marriage', 'romantic', 'relationship', 'legal', 'movies', 'music', 'sports', 'car', 'food', 'cool', 'famous', 'funny', 'humor', 'anger', 'sad', 'dad', 'age']);
+const GENRE_THEME = { courage: 'courage', fear: 'courage', strength: 'courage', peace: 'calm', alone: 'calm', nature: 'calm', morning: 'action', work: 'action', business: 'action', time: 'action', power: 'action', change: 'action', best: 'action', success: 'perseverance', failure: 'perseverance', experience: 'growth', learning: 'growth', education: 'growth', knowledge: 'growth', wisdom: 'growth', intelligence: 'growth', teacher: 'growth', hope: 'purpose', dreams: 'purpose', future: 'purpose', imagination: 'purpose', happiness: 'purpose', life: 'purpose', great: 'purpose', trust: 'mindset', faith: 'mindset', truth: 'mindset', attitude: 'mindset', positive: 'mindset', good: 'mindset', respect: 'mindset', beauty: 'mindset', art: 'mindset', freedom: 'courage', leadership: 'action', friendship: 'mindset', love: 'mindset', health: 'discipline', home: 'calm', society: 'mindset', history: 'growth', science: 'growth', technology: 'growth', design: 'growth', travel: 'growth', money: 'discipline', amazing: 'purpose', poetry: 'mindset', family: 'mindset', age: 'growth' };
+const KEYWORD_THEME = [['perseverance', /persever|patien|endur|\bagain\b|failure|fail\b|\btry\b|never give/i], ['courage', /courag|\bfear|brave|bold|dare/i], ['calm', /calm|peace|\bstill\b|quiet|serene|content/i], ['discipline', /disciplin|habit|control|order|master|self-/i], ['action', /\bdo\b|\bact\b|action|begin|work|labou?r|industr|energy|today/i], ['growth', /learn|grow|wisdom|knowledge|improv|better|teach/i], ['purpose', /dream|purpose|vision|ideal|aim|goal|life/i]];
+const themeOf = (text, genre) => GENRE_THEME[genre] ?? KEYWORD_THEME.find(([, re]) => re.test(text))?.[0] ?? 'mindset';
+const datasetHints = [];
+if (DATASET && existsSync(DATASET)) {
+  for (const row of readFileSync(DATASET, 'latin1').split('\n').slice(1)) {
+    const p = row.split(';'); if (p.length < 3) continue; const genre = p.pop().trim(), author = p.pop().trim(), text = p.join(';').trim();
+    if (!AUTHOR_WORKS.has(author) || SKIP_GENRE.has(genre) || text.length < 20 || text.length > 300) continue;
+    datasetHints.push({ author, text, theme: themeOf(text, genre) });
+  }
+  console.log(`dataset: ${datasetHints.length} rows by authors we have books for`);
+}
+
+function matchHint(ids, hint, minScore) {
+  const hw = words(hint); if (hw.length < 2) return null;
+  const hset = new Set(hw); let best = null;
+  const consider = (text, id, penaltySpan) => {
     const w = words(text); const ratio = w.length / Math.max(1, hw.length);
     const sc = sim(hw, w) - Math.max(0, ratio - 1.8) * 0.12 - penaltySpan;
-    if (!best || sc > best.sc) best = { sc, text };
+    if (!best || sc > best.sc) best = { sc, text, id };
   };
-  for (let k = 0; k < sents.length; k++) for (const span of [1, 2]) {
-    const parts = sents.slice(k, k + span); if (parts.length < span || parts.some(p => p.para !== parts[0].para)) continue;
-    const text = parts.map(p => p.s).join(' '); consider(text, span === 2 ? 0.04 : 0);
-    if (span === 1 && text.includes(';')) for (const clause of text.split(/;\s*/)) { const c = clause.trim().replace(/[.,:]+$/, ''); if (c.length > 25) consider(/[.!?]$/.test(c) ? c : c + '.', 0.03); }
+  for (const id of ids) {
+    const sents = books[id];
+    // try single sentences, sentence pairs within a paragraph, and the ';' clauses of a long sentence (a hint can be a part of a sentence)
+    for (let k = 0; k < sents.length; k++) {
+      let shared = 0; for (const w of hset) if (sents[k].w.has(w)) shared++;
+      const nextShared = k + 1 < sents.length ? (() => { let n = 0; for (const w of hset) if (sents[k + 1].w.has(w)) n++; return n; })() : 0;
+      if (shared + nextShared < hset.size * 0.5) continue;   // cheap filter: the hint's words must be mostly in this sentence or the next
+      for (const span of [1, 2]) {
+        const parts = sents.slice(k, k + span); if (parts.length < span || parts.some(p => p.para !== parts[0].para)) continue;
+        const text = parts.map(p => p.s).join(' '); consider(text, id, span === 2 ? 0.04 : 0);
+        if (span === 1 && text.length > 150) for (let c = text.indexOf(','); c > 0; c = text.indexOf(',', c + 1)) { if (c > 30) consider(text.slice(0, c) + '.', id, text.length <= 260 ? 0.2 : 0.05); }   // a famous opening clause of a long sentence
+        if (span === 1 && text.includes(';')) for (const clause of text.split(/;\s*/)) { const c = clause.trim().replace(/[.,:]+$/, ''); if (c.length > 25) consider(/[.!?]$/.test(c) ? c : c + '.', id, 0.03); }
+      }
+    }
   }
-  if (!best || best.sc < 0.68) { dropped.push({ id, hint, why: `no passage close enough (best ${best ? best.sc.toFixed(2) : '0'})`, got: best?.text?.slice(0, 120) }); continue; }
-  let text = best.text.replace(/^[—–-]+\s*/, '').trim();
+  return !best ? null : best.sc >= minScore ? best : { ...best, below: true };
+}
+
+// a reviewer's theme for a quote (by its first words) beats the guess from the hint or the list's genre
+const THEME_OVERRIDE = { 'Nothing ever comes to me': 'perseverance', 'I have learned that success': 'perseverance', 'The very greatest things': 'perseverance', 'Progress, however': 'perseverance',
+  'The journey of a thousand li': 'perseverance', 'We learn wisdom from failure': 'perseverance', 'In all human affairs': 'perseverance', 'Few things help an individual': 'action', 'When in doubt': 'mindset', 'The truth is rarely': 'mindset',
+  'Silence is the element': 'calm', 'Trust the instinct': 'courage', 'A great man is always': 'mindset', 'He who is satisfied': 'calm', 'Our faith comes in moments': 'mindset' };
+const CUT_AFTER = ['it reveals him to himself'];
+const CUT_BEFORE = [': in the beautiful words of'];
+const EXCLUDE_START = ['They who have no central purpose', 'Thou must be like a promontory'];
+// speaker labels and stage directions come with plays ("LORD DARLINGTON. ..."): strip the label, refuse text that still has directions
+const SPEAKER = /^(?:(?:MRS|MR|DR|LADY|LORD|SIR|MISS|THE)\.?\s+)?[A-Z][A-Z'’-]+(?:\s[A-Z][A-Z'’-]+){0,2}\.\s+(?=[A-Z“])/;
+function finish(best, hint) {
+  let text = best.text.replace(/^[—–-]+\s*/, '').trim().replace(SPEAKER, '');
+  // some books run two sentences together when a full stop is missing, or follow a saying with someone else's words: cut at the real end of the author's own sentence
+  for (const cut of CUT_AFTER) { const i = text.indexOf(cut); if (i >= 0 && text.length > i + cut.length + 1) text = text.slice(0, i + cut.length).replace(/[,;:]$/, '') + '.'; }
+  for (const cut of CUT_BEFORE) { const i = text.indexOf(cut); if (i > 20) text = text.slice(0, i).replace(/[,;:\s]+$/, '') + '.'; }
+  if (EXCLUDE_START.some(x => text.startsWith(x))) return { why: 'excluded by review (cut-off list or not self-contained)', got: text.slice(0, 120) };
+  text = text.replace(/^(?:No|Yes|Well|Oh|Ah|Why),\s+/i, '');   // the start of a spoken reply in a play
+  // Confucius and Lao Tzu are printed as: The Master said, 'saying.' The sentence is theirs, so keep the saying without the framing
+  text = text.replace(/^(?:The Master|Confucius) said,?\s*[\u2018']/, '').replace(/^[\u2018']/, '').replace(/[\u2019']$/, '');
+  if ((text.match(/["\u201c\u201d]/g) ?? []).length === 1) text = text.replace(/^["\u201c]|["\u201d]$/g, '').trim();   // one stray quote mark from cutting a passage out
+  if (/^[a-z]/.test(text) && /[.!]$/.test(text)) text = text.charAt(0).toUpperCase() + text.slice(1);   // a clause printed after a semicolon
   // unbalanced curly quotes at the edges come from cutting a passage out of a longer one: drop them
   if ((text.match(/“/g) ?? []).length !== (text.match(/”/g) ?? []).length) text = text.replace(/^[“]+/, '').replace(/[”]+$/, '').trim();
   // some editions print the first word in capitals ("CALMNESS of mind..."): sentence case it
   text = text.replace(/^([A-Z]{2,})(\b)/, (_, w) => w[0] + w.slice(1).toLowerCase());
-  if (text.length < 25 || text.length > 260) { dropped.push({ id, hint, why: `length ${text.length}`, got: text.slice(0, 120) }); continue; }
-  if (/\b(?:chapter|section|vol\.|page)\b|\d{2,}/i.test(text)) { dropped.push({ id, hint, why: 'looks like a heading or footnote', got: text.slice(0, 120) }); continue; }
+  if (text.length < 25 || text.length > 260) return { why: `length ${text.length}`, got: text.slice(0, 120) };
+  if (/\b(?:chapter|section|vol\.|page)\b|\d{2,}|[()]/i.test(text)) return { why: 'looks like a heading, footnote or stage direction', got: text.slice(0, 120) };
   // reject: fragments, questions, other people's words quoted by the author (it would be misattributed), and pieces that quote or report someone
-  const why = /^(?:Hence|Thus|But|And|So|Therefore|Yet|Still|For|Nor|Then|Also)\b/.test(text) ? 'continues a previous sentence' : !/^[A-Z“]/.test(text) ? 'starts mid-sentence' : /\?$/.test(text) ? 'is a question' : /[“”]|\b(?:said|says|saying|remarked|observed|wrote|maxim|proverb|called|according to|quoted?|replied)\b/i.test(text) ? 'quotes or reports someone else' : /^[a-z]/.test(text) ? 'starts lower case' : '';
-  if (why) { dropped.push({ id, hint, why, got: text.slice(0, 120) }); continue; }
-  if (quotes.some(q => q.text === text)) continue;
-  quotes.push({ id: `${id}-${quotes.length + 1}`, text, author: WORKS[id].author, work: WORKS[id].work, note: WORKS[id].note, year: WORKS[id].year, gutenberg: Number(id), theme, score: Number(best.sc.toFixed(2)) });
+  const why = (/^(?:Hence|Thus|But|And|So|Therefore|Yet|Still|For|Nor|Then|Also|He|She|They|It|His|Her|Their|Its)\b/.test(text) && !/^(?:He|They|She) who\b|^For as\b/.test(text)) ? 'continues a previous sentence or is about someone in a story' : !/^[A-Z“]/.test(text) ? 'starts mid-sentence' : /\?$/.test(text) ? 'is a question' : /[“”"]|\b(?:said|says|saying|remarked|observed|wrote|maxim|proverb|called|according to|quoted?|replied|asked|cried|exclaimed|answered|whispered)\b/i.test(text) ? 'quotes or reports someone else' : /^[a-z]/.test(text) ? 'starts lower case' : '';
+  return why ? { why, got: text.slice(0, 120) } : { text };
 }
-console.log(`${quotes.length} quotes found, ${dropped.length} dropped`);
+
+// Rows from the open list must also be ABOUT something a motivation video can use (and not about drink, government, marriage, money, war...). The hand-written hints were chosen by eye.
+const USEFUL = /\b(courag\w*|fear\w*|hope\w*|dream\w*|success\w*|work|hard work|effort\w*|persever\w*|patien\w*|failure|mistake\w*|learn\w*|wisdom|begin\w*|achiev\w*|strong\w*|strength|energy|enthusiasm|purpose|vision|ideal\w*|believ\w*|faith|worth|calm\w*|silence|progress|resolut\w*|determin\w*|obstacle\w*|hardship|industry|opportunit\w*|responsib\w*|duty|discover\w*|trust\w*|truth|happ\w*|brave\w*|bold|serv\w*|grow\w*|improv\w*|great\w*|noble|honest\w*)\b/i;
+const AVOID = /\b(alcohol|drink\w*|drunk\w*|democra\w*|government|govern\w*|soldier\w*|war|enem\w*|devil|marri\w*|wife|husband|romanc\w*|sarcasm|riches|money|wealth|prosper\w*|kill\w*|death|dead|die|dying|sex\w*|wom[ae]n|nude|religio\w*|church|god|philosoph\w*|temperament\w*|histor\w*|cauliflower|peach|prejudice|annoyance|exercise|body|bodily|moral\w*|sympath\w*|sorrowful|weeping|mirror|eternity|useless|disbelief|hate|friends?|fiction|longevity|democracy)\b/i;
+// Open-list matches are CANDIDATES. A person reviews them (the script prints them all) and only approved sentences ship. Approval is by the book's exact sentence, so a typo in
+// the list can never ship a wrong word. Run with APPROVE_ALL=1 to see every candidate that passed the filters.
+const LIST_APPROVED = new Set([
+  'When in doubt, tell the truth.', 'Courage is resistance to fear, mastery of fear--not absence of fear.', 'Believe that life is worth living, and your belief will help create the fact.',
+  'A chain is no stronger than its weakest link, and life is after all a chain.', 'Nothing ever comes to me, that is worth having, except as the result of hard work.',
+  'Few things help an individual more than to place responsibility upon him, and to let him know that you trust him.',
+  'I have learned that success is to be measured not so much by the position that one has reached in life as by the obstacles which he has overcome while trying to succeed.',
+  'The very greatest things—great thoughts, discoveries, inventions—have usually been nurtured in hardship, often pondered over in sorrow, and at length established with difficulty.',
+  'Silence is the element in which great things fashion themselves together.',
+  'Progress, however, of the best kind, is comparatively slow. Great results cannot be achieved at once; and we must be satisfied to advance in life as we walk, step by step.',
+  "Human felicity is produc'd not so much by great pieces of good fortune that seldom happen, as by little advantages that occur every day.",
+  'The first duty for a man is still that of subduing Fear. We must get rid of Fear; we cannot act at all till then.',
+  'If he is indeed wise he does not bid you enter the house of his wisdom, but rather leads you to the threshold of your own mind.',
+  'To be good is noble; but to show others how to be good is nobler and no trouble.', 'The truth is rarely pure and never simple.',
+  'A great man is always willing to be little.', 'Our faith comes in moments; our vice is habitual.', 'Trust the instinct to the end, though you can render no reason.',
+  'He who has conquered doubt and fear has conquered failure.', 'In all human affairs there are efforts, and there are results, and the strength of the effort is the measure of the result.',
+  'We are by nature observers, and thereby learners. That is our permanent state.', 'If you have built castles in the air, your work need not be lost; that is where they should be. Now put the foundations under them.',
+  'No face which we can give to a matter will stead us so well at last as the truth. This alone wears well.', 'The object of the superior man is truth.',
+]);
+const quotes = []; const dropped = []; const perAuthor = new Map();
+const add = (id, theme, hint, best, source) => {
+  const f = finish(best, hint); if (f.why) { dropped.push({ id, hint, why: f.why, got: f.got }); return; }
+  // shouted text ("TO BE GOOD IS NOBLE...") is printed in capitals by some editions: lower it to sentence case
+  const letters = f.text.replace(/[^A-Za-z]/g, ''); if (letters.length > 12 && letters.replace(/[^A-Z]/g, '').length / letters.length > 0.6) f.text = f.text.charAt(0) + f.text.slice(1).toLowerCase();
+  if (source === 'list') {
+    if (!process.env.APPROVE_ALL && !LIST_APPROVED.has(f.text)) { dropped.push({ id, hint, why: 'not reviewed and approved', got: f.text.slice(0, 120) }); return; }
+    if (!USEFUL.test(f.text)) { dropped.push({ id, hint, why: 'not about anything a motivation video can use', got: f.text.slice(0, 120) }); return; }
+    if (AVOID.test(f.text)) { dropped.push({ id, hint, why: 'off topic for this library (drink, government, marriage, money, war...)', got: f.text.slice(0, 120) }); return; }
+    if (/,\s[A-Z][a-z]+\.$/.test(f.text)) { dropped.push({ id, hint, why: 'addressed to a character by name', got: f.text.slice(0, 120) }); return; }
+    if (/\b(?:indifferen\w*|affected with|whosoever|whoso)\b/i.test(f.text)) { dropped.push({ id, hint, why: 'too archaic to read well on screen', got: f.text.slice(0, 120) }); return; }
+  }
+  if (quotes.some(q => q.text === f.text || q.text.includes(f.text) || f.text.includes(q.text))) return;   // never both a quote and a longer version of it
+  theme = Object.entries(THEME_OVERRIDE).find(([k]) => f.text.startsWith(k))?.[1] ?? theme;
+  quotes.push({ id: `${id}-${quotes.length + 1}`, text: f.text, author: WORKS[id].author, work: WORKS[id].work, note: WORKS[id].note, year: WORKS[id].year, gutenberg: Number(id), theme, score: Number(best.sc.toFixed(2)), source });
+  perAuthor.set(WORKS[id].author, (perAuthor.get(WORKS[id].author) ?? 0) + 1);
+};
+// 1. hand-written hints (matched with the looser threshold)
+for (const [id, theme, hint] of HINTS) { const ids = Array.isArray(id) ? id : [id]; const m = matchHint(ids, hint, 0.68); if (!m || m.below) { dropped.push({ id: ids[0], hint, why: `no passage close enough (best ${m?.sc ? m.sc.toFixed(2) : '0'})`, got: m?.text?.slice(0, 120) }); continue; } add(m.id, theme, hint, m, 'hint'); }
+// 2. rows of the open list (stricter: a real quote by this author should be almost word for word in one of their books)
+const candidates = [];
+for (const h of datasetHints) { const m = matchHint(AUTHOR_WORKS.get(h.author), h.text, 0.85); if (m && !m.below) candidates.push({ ...h, m }); }
+console.log(`dataset rows that matched an author's own book: ${candidates.length} of ${datasetHints.length}`);
+candidates.sort((a, b) => b.m.sc - a.m.sc || a.m.text.length - b.m.text.length);
+for (const c of candidates) { const a = WORKS[c.m.id].author; if (process.env.APPROVE_ALL && (perAuthor.get(a) ?? 0) >= PER_AUTHOR) continue; add(c.m.id, c.theme, c.text, c.m, 'list'); }   // approved quotes are not capped; the cap only limits a review run
+
+console.log(`${quotes.length} quotes found, ${dropped.length} dropped; per author: ${[...perAuthor].map(([a, n]) => a + ' ' + n).join(', ')}`);
 for (const d of dropped) console.log(` - dropped [${WORKS[d.id].author}] "${d.hint.slice(0, 70)}" : ${d.why}${d.got ? ' | nearest: ' + d.got : ''}`);
 console.log('\nMatched (check each reads as a good, whole quote):');
-for (const q of quotes) console.log(` ${q.score} [${q.author}] ${q.text}`);
+for (const q of quotes) console.log(` ${q.score} ${q.source} [${q.author}] ${q.text}`);
 
 const header = `// GENERATED by scripts/build-quotes.mjs on ${new Date().toISOString().slice(0, 10)}. Do not edit by hand.
 // Every quote is a sentence (or two) found VERBATIM in a public-domain book on Project Gutenberg (author died before 1930; translations are public domain).
@@ -183,7 +351,7 @@ const header = `// GENERATED by scripts/build-quotes.mjs on ${new Date().toISOSt
 `;
 const body = `export type QuoteTheme = ${THEMES.map(t => `'${t}'`).join(' | ')};
 export interface QuoteRecord { id: string; text: string; author: string; work: string; /** translator or edition note */ note: string; year: string; gutenberg: number; theme: QuoteTheme }
-export const QUOTES: QuoteRecord[] = ${JSON.stringify(quotes.map(({ score: _s, ...q }) => q), null, 1)};
+export const QUOTES: QuoteRecord[] = ${JSON.stringify(quotes.map(({ score: _s, source: _src, ...q }) => q), null, 1)};
 `;
 import { mkdirSync } from 'node:fs';
 mkdirSync(new URL('../src/lib/quotes/', import.meta.url), { recursive: true });

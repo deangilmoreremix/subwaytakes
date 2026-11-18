@@ -4,7 +4,7 @@ import { QUOTE_THEMES, QUOTE_THEME_LABELS, allQuotes, attribution, findQuote, pi
 import { FindDialog, type FindItem } from './FindDialog';
 import { Label } from './ui';
 
-const EXAMPLES = ['I want to quit', 'calm', 'courage', 'Emerson', 'dreams', 'work'];
+const EXAMPLES = ['I want to quit', 'calm', 'courage', 'Thoreau', 'Twain', 'Confucius'];
 
 /** Optional: share a real quote. Every quote is a sentence found word for word in a public-domain book, with its author and work. Without one, the guest gives their own advice. */
 export function QuotePicker({ quote, onQuote }: { quote?: PickedQuote; onQuote: (q: PickedQuote | undefined) => void }) {
