@@ -1,3 +1,4 @@
+import { recomposeBible } from '../bible/spec';
 import type { TakeSpec } from './index';
 import { showOf } from '../shows';
 
@@ -18,5 +19,5 @@ export function batchSpecs(base: TakeSpec, lines: string[]): { specs: TakeSpec[]
   const show = showOf(base.show);
   if (show.guests === 2) return { specs: [], problem: 'Debate duels need two sides each, so they cannot be batched. Pick another show.' };
   const specs = lines.map(line => show.editableQuestion ? { ...base, question: line.slice(0, 160) } : { ...base, take: line.slice(0, 220) });
-  return { specs, problem: null };
+  return { specs: specs.map(recomposeBible), problem: null };   // Scripture: re-fit the spoken verse to each episode's own question length
 }

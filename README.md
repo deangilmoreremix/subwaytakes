@@ -83,6 +83,14 @@ Select a shot, then Generate captions. Two modals: **Generate captions** (pick t
 - Credits: ai-video-captions and Capite (both MIT), see `NOTICE.md`.
 - **Verified:** unit tests; real headless exports of all seven motion engines and Japanese, Arabic, Hindi, Hebrew and Korean captions; real on-device transcription of a real generated clip with Transformers.js Whisper-base and whisper.cpp tiny.en (see the change notes). **Not verified:** WebGPU speed, Safari and Firefox, whisper.cpp base and small, Web Speech quality, very long clips.
 
+### Scripture and Motivation packs (Phase 11)
+
+Two paid add-ons, each an extra show in the same subway interview: **Scripture** (Bible Pack) and **Motivation** (Motivation Pack). Apply `20261124000000_faith_motivation_packs.sql` to seed the two products (placeholder prices; edit them in `/admin`). Like Happiness they are display locks: the shows are prompt text, so the lock is not a server-side gate.
+
+- **Verses are exact.** The library (`src/lib/bible/verses.generated.ts`, 135 verses in 9 themes, King James Version and World English Bible, both public domain) is built by `node scripts/build-verses.mjs` (run with `NODE_USE_ENV_PROXY=1`; about 12 minutes because the free API is rate limited). Every verse must match in two independent sources (bible-api.com and api.getbible.net) or it is left out; 10 candidates were left out because the two sources carry different WEB or KJV spellings. Customers can also type their own verse (labelled "your text", no accuracy claim).
+- **The video model may garble spoken words.** The on-screen verse card is always exact. If the verse fits the clip it is spoken first, then the reflection; if not, the guest names the verse and reflects (a spoken verse is never cut short). For word-for-word audio use the Cuts format. Unverified: how well real video models speak a verse; run `scripts/live-interview.ts` with a Scripture take (dry run first) to check.
+- **Guardrails:** the content screen refuses depicting or voicing God, Jesus, prophets and other holy figures, mocking faith, and guarantees of healing or wealth; ordinary faith talk passes. The AI policy has a faith section. All of this is a draft for legal review.
+
 ### Launch readiness (Phase 10)
 
 - **Content safety:** every generation request is screened for sexual content, minors, graphic violence, self-harm, hate, medical-cure claims and real, named people, in the browser (clear message) AND in the gateway (enforced, before any charge). It is a phrase-and-pattern screen, not a classifier: it stops the obvious and lazily obfuscated, not clever intent. Add your own terms in `/admin` (Operations). The studio's own prompts are tested to pass it.

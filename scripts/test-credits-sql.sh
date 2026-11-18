@@ -33,6 +33,9 @@ echo "retention migration applied"
 OPS="$ROOT/supabase/migrations/20261123000000_launch_ops.sql"
 "${PSQL[@]}" -f "$OPS" >/dev/null
 echo "launch-ops migration applied"
+FAITH="$ROOT/supabase/migrations/20261124000000_faith_motivation_packs.sql"
+"${PSQL[@]}" -f "$FAITH" >/dev/null
+echo "faith/motivation packs migration applied"
 
 # Applying the migrations twice must be safe (idempotent apply).
 "${PSQL[@]}" -f "$BILLING" >/dev/null 2>"$WORK/second-billing.err" || { echo "FAIL: billing migration is not re-runnable"; cat "$WORK/second-billing.err"; exit 1; }
@@ -41,6 +44,12 @@ echo "PASS: billing migration can be re-applied"
 echo "PASS: retention migration can be re-applied"
 "${PSQL[@]}" -f "$OPS" >/dev/null 2>"$WORK/second-ops.err" || { echo "FAIL: launch-ops migration is not re-runnable"; cat "$WORK/second-ops.err"; exit 1; }
 echo "PASS: launch-ops migration can be re-applied"
+# the packs seed once, and re-applying never overwrites a price the operator has edited
+"${PSQL[@]}" -c "UPDATE products SET price_cents = 4242 WHERE key = 'bible_pack';" >/dev/null
+"${PSQL[@]}" -f "$FAITH" >/dev/null 2>"$WORK/second-faith.err" || { echo "FAIL: packs migration is not re-runnable"; cat "$WORK/second-faith.err"; exit 1; }
+PACKS=$("${PSQL[@]}" -At -c "SELECT count(*) || ':' || max(price_cents) FILTER (WHERE key = 'bible_pack') || ':' || bool_and(active) FROM products WHERE key IN ('bible_pack','motivation_pack');")
+[ "$PACKS" = "2:4242:true" ] && echo "PASS: packs seeded, re-apply keeps edited prices" || { echo "FAIL: packs seed ($PACKS)"; exit 1; }
+"${PSQL[@]}" -c "UPDATE products SET price_cents = 2700 WHERE key = 'bible_pack';" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20261120000000_credits_ledger.sql" >/dev/null 2>"$WORK/second.err" || { echo "FAIL: migration is not re-runnable"; cat "$WORK/second.err"; exit 1; }
 echo "PASS: migration can be re-applied"
 

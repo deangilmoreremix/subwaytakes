@@ -6,6 +6,8 @@ export const ENTITLEMENT_NAMES: Record<string, string> = {
   pro_pack: 'Pro Pack',
   recast: 'Recast',
   happiness: 'Happiness show',
+  bible: 'Bible Pack',
+  motivation: 'Motivation Pack',
   commercial: 'Commercial licence',
 };
 

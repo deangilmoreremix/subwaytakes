@@ -10,6 +10,7 @@
  *  - solo:    guest close-up, host's hand holds the card into frame
  */
 import type { Aspect } from '../muapi/registry';
+import type { PickedVerse } from '../bible/types';
 import { DEFAULT_PLACE, cardMicPhrase, cityOf, placePrompt, type PlaceSpec } from '../places';
 import { TONE_TEXT, questionFor, showOf, type ShowId, type Tone } from '../shows';
 
@@ -25,6 +26,10 @@ export interface TakeSpec {
   take: string;
   /** Duel only: guest B's side. */
   take2?: string;
+  /** Scripture show: the verse shown on screen (word for word, from the verified library or typed by the customer). */
+  verse?: PickedVerse;
+  /** Scripture show: the guest's own reflection on the verse. `take` (what is spoken) is composed from the verse and this. */
+  reflection?: string;
   /** Duel only: how guest B looks. */
   guest2Description?: string;
   guestDescription: string;
@@ -75,6 +80,13 @@ const clip = (text: string, max: number) => {
  * The lines each person speaks, trimmed to fit the clip. The host's line is the show's question.
  * Duel: the answer time is shared by guest A (`take`) and guest B (`take2`).
  */
+/** Words the guest (or each guest in a duel) can say in the clip, after the host's question. */
+export function guestWordBudget(t: Pick<TakeSpec, 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question'>>): number {
+  const host = questionFor(showOf(t.show), t.question);
+  const hostSeconds = Math.max(OPENER_SECONDS, host.split(/\s+/).length / WORDS_PER_SECOND);
+  return Math.max(6, Math.floor(Math.max(2, t.durationSeconds - hostSeconds) * WORDS_PER_SECOND));
+}
+
 export function spokenLines(t: Pick<TakeSpec, 'take' | 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'take2'>>): { host: string; guest: string; guest2?: string; trimmed: boolean } {
   const show = showOf(t.show);
   const host = questionFor(show, t.question);
@@ -174,7 +186,7 @@ export function cutsProblem(host: Person | undefined, guest: Person | undefined,
 }
 
 /** Text for the on-screen title: the take, uppercase-free, wrapped to short lines. */
-export function titleLines(take: string, maxChars = 18): string[] {
+export function titleLines(take: string, maxChars = 18, maxLines = 5): string[] {
   const words = take.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let cur = '';
@@ -182,7 +194,16 @@ export function titleLines(take: string, maxChars = 18): string[] {
     if (cur && (cur + ' ' + w).length > maxChars) { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
   }
   if (cur) lines.push(cur);
-  return lines.slice(0, 5);
+  return lines.slice(0, maxLines);
+}
+
+/** Size and wrapping for the bold take / quote card: short takes stay big (the original look), longer advice shrinks so the whole text fits instead of being cut. */
+export function takeCardLayout(text: string): { size: number; maxChars: number; maxLines: number } {
+  const n = text.trim().length;
+  if (n <= 48) return { size: 86, maxChars: 16, maxLines: 5 };
+  if (n <= 90) return { size: 68, maxChars: 20, maxLines: 6 };
+  if (n <= 150) return { size: 56, maxChars: 24, maxLines: 7 };
+  return { size: 46, maxChars: 28, maxLines: 9 };
 }
 
 export function cardNameFor(t: Pick<TakeSpec, 'place'>): string {

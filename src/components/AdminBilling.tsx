@@ -66,7 +66,7 @@ export function AdminBilling() {
       {orders && (<>
         <p className="mt-3 text-[12px] text-zinc-300">Unlocks: {owned.length ? owned.join(', ') : 'none'}</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          <select className={`${inputCls} max-w-[160px]`} aria-label="Unlock key" value={key} onChange={e => setKey(e.target.value)}>{['pro_pack', 'recast', 'happiness', 'commercial'].map(k => <option key={k}>{k}</option>)}</select>
+          <select className={`${inputCls} max-w-[160px]`} aria-label="Unlock key" value={key} onChange={e => setKey(e.target.value)}>{['pro_pack', 'recast', 'happiness', 'bible', 'motivation', 'commercial'].map(k => <option key={k}>{k}</option>)}</select>
           <button onClick={() => setUnlock(true)} disabled={!!busy} className="h-9 rounded-xl border border-line bg-ink-800 px-3 text-[12px] text-zinc-200">Give unlock</button>
           <button onClick={() => setUnlock(false)} disabled={!!busy} className="h-9 rounded-xl border border-line bg-ink-800 px-3 text-[12px] text-zinc-200">Remove unlock</button>
         </div>

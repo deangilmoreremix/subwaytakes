@@ -23,13 +23,14 @@ describe('feature locks', () => {
     expect(cityLocked('berlin', ['pro_pack'])).toBe(false);
     expect(CITIES.filter(c => cityLocked(c.id, [])).length).toBeGreaterThanOrEqual(20);
   });
-  it('only the Happiness show is locked, and it is a real show', () => {
-    expect(SHOWS.some(s => s.id === 'happiness')).toBe(true);
-    for (const s of SHOWS) expect(showLocked(s.id, [])).toBe(s.id === 'happiness');
-    expect(showLocked('happiness', ['happiness'])).toBe(false);
+  it('only the pack shows are locked, each by its own pack, and they are real shows', () => {
+    const PACK: Record<string, string> = { happiness: 'happiness', bible: 'bible', motivation: 'motivation' };
+    for (const id of Object.keys(PACK)) expect(SHOWS.some(s => s.id === id)).toBe(true);
+    for (const s of SHOWS) expect(showLocked(s.id, [])).toBe(s.id in PACK);
+    for (const [show, key] of Object.entries(PACK)) { expect(showLocked(show, [key])).toBe(false); for (const other of Object.values(PACK).filter(k => k !== key)) expect(showLocked(show, [other])).toBe(true); }
   });
   it('every feature points at a product key the seeded catalogue has', () => {
-    const seeded = ['starter', 'credits_s', 'credits_m', 'credits_l', 'pro_pack', 'recast_happiness', 'commercial'];
+    const seeded = ['starter', 'credits_s', 'credits_m', 'credits_l', 'pro_pack', 'recast_happiness', 'commercial', 'bible_pack', 'motivation_pack'];
     for (const f of Object.values(FEATURES)) expect(seeded).toContain(f.product);
   });
   it('the app-side feature keys match what the gateway enforces for the same models', () => {

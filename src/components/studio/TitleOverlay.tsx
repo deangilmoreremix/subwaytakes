@@ -1,5 +1,6 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
-import { titleLines } from '../../lib/interview';
+import { takeCardLayout, titleLines } from '../../lib/interview';
+import { verseFontSize } from '../../lib/shows';
 import type { StoredTitle } from '../../lib/shows/stored';
 
 const SHADOW = '0 4px 0 rgba(0,0,0,0.85), 0 0 18px rgba(0,0,0,0.6)';
@@ -15,14 +16,24 @@ export function TitleOverlay({ title, fontFamily, fontWeight }: { title: StoredT
   const pop = interpolate(frame, [0, 10], [0.6, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const fade = interpolate(frame, [0, 8], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const base = { fontFamily, fontWeight } as const;
-  const headSize = d.variant === 'take' ? 86 : 56;
-  const lines = titleLines(d.headline, d.variant === 'take' ? 16 : 22);
+  const card = d.variant === 'take' ? takeCardLayout(d.headline) : { size: 56, maxChars: 22, maxLines: 5 };
+  const headSize = card.size;
+  const lines = titleLines(d.headline, card.maxChars, card.maxLines);
 
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
-      {d.variant !== 'ab' && lines.length > 0 && (
+      {d.variant !== 'ab' && d.variant !== 'verse' && lines.length > 0 && (
         <div style={{ ...base, position: 'absolute', top: '6%', left: '6%', right: '14%', fontSize: headSize, lineHeight: 1.05, color: '#fff', textShadow: SHADOW, textTransform: 'uppercase' }}>
           {lines.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+      )}
+
+      {d.variant === 'verse' && d.headline && (
+        <div style={{ position: 'absolute', top: '7%', left: '6%', right: '6%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 22 }}>
+          <div style={{ ...base, background: 'rgba(14,10,4,0.78)', border: `4px solid ${d.badgeBg}`, borderRadius: 28, padding: '34px 38px', color: '#fff7e0', fontSize: verseFontSize(d.headline), lineHeight: 1.18, textShadow: '0 2px 0 rgba(0,0,0,0.6)' }}>
+            {'\u201C'}{d.headline}{'\u201D'}
+          </div>
+          {d.value && <div style={{ ...base, fontSize: 40, letterSpacing: 1, color: d.badgeFg, background: d.badgeBg, padding: '8px 26px', borderRadius: 999 }}>{d.value}</div>}
         </div>
       )}
 

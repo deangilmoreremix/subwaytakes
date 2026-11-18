@@ -7,10 +7,10 @@ import { resolveTitle } from './stored';
 const spec = (id: ShowId, p: Partial<TakeSpec> = {}): TakeSpec => applyShow({ ...DEFAULT_TAKE, ...p }, id);
 
 describe('the show catalogue', () => {
-  it('has ten shows with unique ids, badges and ideas', () => {
-    expect(SHOWS).toHaveLength(10);
-    expect(new Set(SHOWS.map(s => s.id)).size).toBe(10);
-    expect(new Set(SHOWS.map(s => s.badge)).size).toBe(10);
+  it('has twelve shows with unique ids, badges and ideas', () => {
+    expect(SHOWS).toHaveLength(12);
+    expect(new Set(SHOWS.map(s => s.id)).size).toBe(12);
+    expect(new Set(SHOWS.map(s => s.badge)).size).toBe(12);
     for (const s of SHOWS) {
       expect(s.ideas.length, s.id).toBeGreaterThanOrEqual(3);
       expect(s.tones, s.id).toContain(s.defaultTone);

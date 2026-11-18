@@ -36,6 +36,7 @@ import { applyTemplate, type Template } from '../lib/templates';
 import type { Clip } from '../lib/timeline/types';
 import { addClip, assembleBestOf, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
 import { getMediaInfo } from '../lib/timeline/media';
+import { recomposeBible } from '../lib/bible/spec';
 import { GenerateCaptionsModal } from '../components/studio/captions/GenerateCaptionsModal';
 import { CaptionStudioModal } from '../components/studio/captions/CaptionStudioModal';
 import { DEFAULT_CAPTION_STYLE } from '../lib/captions/presets';
@@ -90,7 +91,7 @@ export function CreateTakePage() {
   }, [brandKit, brandLoaded, billingLoaded, entitledBrand, getProject, setProject, project.clips.length]);
   const applyTpl = (t: Template) => {
     const r = applyTemplate(spec, t);
-    setSpec(r.spec);
+    setSpec(recomposeBible(r.spec));
     const cur = getProject();
     setProject({ ...cur, style: { ...cur.style, captionFont: r.captionFont } });
   };
@@ -138,6 +139,7 @@ export function CreateTakePage() {
     if (k === 'aspect' && !NATIVE_MODELS.find(m => m.slug === slug)?.aspects.includes(v as TakeSpec['aspect'])) {
       setSlug(chooseNativeModel('fast', 'text', v as TakeSpec['aspect']).slug);
     }
+    if (['show', 'verse', 'reflection', 'durationSeconds', 'question'].includes(k)) next = recomposeBible(next);   // Scripture: keep the spoken line in step
     return next;
   });
 

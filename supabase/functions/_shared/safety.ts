@@ -4,7 +4,7 @@
 // Honest limits: this is a deterministic phrase and pattern screen, not a classifier. It stops the obvious and the lazily obfuscated
 // (leetspeak, spacing, punctuation, accents), it does not understand intent. The operator can add blocked terms in the safety_terms table.
 
-export type SafetyCategory = 'minors' | 'sexual' | 'violence' | 'self_harm' | 'likeness' | 'hate' | 'medical' | 'oversize';
+export type SafetyCategory = 'minors' | 'sexual' | 'violence' | 'self_harm' | 'likeness' | 'hate' | 'medical' | 'religious' | 'guarantee' | 'oversize';
 export type SafetyResult = { ok: true } | { ok: false; category: SafetyCategory; message: string };
 
 const MESSAGES: Record<SafetyCategory, string> = {
@@ -15,6 +15,8 @@ const MESSAGES: Record<SafetyCategory, string> = {
   likeness: 'This studio does not create videos of real, named people or celebrity look-alikes. Describe an original character instead.',
   hate: 'This studio does not create hateful content.',
   medical: 'This studio does not make medical or health-treatment claims.',
+  religious: 'This studio does not show or voice God, Jesus, prophets or other holy figures, and does not mock anyone\'s faith.',
+  guarantee: 'This studio does not promise healing, wealth or guaranteed results.',
   oversize: 'This request is too long or too complicated to check. Shorten it and try again.',
 };
 
@@ -38,7 +40,7 @@ export function normalize(input: string, leet = true): string {
 const squash = (t: string): string => t.replace(/([a-z])\1+/g, '$1');
 
 // Words are matched on whole-word boundaries after normalisation, so "class" never trips "ass" and "Essex" never trips "sex".
-const TERMS: Record<Exclude<SafetyCategory, 'likeness' | 'oversize'>, string[]> = {
+const TERMS: Record<Exclude<SafetyCategory, 'likeness' | 'oversize' | 'religious' | 'guarantee'>, string[]> = {
   // Unambiguous words for children. Ordinary words like "kids" or "baby" are only blocked next to sexual or violent words (see WEAK_MINOR).
   minors: ['toddler', 'infant', 'newborn', 'preteen', 'preteens', 'teenager', 'teenagers', 'underage', 'schoolboy', 'schoolgirl', 'little boy', 'little girl', 'young boy', 'young girl', 'tween', 'tweens'],
   sexual: ['nude', 'nudes', 'naked', 'nsfw', 'porn', 'porno', 'pornographic', 'erotic', 'sex scene', 'sexual intercourse', 'topless', 'lingerie model', 'explicit sex', 'sexually explicit', 'strip tease', 'stripper', 'orgy', 'fetish'],
@@ -55,6 +57,20 @@ const PATTERNS: Array<{ category: SafetyCategory; re: RegExp; plain?: boolean }>
   { category: 'likeness', re: /\b(?:a |an |the )?(?:celebrity|famous (?:person|actor|actress|singer|rapper|politician|athlete)|real person)\b/ },
   { category: 'minors', re: /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen) ?(?:year|yr)s? ?old (?:boy|girl|child|kid|son|daughter|student|person|guy|baby|brother|sister|youth)\b/ },
   { category: 'minors', plain: true, re: /\b(?:[1-9]|1[0-7]) ?(?:year|yr)s? ?old (?:boy|girl|child|kid|son|daughter|student|person|guy|baby|brother|sister|youth)\b|\b(?:boy|girl|child|kid|son|daughter|student|baby|brother|sister) (?:aged|age) (?:[1-9]|1[0-7])\b|\b(?:[1-9]|1[0-7]) ?yo\b/ },
+  // Faith content. Ordinary faith talk ("my faith got me through", "God is my strength", "I read Psalm 23") is fine; showing or voicing holy figures,
+  // mocking faith, and promising healing or wealth are not. The figure list is deliberately about depiction words (a video OF, playing, voice of), not mentions.
+  { category: 'religious', re: /\b(?:depict\w*|portray\w*|play(?:s|ing|ed)? (?:the role of |the part of )?|act(?:s|ing|or|ors) (?:as|playing)|dressed as|costume of|looks? like|looking like|voice of|voiced by|speaks? as|speaking as|impersonat\w*|(?:video|image|picture|photo|scene|statue|vision|painting|drawing|portrait|likeness|face|appearance|animation|render(?:ing)?|clip) (?:of|as|showing|depicting)) (?:the |a |an |our )?(?:god|jesus|jesus christ|christ|allah|buddha|muhammad|mohammed|holy spirit|virgin mary|mary mother of god|satan|the devil|lucifer|moses|abraham|krishna|prophet|angel|angels|saint|pope)\b/ },
+  { category: 'religious', re: /\b(?:show|shows|showing|bring|brings|bringing|put|puts|putting) (?:me |us |them )?(?:the |a |an |our )?(?:god|jesus|jesus christ|christ|allah|buddha|muhammad|mohammed|holy spirit|virgin mary|satan|the devil|lucifer|moses|abraham|krishna|prophet|angels?)\b (?:sitting|standing|walking|appearing|riding|sits|stands|walks|appears|next to|beside|on the|in the|inside|talking|speaking|saying)\b/ },
+  // a holy figure doing something in the scene: "Jesus rides the train", "God appears in the car", "Allah talking to the guest", "a video where Jesus ..."
+  { category: 'religious', re: /\b(?:god|jesus|jesus christ|christ|allah|buddha|muhammad|mohammed|muhammed|holy spirit|virgin mary|satan|the devil|lucifer|moses|abraham|krishna|prophet|angels?)\b (?:rides?|riding|sits?|sitting|stands?|standing|walks?|walking|appears?|appearing|talks?|talking|enters?|entering|joins?|joining|dances?|dancing|as a character|on the (?:train|subway|tube|metro|platform|bench)|in the (?:train|subway|car|carriage|station|video|scene|frame)|next to|beside|with the (?:host|guest))\b/ },
+  { category: 'religious', re: /\b(?:video|scene|clip|movie|film|story|skit|sketch|cartoon|animation|image|picture) (?:where|in which|with|about|featuring|starring|of) (?:the |a |an )?(?:god|jesus|jesus christ|christ|allah|buddha|muhammad|mohammed|muhammed|holy spirit|virgin mary|satan|the devil|lucifer|moses|abraham|krishna|prophet|angels?)\b/ },
+  { category: 'religious', re: /\b(?:parody|parodies|spoof|satire|skit|joke|jokes|meme|memes) (?:of|about|on|with) (?:the |a |an )?(?:god|jesus|jesus christ|christ|allah|buddha|muhammad|mohammed|muhammed|holy spirit|virgin mary|satan|the devil|lucifer|moses|abraham|krishna|prophet|angels?)\b/ },
+  { category: 'religious', re: /\b(?:mock\w*|make fun of|ridicule\w*|blaspheme|blasphemy|parody|parodies|satiri[sz]e\w*|insult\w*|trash\w*|bash\w*) (?:the |a |an |their |his |her )?(?:bible|scripture|scriptures|faith|church|christians?|muslims?|islam|mormons?|hindus?|hinduism|buddhists?|buddhism|sikhs?|atheists?|catholics?|catholicism|jews|jewish people|judaism|religion|religious people|prayer|pastors?|priests?|nuns?|imams?|rabbis?|the pope|pope|quran|koran|god)\b/ },
+  { category: 'guarantee', re: /\bguarantee\w*\b(?! (?:money|a )?(?:money[- ]?back|refund))(?:(?!money back|refund).){0,60}\b(?:rich|riches|wealth\w*|millionaire|healing|healed|heal|cure\w*|blessings?|prosper\w*|success|miracles?|breakthroughs?)\b|\b(?:rich|riches|wealth\w*|healing|healed|cure\w*|prosper\w*|miracles?)\b.{0,40}\bguarantee\w*\b/ },
+  { category: 'guarantee', re: /\b(?:god|jesus|the lord|faith|prayer) (?:will|promises|guarantees|always|owes you)\b.{0,30}\b(?:make you rich|heal you|cure you|cure your|heal your (?:body|cancer|disease|illness|sickness|diabetes|tumou?r|pain|condition)|give you (?:money|wealth|a million|riches)|pay your|erase your debt|make you a millionaire)\b/ },
+  { category: 'guarantee', re: /\b(?:pray|prayer|believe|faith|tithe|donate|give|send|sow)\w*\b.{0,50}\b(?:and then|and you will|you will|you ll|and it will|and god will)\b.{0,30}\b(?:be healed|cancer (?:will )?(?:disappear|be gone|go away)|disease (?:will )?(?:disappear|be gone)|get rich|become rich|become a millionaire|double your money|never be poor|get a miracle|be cured)\b/ },
+  { category: 'guarantee', re: /\b(?:pray\w*|faith|believe\w*|god|jesus|the lord)\b.{0,60}\b(?:cancer|tumou?rs?|disease|illness|diabetes|debt)\b.{0,30}\b(?:disappear\w*|vanish\w*|be gone|go away|gone|healed|cured|erased|wiped)\b/ },
+  { category: 'guarantee', re: /\b(?:seed (?:faith|offering|money)|sow (?:a )?seed|send (?:a )?seed offering|prosperity (?:gospel|guarantee))\b/ },
   { category: 'minors', plain: true, re: /\b(?:under ?18|under ?age|high school (?:student|girl|boy)|middle school|elementary school)\b/ },
 ];
 
@@ -69,7 +85,7 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const wordRe = (term: string) => new RegExp(`(?:^| )${esc(normalize(term))}(?: |$)`);
 const wordReSquashed = (term: string) => new RegExp(`(?:^| )${esc(squash(normalize(term)))}(?: |$)`);
 const test = (re: RegExp, reSq: RegExp, t: string, tSq: string): boolean => re.test(t) || reSq.test(tSq);
-const COMPILED = (Object.entries(TERMS) as Array<[Exclude<SafetyCategory, 'likeness' | 'oversize'>, string[]]>).flatMap(([category, list]) => list.map(t => ({ category, re: wordRe(t), reSq: wordReSquashed(t) })));
+const COMPILED = (Object.entries(TERMS) as Array<[Exclude<SafetyCategory, 'likeness' | 'oversize' | 'religious' | 'guarantee'>, string[]]>).flatMap(([category, list]) => list.map(t => ({ category, re: wordRe(t), reSq: wordReSquashed(t) })));
 const NAME_RES = NAMES.map(n => ({ re: wordRe(n), reSq: wordReSquashed(n) }));
 const WEAK_MINOR = ['child', 'children', 'kid', 'kids', 'baby', 'babies', 'teen', 'teens', 'minor', 'boy', 'girl', 'son', 'daughter', 'student'].map(w => ({ re: wordRe(w), reSq: wordReSquashed(w) }));
 const ADULT_HARM = COMPILED.filter(c => c.category === 'sexual' || c.category === 'violence');

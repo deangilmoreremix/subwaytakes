@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { DictateButton } from './DictateButton';
+import { VersePicker } from './VersePicker';
+import { bibleComposition } from '../../lib/bible/spec';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { FORMATS } from '../../lib/interview';
@@ -17,7 +19,7 @@ import { clsx } from '../../lib/format';
 import { Plus, Check, AlertCircle, Loader2, Captions, Play, Square, Sparkles, UserRound, Lock } from 'lucide-react';
 import { UnlockPrompt } from '../UnlockPrompt';
 import { useBilling } from '../../lib/billing/useBilling';
-import { showLocked, type Feature } from '../../lib/billing/features';
+import { showFeature, showLocked, type Feature } from '../../lib/billing/features';
 import type { CharacterBible } from '../../lib/types';
 import type { ClipJob } from '../../lib/muapi/jobs';
 import type { Clip } from '../../lib/timeline/types';
@@ -28,6 +30,20 @@ import type { TransitionContext } from '../../lib/timeline/ops';
 import type { TransitionType } from '../../lib/timeline/types';
 
 type Tab = 'take' | 'model' | 'output' | 'media' | 'clip';
+
+/** Tells the customer, in plain words, whether the verse will be spoken in full and how to get word-exact audio. */
+function BibleNote({ spec }: { spec: TakeSpec }) {
+  const c = bibleComposition(spec);
+  return (
+    <div className="space-y-1 rounded-xl border border-line bg-ink-950 p-2.5 text-[11px] text-zinc-400" data-testid="bible-note">
+      <p><b className="text-zinc-200">The guest says:</b> {c.line || '(nothing yet)'}</p>
+      {spec.verse && (c.readsVerse
+        ? <p>The whole verse ({c.verseWords} words) fits this clip and is spoken.</p>
+        : <p>This verse ({c.verseWords} words) is too long to speak in this clip, so the guest names it and reflects; the exact verse is on screen. Use a longer clip to speak it.</p>)}
+      <p>Video models can still garble spoken words. The on-screen verse is always exact. For word-for-word audio, use the Cuts format (the voice reads the text exactly).</p>
+    </div>
+  );
+}
 
 export function Inspector({ aiLabel, onAiLabel, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
   aiLabel: boolean; onAiLabel: (on: boolean) => void;
@@ -72,21 +88,29 @@ export function Inspector({ aiLabel, onAiLabel, onAddDub, onTemplate, spec, set,
           <div><Label>Show</Label>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
               {SHOWS.map(sh => (
-                <button key={sh.id} onClick={() => { if (showLocked(sh.id, owned)) setUnlock('happiness'); else { setUnlock(null); set('show', sh.id); } }} aria-pressed={spec.show === sh.id} title={sh.blurb}
+                <button key={sh.id} onClick={() => { const sf = showFeature(sh.id); if (sf && showLocked(sh.id, owned)) setUnlock(sf); else { setUnlock(null); set('show', sh.id); } }} aria-pressed={spec.show === sh.id} title={sh.blurb}
                   className={clsx('inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[12px] transition', spec.show === sh.id ? 'border-accent/60 bg-accent-soft text-white' : 'border-line bg-ink-850 text-zinc-400 hover:border-white/15 hover:text-zinc-200')}>
                   {sh.label}{showLocked(sh.id, owned) && <Lock aria-label="locked" className="h-3 w-3 text-zinc-500" />}
                 </button>
               ))}
             </div>
-            {unlock === 'happiness' && <UnlockPrompt feature="happiness" onClose={() => setUnlock(null)} className="mt-2" />}
+            {unlock && unlock !== 'cuts' && ['happiness', 'bible', 'motivation'].includes(unlock) && <UnlockPrompt feature={unlock} onClose={() => setUnlock(null)} className="mt-2" />}
             <p className="mt-1.5 text-[11px] text-zinc-600">{show.blurb}</p>
           </div>
           {show.editableQuestion && (
             <div><Label hint={<IdeasButton ideas={show.ideas} onPick={t => set('question', t.slice(0, 160))} />}>The host asks</Label>
               <input className={inputCls} maxLength={160} value={spec.question ?? show.question} onChange={e => set('question', e.target.value)} /></div>
           )}
+          {show.id === 'bible' ? (<>
+            <VersePicker verse={spec.verse} onVerse={v => set('verse', v)} />
+            <div><Label hint={<span className="flex items-center gap-3"><DictateButton value={spec.reflection ?? ''} onChange={v => set('reflection', v)} />{(spec.reflection ?? '').length}/220</span>}>What it means to them</Label>
+              <textarea className={inputCls} rows={3} maxLength={220} value={spec.reflection ?? ''} onChange={e => set('reflection', e.target.value)} aria-label="Reflection" /></div>
+            <BibleNote spec={spec} />
+          </>) : (
           <div><Label hint={<span className="flex items-center gap-3"><DictateButton value={spec.take} onChange={v => set('take', v)} />{!show.editableQuestion && <IdeasButton onPick={t => set('take', t.slice(0, 220))} />}{spec.take.length}/220</span>}>{show.id === 'hot_take' ? 'The take' : show.answerLabel}</Label>
             <textarea className={inputCls} rows={4} maxLength={220} value={spec.take} onChange={e => set('take', e.target.value)} /></div>
+          )}
+
           {show.guests === 2 && (<>
             <div><Label hint={`${(spec.take2 ?? '').length}/220`}>Guest B takes</Label>
               <textarea className={inputCls} rows={3} maxLength={220} value={spec.take2 ?? ''} onChange={e => set('take2', e.target.value)} /></div>

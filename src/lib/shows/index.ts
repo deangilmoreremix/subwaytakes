@@ -4,12 +4,14 @@
  * it changes what is asked, how it feels and how the title looks.
  */
 import type { PlaceSpec } from '../places';
+import type { PickedVerse } from '../bible/types';
+import { BIBLE_IDEAS, BIBLE_SAMPLE, MOTIVATION_IDEAS, MOTIVATION_SAMPLE } from './packs';
 
 export type ShowId =
   | 'hot_take' | 'happiness' | 'one_question' | 'reveal' | 'duel'
-  | 'would_you_rather' | 'compliment' | 'rate_my' | 'red_flag' | 'confession';
+  | 'would_you_rather' | 'compliment' | 'rate_my' | 'red_flag' | 'confession' | 'bible' | 'motivation';
 
-export type Tone = 'playful' | 'deadpan' | 'heated' | 'warm' | 'joyful' | 'grateful' | 'candid' | 'surprised';
+export type Tone = 'playful' | 'deadpan' | 'heated' | 'warm' | 'joyful' | 'grateful' | 'candid' | 'surprised' | 'reverent' | 'hopeful' | 'calm' | 'fired_up' | 'tough_love';
 
 export const TONE_TEXT: Record<Tone, string> = {
   playful: 'playful and grinning',
@@ -20,19 +22,27 @@ export const TONE_TEXT: Record<Tone, string> = {
   grateful: 'grateful and a little emotional, smiling',
   candid: 'candid and a bit sheepish',
   surprised: 'surprised and thinking out loud',
+  reverent: 'quiet, sincere and reverent, speaking softly',
+  hopeful: 'hopeful and gently smiling',
+  calm: 'calm, steady and reassuring',
+  fired_up: 'fired up, intense and full of energy',
+  tough_love: 'direct and no-nonsense, but caring',
 };
 
 export const TONE_LABEL: Record<Tone, string> = {
   playful: 'Playful', deadpan: 'Deadpan', heated: 'Heated', warm: 'Warm', joyful: 'Joyful', grateful: 'Grateful', candid: 'Candid', surprised: 'Surprised',
+  reverent: 'Reverent', hopeful: 'Hopeful', calm: 'Calm', fired_up: 'Fired up', tough_love: 'Tough love',
 };
 
 /** How the on-screen graphic is drawn. */
-export type TitleVariant = 'take' | 'number' | 'vs' | 'ab' | 'score';
+export type TitleVariant = 'take' | 'number' | 'vs' | 'ab' | 'score' | 'verse';
 
 export interface Show {
   id: ShowId;
   label: string;
   blurb: string;
+  /** The on-screen headline is what the guest says (Hot Take, Motivation) rather than the host's question. */
+  titleFromTake?: boolean;
   /** Does the host ask a question you can edit (vs the fixed "So what's ur take?")? */
   editableQuestion: boolean;
   /** Default host question. */
@@ -61,7 +71,7 @@ export const SHOWS: Show[] = [
   {
     id: 'hot_take', label: 'Hot Take', blurb: 'The guest defends a bold take.', editableQuestion: false,
     question: "So what's ur take?", answerLabel: 'The take', tones: ['playful', 'deadpan', 'heated'], defaultTone: 'playful',
-    variant: 'take', badge: 'HOT TAKE', badgeBg: '#ffd21f', badgeFg: '#111', reaction: 'The host reacts, laughing.', guests: 1, place: {},
+    variant: 'take', titleFromTake: true, badge: 'HOT TAKE', badgeBg: '#ffd21f', badgeFg: '#111', reaction: 'The host reacts, laughing.', guests: 1, place: {},
     ideas: ['Pineapple belongs on pizza.', 'Leggings should not be pants.', 'Cereal is a soup.', 'Tipping has gone too far.', 'Working from home beats the office.'],
   },
   {
@@ -124,6 +134,22 @@ export const SHOWS: Show[] = [
     ideas: ['What is the dumbest thing you have ever spent money on?', 'What is your most embarrassing train moment?', 'What is something you pretend to understand?', 'What is a guilty pleasure you will never give up?'],
     guard: 'Funny and harmless only. Nothing illegal, violent, sexual or about real people.',
   },
+  {
+    id: 'bible', label: 'Scripture', blurb: 'The guest shares a Bible verse and what it means to them. The verse appears on screen word for word.', editableQuestion: true,
+    question: 'What verse got you through this week?', answerLabel: 'Their reflection', tones: ['reverent', 'hopeful', 'grateful', 'calm', 'joyful'], defaultTone: 'reverent',
+    variant: 'verse', badge: 'SCRIPTURE', badgeBg: '#e9dcb0', badgeFg: '#2b1d00', reaction: 'The host listens quietly, then gives a warm, gentle nod and a small smile.', guests: 1,
+    place: { time: 'golden_hour', crowd: 'sparse', ambience: ['conversations'] },
+    ideas: BIBLE_IDEAS,
+    guard: 'Two ordinary commuters talking quietly. No religious figures, symbols, scenes, halos, crosses or imagery appear. Nothing is promised about healing, wealth or outcomes.',
+  },
+  {
+    id: 'motivation', label: 'Motivation', blurb: 'Advice and mindset in the guest\'s own words, on a bold quote card.', editableQuestion: true,
+    question: 'What got you through your hardest day?', answerLabel: 'Their advice', tones: ['fired_up', 'calm', 'tough_love', 'grateful'], defaultTone: 'fired_up',
+    variant: 'take', titleFromTake: true, badge: 'MOTIVATION', badgeBg: '#ff5a1f', badgeFg: '#ffffff', reaction: 'The host nods, clearly fired up, and gives the guest a fist bump.', guests: 1,
+    place: { time: 'early_morning', crowd: 'moderate' },
+    ideas: MOTIVATION_IDEAS,
+    guard: 'Original advice in the guest\'s own words. Never attribute a quote to anyone by name. No medical claims and no promises about outcomes or money.',
+  },
 ];
 
 export const DEFAULT_SHOW: ShowId = 'hot_take';
@@ -163,6 +189,9 @@ export function splitOptions(question: string): [string, string] | null {
   return a && b ? [a, b] : null;
 }
 
+/** Verse text gets smaller as it gets longer so up to about 300 characters stay inside the card (pure, so it is tested). */
+export function verseFontSize(text: string): number { const n = text.length; return n <= 70 ? 66 : n <= 130 ? 56 : n <= 200 ? 48 : n <= 260 ? 42 : 36; }
+
 export interface TitleData {
   variant: TitleVariant;
   badge: string; badgeBg: string; badgeFg: string;
@@ -175,7 +204,7 @@ export interface TitleData {
 }
 
 export interface TitleInput {
-  show?: ShowId; question?: string; take: string; take2?: string;
+  show?: ShowId; question?: string; take: string; take2?: string; verse?: PickedVerse;
 }
 
 /** Everything the on-screen graphic needs, from the spec. Pure. */
@@ -186,6 +215,7 @@ export function titleFor(t: TitleInput): TitleData {
   switch (show.variant) {
     case 'number': return { ...base, headline: question, value: extractNumber(t.take) ?? undefined };
     case 'score': return { ...base, headline: question, value: extractScore(t.take) ?? undefined };
+    case 'verse': return t.verse?.text ? { ...base, headline: t.verse.text, value: `${t.verse.ref} · ${t.verse.translation === 'custom' ? 'your text' : t.verse.translation}` } : { ...base, headline: question };
     case 'ab': {
       const ab = splitOptions(question);
       return { ...base, headline: 'Would you rather', left: ab?.[0], right: ab?.[1] };
@@ -193,7 +223,7 @@ export function titleFor(t: TitleInput): TitleData {
     case 'vs': return { ...base, headline: question, left: t.take.trim(), right: (t.take2 ?? '').trim() };
     default:
       // Hot Take puts the take on screen; the other shows put the question there.
-      return { ...base, headline: show.id === 'hot_take' ? t.take : question };
+      return { ...base, headline: show.titleFromTake ? t.take : question };
   }
 }
 
@@ -211,17 +241,29 @@ export const SAMPLE_ANSWERS: Record<ShowId, string[]> = {
   rate_my: ['That is a solid 7 out of 10. The jacket is great but the shoes are fighting it.'],
   red_flag: ['Red flag. Three days is a lifetime. Just text back.'],
   confession: ['I bought a stand mixer and have used it exactly once, to make one single cookie.'],
+  bible: [BIBLE_SAMPLE],
+  motivation: [MOTIVATION_SAMPLE],
 };
 
 const ALL_SAMPLES = new Set(Object.values(SAMPLE_ANSWERS).flat());
 
-interface ShowSwitchable { show: ShowId; question?: string; tone: Tone; place: PlaceSpec; take: string; take2?: string }
+interface ShowSwitchable { show: ShowId; question?: string; tone: Tone; place: PlaceSpec; take: string; take2?: string; verse?: PickedVerse; reflection?: string }
 
 /** Switch show: its question, an allowed tone, place defaults, and a matching sample answer if the user has not written one. Pure. */
 export function applyShow<T extends ShowSwitchable>(spec: T, id: ShowId): T {
   const show = showOf(id);
   const samples = SAMPLE_ANSWERS[id];
   const untouched = (v: string | undefined) => !v?.trim() || ALL_SAMPLES.has(v);
+  // Scripture keeps its own reflection and verse, and `take` for that show is COMPOSED from them (the spoken line). So leaving Scripture must not
+  // carry the composed line along as if the customer had typed it, and coming back must not resurrect an old reflection over newer typing.
+  if (spec.show === 'bible' && id !== 'bible') {
+    return { ...spec, show: id, verse: undefined, reflection: undefined, question: show.editableQuestion ? show.question : undefined, tone: show.tones.includes(spec.tone) ? spec.tone : show.defaultTone,
+      place: { ...spec.place, ...show.place }, take: samples[0], take2: show.guests === 2 ? samples[1] : spec.take2 };
+  }
+  if (id === 'bible' && spec.show !== 'bible') {
+    return { ...spec, show: id, verse: undefined, reflection: untouched(spec.take) ? BIBLE_SAMPLE : spec.take, question: show.question, tone: show.tones.includes(spec.tone) ? spec.tone : show.defaultTone,
+      place: { ...spec.place, ...show.place }, take: spec.take, take2: spec.take2 };
+  }
   return {
     ...spec,
     show: id,
