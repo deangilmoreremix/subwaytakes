@@ -48,7 +48,7 @@ describe('verse search finds what people look for', () => {
 
 describe('quote library', () => {
   it('has real, attributed quotes with sources and no duplicates', () => {
-    expect(QUOTES.length).toBeGreaterThanOrEqual(80); expect(new Set(QUOTES.map(q => q.id)).size).toBe(QUOTES.length); expect(new Set(QUOTES.map(q => q.text)).size).toBe(QUOTES.length);
+    expect(QUOTES.length).toBeGreaterThanOrEqual(70); expect(new Set(QUOTES.map(q => q.id)).size).toBe(QUOTES.length); expect(new Set(QUOTES.map(q => q.text)).size).toBe(QUOTES.length);
     for (const q of QUOTES) { expect(q.author, q.id).toBeTruthy(); expect(q.work, q.id).toBeTruthy(); expect(q.gutenberg, q.id).toBeGreaterThan(0); expect(q.text.length, q.id).toBeGreaterThanOrEqual(25); expect(q.text.length, q.id).toBeLessThanOrEqual(260); expect(QUOTE_THEMES).toContain(q.theme); }
   });
   it('quotes read as clean sentences: start with a capital, end with punctuation, no markup, no one else quoted', () => {
@@ -60,19 +60,23 @@ describe('quote library', () => {
   });
   it('every theme has at least 5 quotes and the library has many voices', () => {
     for (const t of QUOTE_THEMES) expect(QUOTES.filter(q => q.theme === t).length, t).toBeGreaterThanOrEqual(5);
-    expect(new Set(QUOTES.map(q => q.author)).size).toBeGreaterThanOrEqual(12);
+    expect(new Set(QUOTES.map(q => q.author)).size).toBeGreaterThanOrEqual(10);
     const per: Record<string, number> = {}; for (const q of QUOTES) per[q.author] = (per[q.author] ?? 0) + 1; expect(Math.max(...Object.values(per))).toBeLessThanOrEqual(22);
   });
   it('books with plays or sayings are cleaned (no "The Master said", no speaker labels) and known lines are exact', () => {
     const has = (s: string) => QUOTES.some(q => q.text === s);
-    expect(has('We are all in the gutter, but some of us are looking at the stars.')).toBe(true); expect(has('The journey of a thousand li commenced with a single step.')).toBe(true);
-    expect(has('He who has conquered doubt and fear has conquered failure.')).toBe(true); expect(has('Learning without thought is labour lost; thought without learning is perilous.')).toBe(true);
+    expect(has('The journey of a thousand li commenced with a single step.')).toBe(true);
+    expect(has('He who has conquered doubt and fear has conquered failure.')).toBe(true); expect(has('He who fights with monsters should be careful lest he thereby become a monster.')).toBe(true); expect(has('Learning without thought is labour lost; thought without learning is perilous.')).toBe(true);
     for (const q of QUOTES) expect(q.text, q.id).not.toMatch(/^The Master|^(?:LORD|LADY|MRS|MR)\b/);
   });
-  it('is only from authors who died long ago (public domain)', () => { const ok = new Set(['Marcus Aurelius', 'Epictetus', 'James Allen', 'Ralph Waldo Emerson', 'Henry David Thoreau', 'Samuel Smiles', 'Benjamin Franklin', 'Mark Twain', 'Oscar Wilde', 'William James', 'Friedrich Nietzsche', 'Confucius', 'Lao Tzu', 'Booker T. Washington', 'Thomas Carlyle', 'Kahlil Gibran']); for (const q of QUOTES) expect(ok.has(q.author), q.author).toBe(true); });
+  it('no quote is a character\'s speech: nothing from plays, novels, dialogue or the Prophet / Zarathustra / Teufelsdroeckh', () => {
+    const banned = [790, 844, 885, 174, 1998, 1051, 58585, 1497, 46, 98, 1400]; for (const q of QUOTES) expect(banned, q.id).not.toContain(q.gutenberg);
+    for (const q of QUOTES) expect(q.text, q.id).not.toMatch(/\bDarlington\b|\bAlgernon\b|\bLord Henry\b|\bZarathustra\b|\bTeufelsdr/);
+  });
+  it('is only from authors who died long ago (public domain)', () => { const ok = new Set(['Marcus Aurelius', 'Epictetus', 'James Allen', 'Ralph Waldo Emerson', 'Henry David Thoreau', 'Samuel Smiles', 'Benjamin Franklin', 'Mark Twain', 'William James', 'Friedrich Nietzsche', 'Confucius', 'Lao Tzu', 'Booker T. Washington', 'Thomas Carlyle']); for (const q of QUOTES) expect(ok.has(q.author), q.author).toBe(true); });
   it('known lines are exact (hand-written here, not copied from the library)', () => {
     const has = (s: string) => QUOTES.some(q => q.text === s);
-    expect(has('Nothing great was ever achieved without enthusiasm.')).toBe(true); expect(has('To be great is to be misunderstood.')).toBe(true); expect(has('Dream lofty dreams, and as you dream, so shall you become.')).toBe(true); expect(has('The mass of men lead lives of quiet desperation.')).toBe(true);
+    expect(has('Nothing great was ever achieved without enthusiasm.')).toBe(true); expect(has('To be great is to be misunderstood.')).toBe(true); expect(has('Dream lofty dreams, and as you dream, so shall you become.')).toBe(true); expect(has('Time is but the stream I go a-fishing in.')).toBe(true);
   });
   it('no quote trips the content screen, with or without its author line', () => { for (const q of QUOTES) { expect(checkText(q.text).ok, q.id).toBe(true); expect(checkText(`${q.author} wrote: ${q.text}`).ok, q.id).toBe(true); } });
   it('is searchable by author, work, word, theme and intent', () => {

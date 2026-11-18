@@ -25,10 +25,10 @@ const WORKS = {
   245: { ...A('Mark Twain'), work: 'Life on the Mississippi', note: '', year: '1883' },
   2895: { ...A('Mark Twain'), work: 'Following the Equator', note: '', year: '1897' },
   86: { ...A('Mark Twain'), work: "A Connecticut Yankee in King Arthur's Court", note: '', year: '1889' },
-  174: { ...A('Oscar Wilde'), work: 'The Picture of Dorian Gray', note: '', year: '1890' },
-  790: { ...A('Oscar Wilde'), work: "Lady Windermere's Fan", note: '', year: '1893' },
-  844: { ...A('Oscar Wilde'), work: 'The Importance of Being Earnest', note: '', year: '1895' },
-  885: { ...A('Oscar Wilde'), work: 'An Ideal Husband', note: '', year: '1895' },
+  // 174 removed: its sentences are spoken by characters (play, novel, dialogue, or the Prophet / Zarathustra / Teufelsdroeckh), not by the author in his own voice
+  // 790 removed: its sentences are spoken by characters (play, novel, dialogue, or the Prophet / Zarathustra / Teufelsdroeckh), not by the author in his own voice
+  // 844 removed: its sentences are spoken by characters (play, novel, dialogue, or the Prophet / Zarathustra / Teufelsdroeckh), not by the author in his own voice
+  // 885 removed: its sentences are spoken by characters (play, novel, dialogue, or the Prophet / Zarathustra / Teufelsdroeckh), not by the author in his own voice
   921: { ...A('Oscar Wilde'), work: 'De Profundis', note: '', year: '1905' },
   774: { ...A('Oscar Wilde'), work: 'Intentions', note: '', year: '1891' },
   46: { ...A('Charles Dickens'), work: 'A Christmas Carol', note: '', year: '1843' },
@@ -38,19 +38,19 @@ const WORKS = {
   16287: { ...A('William James'), work: 'Talks to Teachers on Psychology', note: '', year: '1899' },
   621: { ...A('William James'), work: 'The Varieties of Religious Experience', note: '', year: '1902' },
   5116: { ...A('William James'), work: 'Pragmatism', note: '', year: '1907' },
-  1998: { ...A('Friedrich Nietzsche'), work: 'Thus Spake Zarathustra', note: 'trans. Thomas Common, 1909', year: '1883' },
+  // 1998 removed: its sentences are spoken by characters (play, novel, dialogue, or the Prophet / Zarathustra / Teufelsdroeckh), not by the author in his own voice
   4363: { ...A('Friedrich Nietzsche'), work: 'Beyond Good and Evil', note: 'trans. Helen Zimmern, 1907', year: '1886' },
   132: { ...A('Sun Tzu'), work: 'The Art of War', note: 'trans. Lionel Giles, 1910', year: '5th c. BC' },
   3330: { ...A('Confucius'), work: 'The Analects', note: 'trans. James Legge', year: '5th c. BC' },
   216: { ...A('Lao Tzu', ['Lao Tzu', 'Laozi']), work: 'Tao Te Ching', note: 'trans. James Legge', year: '6th c. BC' },
-  1497: { ...A('Plato'), work: 'The Republic', note: 'trans. Benjamin Jowett', year: '4th c. BC' },
+  // 1497 removed: its sentences are spoken by characters (play, novel, dialogue, or the Prophet / Zarathustra / Teufelsdroeckh), not by the author in his own voice
   8438: { ...A('Aristotle'), work: 'Nicomachean Ethics', note: 'trans. D. P. Chase, 1847', year: '4th c. BC' },
   2376: { ...A('Booker T. Washington'), work: 'Up from Slavery', note: '', year: '1901' },
   23: { ...A('Frederick Douglass'), work: 'Narrative of the Life of Frederick Douglass', note: '', year: '1845' },
-  1051: { ...A('Thomas Carlyle'), work: 'Sartor Resartus', note: '', year: '1836' },
+  // 1051 removed: its sentences are spoken by characters (play, novel, dialogue, or the Prophet / Zarathustra / Teufelsdroeckh), not by the author in his own voice
   1091: { ...A('Thomas Carlyle'), work: 'On Heroes, Hero-Worship, and the Heroic in History', note: '', year: '1841' },
   1293: { ...A('John Ruskin'), work: 'Sesame and Lilies', note: '', year: '1865' },
-  58585: { ...A('Kahlil Gibran', ['Khalil Gibran', 'Kahlil Gibran']), work: 'The Prophet', note: '', year: '1923' },
+  // 58585 removed: its sentences are spoken by characters (play, novel, dialogue, or the Prophet / Zarathustra / Teufelsdroeckh), not by the author in his own voice
 };
 const AUTHOR_WORKS = new Map();   // dataset author name -> work ids
 for (const [id, w] of Object.entries(WORKS)) for (const al of w.aliases) AUTHOR_WORKS.set(al, [...(AUTHOR_WORKS.get(al) ?? []), id]);
@@ -207,7 +207,7 @@ const tidy = s => s.replace(/_/g, '').replace(/\s+/g, ' ').replace(/\[[^\]]*\]/g
 const sentencesOf = text => {
   const paras = text.split(/\n\s*\n/).map(p => tidy(p)).filter(p => p.length > 20);
   const out = [];
-  for (const p of paras) { const parts = p.match(/[^.!?]+(?:[.!?]+["”’']?|$)/g) ?? [p]; parts.forEach((x, i) => { const s = tidy(x); if (s.length > 15) out.push({ s, para: p, i }); }); }
+  for (const p of paras) { const parts = p.match(/[^.!?]+(?:[.!?]+["”’']?|$)/g) ?? [p]; let off = 0; parts.forEach((x, i) => { const s = tidy(x); if (s.length > 15) out.push({ s, para: p, i, before: tidy(p.slice(0, p.indexOf(x, off))) }); off += x.length; }); }
   return out;
 };
 const STOP = new Set('a an and the of to in is it that this be as for with on at by or if are was not no but so from his her he she they them we you your thy thee thou which who what when than then there their its our us do does did have has had will shall would should can could may might one all any'.split(' '));
@@ -215,6 +215,9 @@ const words = s => s.toLowerCase().replace(/[^a-z0-9\s']/g, ' ').split(/\s+/).fi
 // how much of the hint's key words the passage contains (0 to 1)
 const sim = (hint, cand) => { const H = new Set(hint), C = new Set(cand); if (!H.size || !C.size) return 0; let i = 0; for (const x of H) if (C.has(x)) i++; return i / H.size; };
 
+// A hint may name works that are not in WORKS (removed because their sentences are character speech): such ids are ignored.
+for (const h of HINTS) { const ids = (Array.isArray(h[0]) ? h[0] : [h[0]]).filter(i => WORKS[i]); h[0] = Array.isArray(h[0]) ? ids : ids[0]; }
+const HINTS_LIVE = HINTS.filter(h => (Array.isArray(h[0]) ? h[0].length : h[0]));
 const books = {};
 for (const id of Object.keys(WORKS)) { const f = join(DATA, `g${id}.txt`); if (!existsSync(f)) { console.error('missing', f); process.exit(1); } books[id] = sentencesOf(cleanBook(readFileSync(f, 'utf8'))).map(x => ({ ...x, w: new Set(words(x.s)) })); }
 
@@ -238,10 +241,11 @@ if (DATASET && existsSync(DATASET)) {
 function matchHint(ids, hint, minScore) {
   const hw = words(hint); if (hw.length < 2) return null;
   const hset = new Set(hw); let best = null;
+  let ctxBefore = '';
   const consider = (text, id, penaltySpan) => {
     const w = words(text); const ratio = w.length / Math.max(1, hw.length);
     const sc = sim(hw, w) - Math.max(0, ratio - 1.8) * 0.12 - penaltySpan;
-    if (!best || sc > best.sc) best = { sc, text, id };
+    if (!best || sc > best.sc) best = { sc, text, id, before: ctxBefore };
   };
   for (const id of ids) {
     const sents = books[id];
@@ -252,7 +256,7 @@ function matchHint(ids, hint, minScore) {
       if (shared + nextShared < hset.size * 0.5) continue;   // cheap filter: the hint's words must be mostly in this sentence or the next
       for (const span of [1, 2]) {
         const parts = sents.slice(k, k + span); if (parts.length < span || parts.some(p => p.para !== parts[0].para)) continue;
-        const text = parts.map(p => p.s).join(' '); consider(text, id, span === 2 ? 0.04 : 0);
+        const text = parts.map(p => p.s).join(' '); ctxBefore = parts[0].before; consider(text, id, span === 2 ? 0.04 : 0);
         if (span === 1 && text.length > 150) for (let c = text.indexOf(','); c > 0; c = text.indexOf(',', c + 1)) { if (c > 30) consider(text.slice(0, c) + '.', id, text.length <= 260 ? 0.2 : 0.05); }   // a famous opening clause of a long sentence
         if (span === 1 && text.includes(';')) for (const clause of text.split(/;\s*/)) { const c = clause.trim().replace(/[.,:]+$/, ''); if (c.length > 25) consider(/[.!?]$/.test(c) ? c : c + '.', id, 0.03); }
       }
@@ -267,16 +271,21 @@ const THEME_OVERRIDE = { 'Nothing ever comes to me': 'perseverance', 'I have lea
   'Silence is the element': 'calm', 'Trust the instinct': 'courage', 'A great man is always': 'mindset', 'He who is satisfied': 'calm', 'Our faith comes in moments': 'mindset' };
 const CUT_AFTER = ['it reveals him to himself'];
 const CUT_BEFORE = [': in the beautiful words of'];
-const EXCLUDE_START = ['They who have no central purpose', 'Thou must be like a promontory'];
+const EXCLUDE_START = ['They who have no central purpose', 'Thou must be like a promontory', 'A chain is no stronger', 'The mass of men lead lives of quiet desperation', 'Experience was of no ethical value'];
 // speaker labels and stage directions come with plays ("LORD DARLINGTON. ..."): strip the label, refuse text that still has directions
 const SPEAKER = /^(?:(?:MRS|MR|DR|LADY|LORD|SIR|MISS|THE)\.?\s+)?[A-Z][A-Z'’-]+(?:\s[A-Z][A-Z'’-]+){0,2}\.\s+(?=[A-Z“])/;
+const STRIP_PREFIX = ['These, then, are my last words to you: '];
 function finish(best, hint) {
+  // the sentence must be the AUTHOR speaking: not inside a character's or a third party's quotation, and not introduced by a speech verb (the Confucius 'The Master said' framing is handled below)
+  const before = best.before ?? '';
+  if ((before.match(/[“]/g) ?? []).length > (before.match(/[”]/g) ?? []).length || (before.match(/"/g) ?? []).length % 2 === 1) return { why: 'inside someone else\'s quotation', got: best.text.slice(0, 120) };
+  if (/\b(?:cries?|cried|exclaims?|exclaimed|answers?|answered|replies|replied|says?|said|asks?|asked|continues?|continued)[^.!?]{0,40}[:,]\s*$/i.test(before) && !/The Master said/.test(before) && !/The Master said/.test(best.text)) return { why: 'introduced by a speech verb (someone else is speaking)', got: best.text.slice(0, 120) };
   let text = best.text.replace(/^[—–-]+\s*/, '').trim().replace(SPEAKER, '');
   // some books run two sentences together when a full stop is missing, or follow a saying with someone else's words: cut at the real end of the author's own sentence
   for (const cut of CUT_AFTER) { const i = text.indexOf(cut); if (i >= 0 && text.length > i + cut.length + 1) text = text.slice(0, i + cut.length).replace(/[,;:]$/, '') + '.'; }
   for (const cut of CUT_BEFORE) { const i = text.indexOf(cut); if (i > 20) text = text.slice(0, i).replace(/[,;:\s]+$/, '') + '.'; }
   if (EXCLUDE_START.some(x => text.startsWith(x))) return { why: 'excluded by review (cut-off list or not self-contained)', got: text.slice(0, 120) };
-  text = text.replace(/^(?:No|Yes|Well|Oh|Ah|Why),\s+/i, '');   // the start of a spoken reply in a play
+  for (const pre of STRIP_PREFIX) if (text.startsWith(pre)) text = text.slice(pre.length);
   // Confucius and Lao Tzu are printed as: The Master said, 'saying.' The sentence is theirs, so keep the saying without the framing
   text = text.replace(/^(?:The Master|Confucius) said,?\s*[\u2018']/, '').replace(/^[\u2018']/, '').replace(/[\u2019']$/, '');
   if ((text.match(/["\u201c\u201d]/g) ?? []).length === 1) text = text.replace(/^["\u201c]|["\u201d]$/g, '').trim();   // one stray quote mark from cutting a passage out
@@ -318,7 +327,7 @@ const quotes = []; const dropped = []; const perAuthor = new Map();
 const add = (id, theme, hint, best, source) => {
   const f = finish(best, hint); if (f.why) { dropped.push({ id, hint, why: f.why, got: f.got }); return; }
   // shouted text ("TO BE GOOD IS NOBLE...") is printed in capitals by some editions: lower it to sentence case
-  const letters = f.text.replace(/[^A-Za-z]/g, ''); if (letters.length > 12 && letters.replace(/[^A-Z]/g, '').length / letters.length > 0.6) f.text = f.text.charAt(0) + f.text.slice(1).toLowerCase();
+  const letters = f.text.replace(/[^A-Za-z]/g, ''); if (letters.length > 12 && letters.replace(/[^A-Z]/g, '').length / letters.length > 0.6) f.text = (f.text.charAt(0) + f.text.slice(1).toLowerCase()).replace(/\bi\b/g, 'I');
   if (source === 'list') {
     if (!process.env.APPROVE_ALL && !LIST_APPROVED.has(f.text)) { dropped.push({ id, hint, why: 'not reviewed and approved', got: f.text.slice(0, 120) }); return; }
     if (!USEFUL.test(f.text)) { dropped.push({ id, hint, why: 'not about anything a motivation video can use', got: f.text.slice(0, 120) }); return; }
@@ -332,7 +341,7 @@ const add = (id, theme, hint, best, source) => {
   perAuthor.set(WORKS[id].author, (perAuthor.get(WORKS[id].author) ?? 0) + 1);
 };
 // 1. hand-written hints (matched with the looser threshold)
-for (const [id, theme, hint] of HINTS) { const ids = Array.isArray(id) ? id : [id]; const m = matchHint(ids, hint, 0.68); if (!m || m.below) { dropped.push({ id: ids[0], hint, why: `no passage close enough (best ${m?.sc ? m.sc.toFixed(2) : '0'})`, got: m?.text?.slice(0, 120) }); continue; } add(m.id, theme, hint, m, 'hint'); }
+for (const [id, theme, hint] of HINTS_LIVE) { const ids = Array.isArray(id) ? id : [id]; const m = matchHint(ids, hint, 0.68); if (!m || m.below) { dropped.push({ id: ids[0], hint, why: `no passage close enough (best ${m?.sc ? m.sc.toFixed(2) : '0'})`, got: m?.text?.slice(0, 120) }); continue; } add(m.id, theme, hint, m, 'hint'); }
 // 2. rows of the open list (stricter: a real quote by this author should be almost word for word in one of their books)
 const candidates = [];
 for (const h of datasetHints) { const m = matchHint(AUTHOR_WORKS.get(h.author), h.text, 0.85); if (m && !m.below) candidates.push({ ...h, m }); }
@@ -345,9 +354,15 @@ for (const d of dropped) console.log(` - dropped [${WORKS[d.id].author}] "${d.hi
 console.log('\nMatched (check each reads as a good, whole quote):');
 for (const q of quotes) console.log(` ${q.score} ${q.source} [${q.author}] ${q.text}`);
 
+// ---- verbatim check: every shipped quote must be a run of the BOOK's own words, in order (case and punctuation aside). A long sentence may be shortened at a clause break; nothing is reworded.
+const squash = t => t.toLowerCase().replace(/[^a-z0-9\u00c0-\u024f]+/g, ' ').trim();
+const bookText = {}; for (const id of Object.keys(WORKS)) bookText[id] = squash(cleanBook(readFileSync(join(DATA, `g${id}.txt`), 'utf8')).replace(/_/g, ''));
+for (let i = quotes.length - 1; i >= 0; i--) { const q = quotes[i]; if (!bookText[q.gutenberg].includes(squash(q.text))) { console.log(` ! removed (not found word for word in book ${q.gutenberg}): ${q.text}`); quotes.splice(i, 1); } }
+
 const header = `// GENERATED by scripts/build-quotes.mjs on ${new Date().toISOString().slice(0, 10)}. Do not edit by hand.
 // Every quote is a sentence (or two) found VERBATIM in a public-domain book on Project Gutenberg (author died before 1930; translations are public domain).
-// A rough hint was matched to the book's own text; the shipped wording is the book's, never a model's or a quote site's. Anything that did not match was dropped.
+// A rough hint was matched to the book's own text; the shipped words are the book's, in the book's order (a long sentence may be shortened at a clause break, never reworded;
+// the build checks this). Never a model's or a quote site's wording. Sentences spoken by characters (plays, novels, dialogue) are excluded. Anything that did not match was dropped.
 `;
 const body = `export type QuoteTheme = ${THEMES.map(t => `'${t}'`).join(' | ')};
 export interface QuoteRecord { id: string; text: string; author: string; work: string; /** translator or edition note */ note: string; year: string; gutenberg: number; theme: QuoteTheme }
