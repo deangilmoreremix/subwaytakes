@@ -76,6 +76,8 @@ await session(['bible', 'motivation'], async page => {
   const kjv = await first.innerText();
   await picker.getByRole('button', { name: 'WEB', exact: true }).click(); await page.waitForTimeout(300);
   check('switching translation keeps the reference and changes the text', (await picker.locator(`[data-verse="${ref}"]`).first().innerText()) !== kjv && (await picker.innerText()).includes('(WEB)'));
+  await picker.getByRole('button', { name: 'BSB', exact: true }).click(); await page.waitForTimeout(300);
+  check('BSB is offered and its licence line is shown', (await picker.innerText()).includes('(BSB)') && /public domain/i.test(await picker.innerText()));
   await page.getByLabel('Reflection').fill('It slows me down when the week gets loud.');
   const note = page.getByTestId('bible-note'); const noteText = await note.innerText();
   check('the note shows the composed line, the verse reading status and the Cuts recommendation', /The guest says:/.test(noteText) && /Cuts/.test(noteText) && /(fits this clip|too long)/.test(noteText), noteText.slice(0, 120));

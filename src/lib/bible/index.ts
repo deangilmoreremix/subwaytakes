@@ -6,15 +6,17 @@ import type { PickedVerse } from './types';
 
 export type { PickedVerse } from './types';
 export type { VerseRecord, VerseTheme } from './verses.generated';
-export type Translation = 'KJV' | 'WEB';
-export const TRANSLATIONS: Translation[] = ['KJV', 'WEB'];
-export const TRANSLATION_NAMES: Record<Translation, string> = { KJV: 'King James Version', WEB: 'World English Bible' };
-export const THEME_LABELS: Record<VerseTheme, string> = { strength: 'Strength', peace: 'Peace', hope: 'Hope', love: 'Love', gratitude: 'Gratitude', courage: 'Courage', wisdom: 'Wisdom', forgiveness: 'Forgiveness', perseverance: 'Perseverance' };
+export type Translation = 'KJV' | 'WEB' | 'BSB';
+export const TRANSLATIONS: Translation[] = ['KJV', 'WEB', 'BSB'];
+export const TRANSLATION_NAMES: Record<Translation, string> = { KJV: 'King James Version', WEB: 'World English Bible', BSB: 'Berean Standard Bible' };
+/** One line about each text's licence, shown under the verse in the picker. All three are public domain (the BSB since 30 April 2023, per its publisher). */
+export const TRANSLATION_LICENCE: Record<Translation, string> = { KJV: 'King James Version, public domain.', WEB: 'World English Bible, public domain.', BSB: 'Berean Standard Bible, public domain (placed there by its publisher on 30 April 2023).' };
+export const THEME_LABELS: Record<VerseTheme, string> = { strength: 'Strength', peace: 'Peace', hope: 'Hope', love: 'Love', gratitude: 'Gratitude', courage: 'Courage', wisdom: 'Wisdom', forgiveness: 'Forgiveness', perseverance: 'Perseverance', joy: 'Joy', comfort: 'Comfort', trust: 'Trust', kindness: 'Kindness', purpose: 'Purpose' };
 export const THEMES = Object.keys(THEME_LABELS) as VerseTheme[];
 export const MAX_TYPED_VERSE = 300;
 
 export const allVerses = (): readonly VerseRecord[] => VERSES;
-export const textOf = (v: VerseRecord, t: Translation): string => (t === 'KJV' ? v.kjv : v.web);
+export const textOf = (v: VerseRecord, t: Translation): string => (t === 'KJV' ? v.kjv : t === 'WEB' ? v.web : v.bsb);
 const words = (s: string): number => s.split(/\s+/).filter(Boolean).length;
 const norm = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 

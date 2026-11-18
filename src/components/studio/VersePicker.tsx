@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { BookOpen, Check } from 'lucide-react';
-import { THEMES, THEME_LABELS, TRANSLATIONS, TRANSLATION_NAMES, MAX_TYPED_VERSE, pickVerse, searchVerses, typedVerse, type PickedVerse, type Translation, type VerseTheme } from '../../lib/bible';
+import { THEMES, THEME_LABELS, TRANSLATIONS, TRANSLATION_NAMES, TRANSLATION_LICENCE, MAX_TYPED_VERSE, pickVerse, searchVerses, textOf, typedVerse, type PickedVerse, type Translation, type VerseTheme } from '../../lib/bible';
 import { Label, inputCls } from './ui';
 import { clsx } from '../../lib/format';
 
@@ -8,7 +8,7 @@ import { clsx } from '../../lib/format';
 export function VersePicker({ verse, onVerse }: { verse?: PickedVerse; onVerse: (v: PickedVerse | undefined) => void }) {
   const [query, setQuery] = useState('');
   const [theme, setTheme] = useState<VerseTheme | 'all'>('all');
-  const [translation, setTranslation] = useState<Translation>(verse?.translation === 'WEB' ? 'WEB' : 'KJV');
+  const [translation, setTranslation] = useState<Translation>(verse?.translation === 'WEB' || verse?.translation === 'BSB' ? verse.translation : 'KJV');
   const [typed, setTyped] = useState(verse?.source === 'typed');
   const [typedText, setTypedText] = useState(verse?.source === 'typed' ? verse.text : '');
   const [typedRef, setTypedRef] = useState(verse?.source === 'typed' ? verse.ref : '');
@@ -34,7 +34,7 @@ export function VersePicker({ verse, onVerse }: { verse?: PickedVerse; onVerse: 
           {results.length === 0 && <p className="p-2 text-[12px] text-zinc-500">No verse matches. Try a reference like Psalm 23:1, or type your own.</p>}
           {results.map(v => {
             const picked = verse?.source === 'library' && verse.ref === v.ref;
-            const text = translation === 'KJV' ? v.kjv : v.web;
+            const text = textOf(v, translation);
             return (
               <button key={v.ref} role="option" aria-selected={picked} data-verse={v.ref} onClick={() => onVerse(pickVerse(v, translation))}
                 className={clsx('block w-full rounded-lg border px-2.5 py-1.5 text-left', picked ? 'border-accent bg-accent-soft/40' : 'border-line bg-ink-950 hover:border-zinc-600')}>
@@ -51,7 +51,7 @@ export function VersePicker({ verse, onVerse }: { verse?: PickedVerse; onVerse: 
           <p className="text-[11px] text-zinc-600">Shown as you type it and labelled "your text". Check that your translation allows this use. We do not verify it.</p>
         </div>
       )}
-      {verse && <p className="text-[11px] text-zinc-500">On screen: <b className="text-zinc-300">{verse.ref}</b> ({verse.translation === 'custom' ? 'your text' : verse.translation}){verse.source === 'library' ? ', word for word from the library.' : '.'}</p>}
+      {verse && <p className="text-[11px] text-zinc-500">On screen: <b className="text-zinc-300">{verse.ref}</b> ({verse.translation === 'custom' ? 'your text' : verse.translation}){verse.source === 'library' ? ', word for word from the library.' : '.'}{verse.translation !== 'custom' && <span className="block text-zinc-600">{TRANSLATION_LICENCE[verse.translation]}</span>}</p>}
     </div>
   );
 }

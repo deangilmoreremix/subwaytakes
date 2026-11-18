@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../supabase', () => ({ supabase: {} }));
-import { allVerses, composeSpokenLine, findVerse, pickVerse, searchVerses, spokenRef, textOf, THEMES, typedVerse, MAX_TYPED_VERSE } from './index';
+import { allVerses, composeSpokenLine, findVerse, pickVerse, searchVerses, spokenRef, textOf, THEMES, THEME_LABELS, TRANSLATIONS, TRANSLATION_LICENCE, typedVerse, MAX_TYPED_VERSE } from './index';
 import { bibleComposition, recomposeBible } from './spec';
 import { checkText } from '../safety';
 import { DEFAULT_TAKE, buildNativePrompt, guestWordBudget, spokenLines } from '../interview';
@@ -9,34 +9,35 @@ import { BIBLE_IDEAS, MOTIVATION_IDEAS } from '../shows/packs';
 import { CITIES, cardMicPhrase } from '../places';
 
 // The exact wording of very well-known verses, written out by hand here (not copied from the library), so a bad data build is caught.
-const PINNED: Array<[string, string, string]> = [
-  ['John 3:16', 'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.', 'For God so loved the world, that he gave his one and only Son, that whoever believes in him should not perish, but have eternal life.'],
-  ['Philippians 4:13', 'I can do all things through Christ which strengtheneth me.', 'I can do all things through Christ, who strengthens me.'],
-  ['Proverbs 3:5', 'Trust in the LORD with all thine heart; and lean not unto thine own understanding.', 'Trust in Yahweh with all your heart, and don’t lean on your own understanding.'],
-  ['Joshua 1:9', 'Have not I commanded thee? Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest.', 'Haven’t I commanded you? Be strong and courageous. Don’t be afraid. Don’t be dismayed, for Yahweh your God is with you wherever you go.'],
-  ['Jeremiah 29:11', 'For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil, to give you an expected end.', 'For I know the thoughts that I think toward you,” says Yahweh, “thoughts of peace, and not of evil, to give you hope and a future.'],
+const PINNED: Array<[string, string, string, string]> = [
+  ['John 3:16', 'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.', 'For God so loved the world, that he gave his one and only Son, that whoever believes in him should not perish, but have eternal life.', 'For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.'],
+  ['Philippians 4:13', 'I can do all things through Christ which strengtheneth me.', 'I can do all things through Christ, who strengthens me.', 'I can do all things through Christ who gives me strength.'],
+  ['Proverbs 3:5', 'Trust in the LORD with all thine heart; and lean not unto thine own understanding.', 'Trust in Yahweh with all your heart, and don’t lean on your own understanding.', 'Trust in the LORD with all your heart, and lean not on your own understanding;'],
+  ['Jeremiah 29:11', 'For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil, to give you an expected end.', 'For I know the thoughts that I think toward you,” says Yahweh, “thoughts of peace, and not of evil, to give you hope and a future.', 'For I know the plans I have for you, declares the LORD, plans to prosper you and not to harm you, to give you a future and a hope.'],
 ];
 const squash = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 
 describe('verse library', () => {
-  it('has at least 100 verses, each with a reference, theme and both texts, and no duplicates', () => {
-    const v = allVerses(); expect(v.length).toBeGreaterThanOrEqual(100);
+  it('has at least 250 verses, each with a reference, theme and all three texts, and no duplicates', () => {
+    const v = allVerses(); expect(v.length).toBeGreaterThanOrEqual(250);
     expect(new Set(v.map(x => x.ref)).size).toBe(v.length);
-    for (const x of v) { expect(x.ref, x.ref).toMatch(/^[1-3]? ?[A-Za-z ]+ \d+:\d+$/); expect(THEMES).toContain(x.theme); expect(x.kjv.length, x.ref).toBeGreaterThan(10); expect(x.web.length, x.ref).toBeGreaterThan(10); }
+    for (const x of v) { expect(x.ref, x.ref).toMatch(/^[1-3]? ?[A-Za-z ]+ \d+:\d+$/); expect(THEMES).toContain(x.theme); expect(x.kjv.length, x.ref).toBeGreaterThan(10); expect(x.web.length, x.ref).toBeGreaterThan(10); expect(x.bsb.length, x.ref).toBeGreaterThan(10); }
   });
-  it('every theme has verses', () => { for (const t of THEMES) expect(allVerses().filter(v => v.theme === t).length, t).toBeGreaterThanOrEqual(5); });
+  it('every theme has verses', () => { for (const t of THEMES) expect(allVerses().filter(v => v.theme === t).length, t).toBeGreaterThanOrEqual(8); });
   it('every verse fits the verse card (300 characters) and has no markup or odd characters', () => {
-    for (const v of allVerses()) for (const t of [v.kjv, v.web]) { expect(t.length, v.ref).toBeLessThanOrEqual(300); expect(t, v.ref).not.toMatch(/[<>{}[\]¶]|&[a-z]+;/); expect(t, v.ref).toBe(t.trim()); }
+    for (const v of allVerses()) for (const t of [v.kjv, v.web, v.bsb]) { expect(t.length, v.ref).toBeLessThanOrEqual(300); expect(t, v.ref).not.toMatch(/[<>{}[\]¶]|&[a-z]+;/); expect(t, v.ref).toBe(t.trim()); }
   });
-  it.each(PINNED)('%s matches its known wording (KJV and WEB)', (ref, kjv, web) => {
+  it.each(PINNED)('%s matches its known wording (KJV, WEB and BSB)', (ref, kjv, web, bsb) => {
     const v = findVerse(ref); if (!v) return;   // a pinned verse may have been legitimately left out by the two-source check; the next test makes sure most are present
-    expect(squash(v.kjv), ref + ' KJV').toBe(squash(kjv)); expect(squash(v.web), ref + ' WEB').toBe(squash(web));
+    expect(squash(v.kjv), ref + ' KJV').toBe(squash(kjv)); expect(squash(v.web), ref + ' WEB').toBe(squash(web)); expect(squash(v.bsb), ref + ' BSB').toBe(squash(bsb));
   });
   it('most pinned verses are present', () => { expect(PINNED.filter(p => findVerse(p[0])).length).toBeGreaterThanOrEqual(3); });
   it('no verse trips the content screen as written (verses that would are left out of the curated list)', () => {
-    for (const v of allVerses()) for (const t of [v.kjv, v.web]) { const r = checkText(t); expect(r.ok, `${v.ref}: ${r.ok ? '' : r.category}`).toBe(true); }
+    for (const v of allVerses()) for (const t of [v.kjv, v.web, v.bsb]) { const r = checkText(t); expect(r.ok, `${v.ref}: ${r.ok ? '' : r.category}`).toBe(true); }
   });
-  it('the two translations really are different texts for most verses', () => { expect(allVerses().filter(v => squash(v.kjv) !== squash(v.web)).length).toBeGreaterThan(allVerses().length / 2); });
+  it('the three translations really are different texts for most verses', () => { for (const [a, b] of [['kjv', 'web'], ['kjv', 'bsb'], ['web', 'bsb']] as const) expect(allVerses().filter(v => squash(v[a]) !== squash(v[b])).length, `${a}/${b}`).toBeGreaterThan(allVerses().length / 2); });
+  it('no verse starts with a psalm title or heading (the card shows only the verse)', () => { for (const v of allVerses()) for (const t of [v.kjv, v.web, v.bsb]) expect(t, v.ref).not.toMatch(/^(?:A |An )?(?:Psalm|Song|Prayer|Maskil|Miktam)\b|^(?:For|To) the (?:choirmaster|director)|^Of (?:David|Asaph)/i); });
+  it('every theme label exists and every theme has a label', () => { for (const t of THEMES) expect(THEME_LABELS[t], t).toBeTruthy(); for (const v of allVerses()) expect(THEMES, v.ref).toContain(v.theme); });
 });
 
 describe('finding and picking verses', () => {
@@ -52,7 +53,7 @@ describe('finding and picking verses', () => {
     expect(searchVerses().length).toBe(allVerses().length);
   });
   it('the translation switch changes the text, not the reference', () => {
-    const v = allVerses()[0]; expect(pickVerse(v, 'KJV').text).toBe(v.kjv); expect(pickVerse(v, 'WEB').text).toBe(v.web); expect(pickVerse(v, 'WEB').ref).toBe(v.ref); expect(textOf(v, 'KJV')).toBe(v.kjv);
+    const v = allVerses()[0]; expect(pickVerse(v, 'KJV').text).toBe(v.kjv); expect(pickVerse(v, 'WEB').text).toBe(v.web); expect(pickVerse(v, 'BSB').text).toBe(v.bsb); expect(pickVerse(v, 'WEB').ref).toBe(v.ref); expect(textOf(v, 'KJV')).toBe(v.kjv);
   });
   it('a typed verse is labelled as the customer\'s own, cleaned and length-limited', () => {
     const t = typedVerse('  Be   still,\n and know.  ', ' Psalm 46:10 '); expect(t).toMatchObject({ translation: 'custom', source: 'typed', ref: 'Psalm 46:10', text: 'Be still, and know.' });
@@ -161,4 +162,9 @@ describe('leaving and re-entering Scripture, and batching', () => {
     const { specs } = batchSpecs(base, ['What verse got you through this week?', 'What is the one verse you would read to someone who has had a very long, hard, tiring and confusing year at work?']);
     for (const s of specs) { expect(s.take.split(/\s+/).length).toBeLessThanOrEqual(guestWordBudget(s)); expect(spokenLines(s).trimmed).toBe(false); }
   });
+});
+
+describe('translations and licences', () => {
+  it('KJV, WEB and BSB are offered, each with a public-domain licence line', () => { expect(TRANSLATIONS).toEqual(['KJV', 'WEB', 'BSB']); for (const t of TRANSLATIONS) expect(TRANSLATION_LICENCE[t]).toMatch(/public domain/i); });
+  it('search works in every translation', () => { for (const t of TRANSLATIONS) expect(searchVerses({ query: 'love', translation: t }).length, t).toBeGreaterThan(3); });
 });
