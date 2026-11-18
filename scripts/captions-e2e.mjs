@@ -37,6 +37,8 @@ await page.route(`${SB}/**`, r => {
   if (m === 'GET') return json(r, []);
   return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
 });
+// fake browser speech recognition (stub) to test the Dictate button
+await ctx.addInitScript(() => { window.SpeechRecognition = class { start() { window.__rec = this; } stop() { this.onend?.(); } }; });
 await page.goto(`${base}/create`);
 await page.getByLabel('Pineapple take clip').waitFor(); await page.waitForTimeout(1500);
 
@@ -48,6 +50,12 @@ await page.evaluate(words => {
   E.transformers = { ...E.transformers, ...fake('transformers') }; E.whisper_cpp = { ...E.whisper_cpp, ...fake('whisper_cpp') };
 }, REAL);
 
+// ---- Dictate (stubbed speech recognition)
+await page.getByRole('tab', { name: /Take/ }).click().catch(() => {});
+await page.getByTestId('dictate').click();
+await page.evaluate(() => window.__rec.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: 'tacos are overrated' }], { isFinal: true })] }));
+check('dictation fills the take', (await page.locator('textarea').first().inputValue()).includes('tacos are overrated'));
+await page.getByTestId('dictate').click();
 // ---- Modal 1: Generate captions
 await page.getByLabel('Pineapple take clip').click();
 await page.getByTestId('open-generate-captions').click();

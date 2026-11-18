@@ -44,20 +44,25 @@ const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('subwayt
 await page.goto(`${base}/create`);
 await page.getByLabel('Pineapple take clip').waitFor(); await page.waitForTimeout(1200);
 await page.getByLabel('Pineapple take clip').click();
-await page.getByRole('button', { name: /Generate captions/ }).click();
+const gen = page.getByRole('dialog', { name: 'Generate captions' }), studio = page.getByRole('dialog', { name: 'Caption studio' });
+async function runCloud() {   // the cloud engine (stubbed Whisper -> SRT) through the new Generate modal
+  await page.getByTestId('open-generate-captions').click(); await gen.waitFor();
+  await gen.locator('[data-engine="cloud"]').click(); await gen.getByTestId('start-captions').click();
+}
+await runCloud();
 if (mode !== 'ok') {
   await page.waitForTimeout(3500);
-  console.log('MODE', mode, 'ERROR UI:', await page.locator('.text-red-300').allInnerTexts(), 'captions:', JSON.stringify(await state()));
+  console.log('MODE', mode, 'ERROR UI:', await gen.locator('.text-red-300').allInnerTexts(), 'captions:', JSON.stringify(await state()));
   await page.screenshot({ path: `${out}/60-captions-${mode}.png` }); await browser.close(); process.exit(0);
 }
-await page.getByRole('button', { name: /Regenerate/ }).waitFor({ timeout: 15000 });
+await studio.waitFor({ timeout: 15000 });
 console.log('WHISPER REQUEST', JSON.stringify(whisperBody));
 await page.waitForTimeout(600); console.log('CAPTIONS', JSON.stringify(await state()));
-await page.mouse.click(1, 1);
-await page.getByLabel('Pineapple take clip').click();
 await page.screenshot({ path: `${out}/61-captions-generated.png` });
+await studio.getByRole('button', { name: 'Cancel' }).click(); await studio.waitFor({ state: 'detached' });
 // regenerate must not duplicate
-await page.getByRole('button', { name: /Regenerate/ }).click(); await page.getByRole('button', { name: /Regenerate/ }).waitFor();
+await page.getByLabel('Pineapple take clip').click(); await runCloud(); await studio.waitFor({ timeout: 15000 });
+await studio.getByRole('button', { name: 'Cancel' }).click(); await studio.waitFor({ state: 'detached' });
 await page.waitForTimeout(500);
 console.log('AFTER REGENERATE', JSON.stringify(await state()));
 // export

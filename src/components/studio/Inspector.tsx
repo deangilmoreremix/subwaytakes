@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Segmented, Label, inputCls, ModelChip } from './ui';
+import { DictateButton } from './DictateButton';
 import { NATIVE_MODELS, type Aspect, type Pipeline } from '../../lib/muapi/registry';
 import { buildNativePrompt, type TakeSpec } from '../../lib/muapi/prompt';
 import { FORMATS } from '../../lib/interview';
@@ -84,7 +85,7 @@ export function Inspector({ aiLabel, onAiLabel, onAddDub, onTemplate, spec, set,
             <div><Label hint={<IdeasButton ideas={show.ideas} onPick={t => set('question', t.slice(0, 160))} />}>The host asks</Label>
               <input className={inputCls} maxLength={160} value={spec.question ?? show.question} onChange={e => set('question', e.target.value)} /></div>
           )}
-          <div><Label hint={<span className="flex items-center gap-3">{!show.editableQuestion && <IdeasButton onPick={t => set('take', t.slice(0, 220))} />}{spec.take.length}/220</span>}>{show.id === 'hot_take' ? 'The take' : show.answerLabel}</Label>
+          <div><Label hint={<span className="flex items-center gap-3"><DictateButton value={spec.take} onChange={v => set('take', v)} />{!show.editableQuestion && <IdeasButton onPick={t => set('take', t.slice(0, 220))} />}{spec.take.length}/220</span>}>{show.id === 'hot_take' ? 'The take' : show.answerLabel}</Label>
             <textarea className={inputCls} rows={4} maxLength={220} value={spec.take} onChange={e => set('take', e.target.value)} /></div>
           {show.guests === 2 && (<>
             <div><Label hint={`${(spec.take2 ?? '').length}/220`}>Guest B takes</Label>
