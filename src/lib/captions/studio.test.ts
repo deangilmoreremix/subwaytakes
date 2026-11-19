@@ -214,3 +214,37 @@ describe('review fixes', () => {
     expect(toVtt([cap('b', 0, 30, [['a<b', 0, 10], ['&', 11, 20]])], 30)).toContain('a&lt;b &amp;');
   });
 });
+
+import { splitAt, trimClip, updateClip } from '../timeline/ops';
+import type { Project } from '../timeline/types';
+describe('trimming and splitting a caption on the timeline keeps its words in time', () => {
+  const cap = (over: Partial<Clip> = {}): Clip => ({ id: 'c', trackId: 'c1', kind: 'caption', label: 'C', start: 100, duration: 60, trimStart: 0, text: 'one two three four', words: [{ t: 'one', s: 0, e: 14 }, { t: 'two', s: 15, e: 29 }, { t: 'three', s: 30, e: 44 }, { t: 'four', s: 45, e: 59 }], ...over });
+  const proj = (c: Clip): Project => ({ fps: 30, tracks: [{ id: 'c1', kind: 'caption', name: 'Captions' }], clips: [c] });
+  it('a left trim moves the word times with the edge, drops words that ended and keeps the text in step', () => {
+    const out = trimClip(proj(cap()), 'c', 'left', 20).clips[0];
+    expect(out.start).toBe(120); expect(out.duration).toBe(40);
+    expect(out.words!.map(w => w.t)).toEqual(['two', 'three', 'four']); expect(out.words![0].s).toBe(0);   // "two" was at 15 to 29: now it is the first word, it keeps its place against the speech
+    expect(out.words![1]).toMatchObject({ t: 'three', s: 10, e: 24 }); expect(out.text).toBe('two three four');
+  });
+  it('extending a caption to the left shifts the words later and keeps all of them', () => {
+    const out = trimClip(proj(cap()), 'c', 'left', -10).clips[0]; expect(out.start).toBe(90); expect(out.words!.map(w => w.s)).toEqual([10, 25, 40, 55]);
+  });
+  it('a right trim drops words that start after the new end and clips the last one', () => {
+    const out = trimClip(proj(cap()), 'c', 'right', -25).clips[0]; expect(out.duration).toBe(35);
+    expect(out.words!.map(w => w.t)).toEqual(['one', 'two', 'three']); expect(out.words![2].e).toBeLessThanOrEqual(35); expect(out.text).toBe('one two three');
+  });
+  it('a split gives each half only its own words, timed against its own start', () => {
+    const out = splitAt(proj(cap()), 130, 'c').clips.sort((a, b) => a.start - b.start);
+    expect(out).toHaveLength(2); expect(out[0].words!.map(w => w.t)).toEqual(['one', 'two']); expect(out[1].words!.map(w => w.t)).toEqual(['three', 'four']);
+    expect(out[1].words![0].s).toBe(0); expect(out[0].text).toBe('one two'); expect(out[1].text).toBe('three four');
+    for (const h of out) for (const w of h.words!) { expect(w.s).toBeGreaterThanOrEqual(0); expect(w.e).toBeLessThanOrEqual(h.duration); expect(w.e).toBeGreaterThan(w.s); }
+  });
+  it('a split that would leave one side with no words changes nothing', () => { const p = proj(cap({ words: [{ t: 'one', s: 0, e: 10 }], text: 'one' })); expect(splitAt(p, 150, 'c')).toBe(p); });
+  it('captions from before words existed (text only) still trim and split like any clip', () => {
+    const old = cap({ words: undefined }); expect(trimClip(proj(old), 'c', 'left', 10).clips[0].words).toBeUndefined(); expect(splitAt(proj(old), 130, 'c').clips).toHaveLength(2);
+  });
+  it('editing the text in the Clip tab drops the stored words so the preview and the export use the new text', () => {
+    const out = updateClip(proj(cap()), 'c', { text: 'fixed typo here', words: undefined }).clips[0]; expect(out.words).toBeUndefined();
+    expect(ensureWords(out).map(w => w.t)).toEqual(['fixed', 'typo', 'here']); expect(clipText(out)).toBe('fixed typo here');
+  });
+});

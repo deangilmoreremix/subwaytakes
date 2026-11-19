@@ -1,7 +1,7 @@
 import { Label, inputCls } from '../ui';
 import { PresetGrid } from './PresetGrid';
 import { MOTION_ENGINES, POSITION_MAX, POSITION_MIN, type CaptionStyle } from '../../../lib/captions/model';
-import { CHOOSABLE_FONTS, FONT_META } from '../../../lib/captions/fontData';
+import { CHOOSABLE_FONTS, FONT_META, nearestWeight } from '../../../lib/captions/fontData';
 import { LANGUAGES } from '../../../lib/captions/scripts';
 import { isCustomised } from '../../../lib/captions/presets';
 
@@ -27,7 +27,7 @@ export function MotionStylePanel({ style, onChange, onPreset, onMaxWords }: { st
       </Row>
 
       <div className="grid grid-cols-2 gap-3">
-        <Row label="Font"><select className={inputCls} value={style.font} onChange={e => { const f = e.target.value as CaptionStyle['font']; onChange({ font: f }); }} aria-label="Font">{CHOOSABLE_FONTS.map(f => <option key={f} value={f}>{FONT_META[f].label}</option>)}</select></Row>
+        <Row label="Font"><select className={inputCls} value={style.font} onChange={e => { const f = e.target.value as CaptionStyle['font']; const w = nearestWeight(f, style.weight); const wt = style.weightTo ? nearestWeight(f, style.weightTo) : undefined; onChange({ font: f, weight: w, weightTo: wt && wt !== w ? wt : undefined }); }} aria-label="Font">{CHOOSABLE_FONTS.map(f => <option key={f} value={f}>{FONT_META[f].label}</option>)}</select></Row>
         <Row label="Weight"><select className={inputCls} value={style.weight} onChange={e => onChange({ weight: Number(e.target.value) })} aria-label="Weight" disabled={weights.length < 2}>{weights.map(w => <option key={w} value={w}>{w}</option>)}</select></Row>
       </div>
       <Row label="Weight on the spoken word">

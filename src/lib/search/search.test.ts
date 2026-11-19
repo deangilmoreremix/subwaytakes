@@ -119,3 +119,9 @@ describe('search ranking details', () => {
     const v = searchVersesRanked({ query: 'fear' }); expect(v[0].hits.length).toBeGreaterThan(0);
   });
 });
+
+describe('search never trips on words that exist on every JavaScript object', () => {
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf', 'prototype', 'constructor strength'])('"%s" is just a word with no results or ordinary results', q => {
+    expect(() => searchVersesRanked({ query: q })).not.toThrow(); expect(() => searchQuotesRanked({ query: q })).not.toThrow(); expect(() => expandQuery(q)).not.toThrow();
+  });
+});

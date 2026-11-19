@@ -242,7 +242,7 @@ export function Inspector({ aiLabel, onAiLabel, onAddDub, onTemplate, spec, set,
 
         {tab === 'clip' && clip && (<>
           <div><Label>{clip.kind === 'caption' ? 'Caption' : clip.kind === 'audio' ? 'Sound effect' : clip.kind === 'effect' ? 'Effect' : 'Video clip'}</Label><p className="truncate text-[12px] text-zinc-400">{clip.label}</p></div>
-          {clip.kind === 'caption' && <div><Label>Text</Label><textarea className={inputCls} rows={3} value={clip.text ?? ''} onChange={e => onClipChange({ text: e.target.value })} /></div>}
+          {clip.kind === 'caption' && <div><Label>Text</Label><textarea className={inputCls} rows={3} value={clip.text ?? ''} onChange={e => onClipChange({ text: e.target.value, words: undefined })} /></div>}   {/* the words are re-spread from the new text, so the preview and the export change too */}
           {clip.kind === 'effect' && clip.effect && (<>
             <div><Label hint={`${clip.effect.hueShift}°`}>Color shift</Label>
               <input type="range" className="w-full" min={0} max={360} value={clip.effect.hueShift} onChange={e => onClipChange({ effect: { ...clip.effect!, hueShift: Number(e.target.value) } })} /></div>

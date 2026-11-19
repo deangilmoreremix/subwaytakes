@@ -122,12 +122,25 @@ await scenario({}, async (page, st) => {
   check('removing the quote returns to own advice and the bar edits the take again', await page.getByTestId('picked-quote').count() === 0 && (await page.getByLabel('Your take').count()) === 1);
 });
 
+// ---- 3b. Own advice survives trying a quote
+await scenario({}, async page => {
+  await show(page, 'Motivation').click(); await page.locator('textarea').first().fill('Show up for the next hour, nothing more.');
+  await pickQuote(page, 'Nothing great');
+  check('the customer\'s own advice becomes their comment on the quote', (await page.getByLabel('Your own words').inputValue()) === 'Show up for the next hour, nothing more.');
+  await page.getByRole('button', { name: 'Remove quote' }).click(); await page.waitForTimeout(300);
+  check('and comes back as their take when the quote is removed (not the stock sample)', (await page.locator('textarea').first().inputValue()) === 'Show up for the next hour, nothing more.');
+});
+
 // ---- 4. Locks: a saved Scripture episode does not unlock the pack when it is reopened without it -------------------------------------------------------
 const savedScripture = { fps: 30, style: { take: { v: 1, show: 'bible', take: 'x', guestDescription: 'g', hostDescription: 'h', place: {}, tone: 'reverent', durationSeconds: 12, aspect: '9:16', format: 'twoshot', verse: { ref: '1 John 4:19', translation: 'KJV' }, reflection: 'Mine.' } },
   tracks: [{ id: 'v1', kind: 'video', name: 'Video' }, { id: 'c1', kind: 'caption', name: 'Captions' }, { id: 'a1', kind: 'audio', name: 'Sound' }, { id: 'e1', kind: 'effect', name: 'Effects' }], clips: [] };
 await scenario({ owned: [], project: savedScripture }, async page => {
   await page.waitForTimeout(1200);
   check('reopening a Scripture project WITHOUT the pack restores the default show (the lock is not bypassed)', (await show(page, 'Hot Take').getAttribute('aria-pressed')) === 'true' && await page.getByTestId('verse-picker').count() === 0);
+  const held = await proj(page);
+  check('and the saved Scripture episode is NOT overwritten by that fallback (buying the pack later brings it back)', held.style.take.show === 'bible' && held.style.take.verse?.ref === '1 John 4:19' && held.style.take.reflection === 'Mine.');
+  await page.locator('textarea').first().fill('My own take now.'); await page.waitForTimeout(700);
+  check('only the customer\'s own change replaces it', (await proj(page)).style.take.show === 'hot_take');
 });
 await scenario({ owned: ['bible'], project: savedScripture }, async page => {
   await page.waitForTimeout(1200);

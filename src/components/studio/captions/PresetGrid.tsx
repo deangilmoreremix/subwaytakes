@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CAPTION_PRESETS, PRESET_CATEGORIES, presetOf, styleFromPreset } from '../../../lib/captions/presets';
 import { CHOOSABLE_FONTS, FONT_META, nearestWeight } from '../../../lib/captions/fontData';
-import { loadFamilies, FALLBACK_STACK } from '../../../lib/captions/fontLoaders';
+import { fontRequests, loadFamilies, FALLBACK_STACK } from '../../../lib/captions/fontLoaders';
 import { wordCss } from '../../../lib/captions/motion';
 import type { CaptionStyle } from '../../../lib/captions/model';
 import { clsx } from '../../../lib/format';
 
+/** The exact family and weights the presets use (so a preset at weight 500 or 600 previews in its real face). */
+const PRESET_FONT_REQUESTS = fontRequests(CAPTION_PRESETS.filter(p => CHOOSABLE_FONTS.includes(p.style.font)).map(p => ({ key: p.style.font, weight: p.style.weight, weightTo: p.style.weightTo })));
+
 /** Loads the latin fonts once for DOM previews (the picker only shows latin text). */
 function useDomFonts(): Record<string, string> {
   const [fam, setFam] = useState<Record<string, string>>({});
-  useEffect(() => { let live = true; void loadFamilies(CHOOSABLE_FONTS.map(key => ({ key, weights: FONT_META[key].weights.filter(w => [300, 400, 700, 800, 900].includes(w)) }))).then(f => { if (live) setFam(f); }); return () => { live = false; }; }, []);
+  useEffect(() => { let live = true; void loadFamilies(PRESET_FONT_REQUESTS).then(f => { if (live) setFam(f); }); return () => { live = false; }; }, []);
   return fam;
 }
 

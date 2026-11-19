@@ -119,15 +119,20 @@ export function CreateTakePage() {
   const specJson = JSON.stringify(snapshotSpec(spec));
   const projTakeJson = project.style?.take ? JSON.stringify(project.style.take) : '';
   const syncedTake = useRef('');
+  /** A saved episode that could NOT be restored as it was (its pack is not owned now, or it is damaged): the saved copy is kept untouched until the customer changes the episode, so buying the pack back (or fixing the account) brings it back. */
+  const heldSaved = useRef<{ saved: string; restored: string } | null>(null);
   useEffect(() => {
     if (!billingLoaded && projTakeJson && projTakeJson !== syncedTake.current && projTakeJson !== specJson) return;   // wait: what the account has unlocked decides what may be restored
     if (specJson === projTakeJson) { syncedTake.current = specJson; return; }
     if (projTakeJson && projTakeJson !== syncedTake.current) {
       syncedTake.current = projTakeJson;
       const restored = restoreSpec(project.style?.take, { showLocked: id => showLocked(id, ownedPacks), cutsLocked: !hasFeature('cuts', ownedPacks) });
-      if (restored) { setSpec(restored); return; }
+      if (restored) { const rj = JSON.stringify(snapshotSpec(restored)); heldSaved.current = rj !== projTakeJson ? { saved: projTakeJson, restored: rj } : null; setSpec(restored); return; }
     }
     if (!projTakeJson && specJson === DEFAULT_SPEC_JSON) { syncedTake.current = specJson; return; }   // a fresh project with nothing chosen yet stays clean
+    const held = heldSaved.current;
+    if (held && projTakeJson === held.saved && specJson === held.restored) return;   // do not overwrite what could not be restored; only the customer's own change does
+    heldSaved.current = null;
     syncedTake.current = specJson;
     const cur = getProject();
     setProject({ ...cur, style: { ...cur.style, take: snapshotSpec(spec) } }, false);
@@ -138,6 +143,7 @@ export function CreateTakePage() {
     const cur = getProject();   // the newest project, not the copy this render captured (another effect may have just written to it)
     const t = resolveTitle(cur.style?.title);
     if (!t) return;
+    if (heldSaved.current && specJson === heldSaved.current.restored && JSON.stringify(cur.style?.take ?? null) === heldSaved.current.saved) return;   // the saved episode is on hold: keep its card too
     if (!cur.style?.take && specJson === DEFAULT_SPEC_JSON) return;   // an older project (a title but no saved episode): the untouched default spec must not replace its card
     const data = titleFor(spec);
     if (JSON.stringify(data) !== JSON.stringify(t.data)) setProject({ ...cur, style: { ...cur.style, title: { ...t, data } } }, false);
@@ -164,6 +170,7 @@ export function CreateTakePage() {
     if (k === 'aspect' && !NATIVE_MODELS.find(m => m.slug === slug)?.aspects.includes(v as TakeSpec['aspect'])) {
       setSlug(chooseNativeModel('fast', 'text', v as TakeSpec['aspect']).slug);
     }
+    if (k === 'quote' && v && s.show === 'motivation' && s.reflection === undefined) next = { ...next, reflection: s.take === SAMPLE_ANSWERS.motivation[0] ? '' : s.take };   // the customer's own advice becomes their comment on the quote (and comes back if the quote is removed)
     if (k === 'quote' && !v && s.show === 'motivation') next = { ...next, take: s.reflection?.trim() || SAMPLE_ANSWERS.motivation[0], reflection: undefined };   // clearing the quote goes back to the guest's own advice
     if (['show', 'verse', 'quote', 'reflection', 'durationSeconds', 'question', 'format'].includes(k)) next = recomposeBible(next);   // Scripture: keep the spoken line in step
     return next;
@@ -409,7 +416,7 @@ export function CreateTakePage() {
             characters={characters} hostHint={route.hint} imageRoute={imageRoute}
             cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} />}
             lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} canGenerate={canGenerate} />}
-            clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
+            clip={clip} onClipChange={patch => { const cur = getProject(); if (clip) setProject(updateClip(cur, clip.id, patch), false); }} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, captionFont: f } }); }}
             captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} hasCaptions={project.clips.some(x => x.kind === 'caption')} onGenerateCaptions={() => setCapModal('generate')} onOpenStudio={() => setCapModal('studio')} canGenerate={canGenerate} />

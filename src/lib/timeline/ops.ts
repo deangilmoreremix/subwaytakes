@@ -1,4 +1,17 @@
 import { MIN_CLIP, type Clip, type Project, type TransitionType } from './types';
+import type { CaptionWord } from '../captions/model';
+import { clipText } from '../captions/words';
+
+/** Word times of a caption (relative to its start) after its left edge moved by `d` frames (positive = trimmed in). Words that end before the new start go; the rest keep their place against the speech. */
+function wordsAfterLeftTrim(words: CaptionWord[], d: number, duration: number): CaptionWord[] {
+  return words.map(w => ({ t: w.t, s: Math.max(0, w.s - d), e: Math.min(duration, w.e - d) })).filter(w => w.e - 0 > 0 && w.s < duration).map(w => ({ ...w, e: Math.max(w.s + 1, w.e) }));
+}
+/** Words that still start inside a caption that was shortened to `duration` frames. */
+function wordsAfterRightTrim(words: CaptionWord[], duration: number): CaptionWord[] {
+  return words.filter(w => w.s < duration).map(w => ({ ...w, e: Math.min(duration, Math.max(w.s + 1, w.e)) }));
+}
+/** A caption clip with new words: its text follows the words (older captions without words are left as they are). */
+const withNewWords = (c: Clip, words: CaptionWord[]): Clip => (c.kind === 'caption' && c.words?.length ? { ...c, words, text: clipText({ ...c, words }) } : c);
 
 let counter = 0;
 export const newId = (p = 'clip') => `${p}_${Date.now().toString(36)}_${(counter++).toString(36)}`;
@@ -65,7 +78,14 @@ export function trimClip(p: Project, id: string, edge: 'left' | 'right', delta: 
     d = Math.max(d, MIN_CLIP - c.duration);
     duration += d;
   }
-  return normalizeTransitions({ ...p, clips: p.clips.map(x => (x.id === id ? { ...x, start, duration, trimStart } : x)) });
+  return normalizeTransitions({ ...p, clips: p.clips.map(x => {
+    if (x.id !== id) return x;
+    const moved = { ...x, start, duration, trimStart };
+    if (x.kind !== 'caption' || !x.words?.length) return moved;
+    // a caption's word times are relative to its own start, so they move with the edge that moved
+    const words = edge === 'left' ? wordsAfterLeftTrim(x.words, start - x.start, duration) : wordsAfterRightTrim(x.words, duration);
+    return words.length ? withNewWords(moved, words) : moved;
+  }) });
 }
 
 /** Split the clip under `frame` (or the given clip) into two at `frame`. */
@@ -76,7 +96,16 @@ export function splitAt(p: Project, frame: number, id?: string): Project {
   const leftDur = frame - c.start;
   const right: Clip = { ...c, id: newId(), start: frame, duration: c.duration - leftDur, trimStart: c.kind === 'video' || c.kind === 'audio' ? c.trimStart + leftDur : c.trimStart };
   const { transitionIn: _noIn, ...rightClean } = right; void _noIn; // the new right half starts a fresh cut
-  return normalizeTransitions({ ...p, clips: p.clips.flatMap(x => (x.id === c.id ? [{ ...x, duration: leftDur }, rightClean as Clip] : [x])) });
+  let leftHalf: Clip = { ...c, duration: leftDur }; let rightHalf = rightClean as Clip;
+  if (c.kind === 'caption' && c.words?.length) {
+    // each half keeps only its own words, timed against its own start (the right half's highlight starts at ITS first word, not the whole line again)
+    const lw = wordsAfterRightTrim(c.words, leftDur);
+    const rw = wordsAfterLeftTrim(c.words, leftDur, c.duration - leftDur);
+    const halves: Clip[] = [lw.length ? withNewWords(leftHalf, lw) : null, rw.length ? withNewWords(rightHalf, rw) : null].filter((x): x is Clip => !!x);
+    if (halves.length < 2) return p;   // one side would be empty: nothing sensible to split
+    [leftHalf, rightHalf] = halves as [Clip, Clip];
+  }
+  return normalizeTransitions({ ...p, clips: p.clips.flatMap(x => (x.id === c.id ? [leftHalf, rightHalf] : [x])) });
 }
 
 export function deleteClip(p: Project, id: string, ripple = false): Project {

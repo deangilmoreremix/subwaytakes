@@ -32,7 +32,8 @@ const wordsOf = (s: string): string[] => norm(s).split(' ').filter(Boolean);
 const STOP = new Set(['a', 'an', 'and', 'the', 'of', 'to', 'in', 'is', 'it', 'i', 'me', 'my', 'im', 'am', 'be', 'for', 'with', 'on', 'at', 'by', 'or', 'about', 'that', 'this', 'what', 'how', 'do', 'does', 'can', 'cant', 'want', 'need', 'feel', 'feeling', 'verse', 'verses', 'quote', 'quotes', 'something', 'some', 'when', 'im']);
 
 /** Synonyms for a word, also trying its singular and its -ing form ("beginnings", "worrying"). */
-const synonymsFor = (w: string): string[] => SYNONYMS[w] ?? SYNONYMS[w.replace(/s$/, '')] ?? SYNONYMS[w.replace(/ing$/, '')] ?? SYNONYMS[w.replace(/ing$/, 'e')] ?? [];
+const own = (k: string): string[] | undefined => (Object.prototype.hasOwnProperty.call(SYNONYMS, k) ? SYNONYMS[k] : undefined);   // never the inherited 'constructor', 'toString', '__proto__'...
+const synonymsFor = (w: string): string[] => own(w) ?? own(w.replace(/s$/, '')) ?? own(w.replace(/ing$/, '')) ?? own(w.replace(/ing$/, 'e')) ?? [];
 
 /** Expand a query into groups: every group must be satisfied (AND); inside a group any alternative will do (the word itself, or its synonyms at lower weight). */
 export function expandQuery(query: string): Array<Array<{ term: string; weight: number }>> {
@@ -43,7 +44,7 @@ export function expandQuery(query: string): Array<Array<{ term: string; weight: 
   for (let i = 0; i < ws.length; i++) {
     // a two-word phrase with its own entry ("give up", "lie down") becomes ONE group: the phrase itself or its related words
     const pair = i + 1 < ws.length ? ws[i] + ws[i + 1] : '';
-    if (pair && SYNONYMS[pair]) { groups.push([{ term: `${ws[i]} ${ws[i + 1]}`, weight: 1 }, ...SYNONYMS[pair].map(t => ({ term: norm(t), weight: 0.3 }))]); i++; continue; }
+    if (pair && own(pair)) { groups.push([{ term: `${ws[i]} ${ws[i + 1]}`, weight: 1 }, ...own(pair)!.map(t => ({ term: norm(t), weight: 0.3 }))]); i++; continue; }
     groups.push([{ term: ws[i], weight: 1 }, ...synonymsFor(ws[i]).map(t => ({ term: norm(t), weight: 0.3 }))]);
   }
   return groups;
@@ -52,7 +53,7 @@ export function expandQuery(query: string): Array<Array<{ term: string; weight: 
 /** Score of one term against an item: `shown` is the part that comes from words you can see (title and text), so only that is highlighted. */
 function scoreTerm(term: string, title: string, titleWords: string[], text: string, textWords: string[], tags: string[]): { score: number; shown: number } {
   let s = 0;
-  if (title.startsWith(term)) s += 40; else if (titleWords.some(w => w.startsWith(term))) s += 24;;
+  if (title.startsWith(term)) s += 40; else if (titleWords.some(w => w.startsWith(term))) s += 24;
   const shown0 = s;
   if (tags.some(t => t === term)) s += 22; else if (tags.some(t => t.startsWith(term))) s += 12;
   const tagPart = s - shown0; s = shown0;

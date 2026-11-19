@@ -184,3 +184,13 @@ describe('what a customer types is screened before any credit is reserved', () =
     expect(checkText(buildNativePrompt(MOTIV({ reflection: 'Do the next small thing, then the one after it.' }))).ok).toBe(true);
   });
 });
+
+describe('Motivation: the customer\'s own advice is kept when they try a quote and remove it again', () => {
+  it('own advice becomes the comment on the quote and returns to the take box when the quote is removed (a pure walk through what the page does)', () => {
+    const own = { ...applyShow(DEFAULT_TAKE, 'motivation'), take: 'Show up for the next hour, nothing more.' };
+    const withQuote = recomposeBible({ ...own, quote: quote0, reflection: own.take });   // what set('quote') does when no comment exists yet
+    expect(withQuote.take).toContain('Show up for the next hour'); expect(withQuote.take).toContain(quote0.author);
+    const removed = { ...withQuote, quote: undefined, take: withQuote.reflection!.trim(), reflection: undefined };   // what set('quote', undefined) does
+    expect(removed.take).toBe('Show up for the next hour, nothing more.');
+  });
+});

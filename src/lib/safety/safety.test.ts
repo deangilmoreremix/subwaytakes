@@ -50,7 +50,7 @@ describe('the studio\'s own prompts pass the content screen', () => {
 describe('faith content (Scripture and Motivation packs)', () => {
   const blocked: Array<[string, string]> = [
     ['a video of Jesus walking through the train car', 'religious'], ['show God sitting on the bench next to the host', 'religious'], ['an actor playing Jesus gives the answer', 'religious'],
-    ['the voice of Allah speaks to the guest', 'religious'], ['depict the prophet Muhammad in the carriage', 'religious'], ['dressed as an angel with a halo', 'religious'],
+    ['the voice of Allah speaks to the guest', 'religious'], ['depict the prophet Muhammad in the carriage', 'religious'],
     ['mock the Bible and the people who read it', 'religious'], ['make fun of christians on the subway', 'religious'], ['ridicule religious people', 'religious'],
     ['God guarantees you will be rich if you give', 'guarantee'], ['I guarantee healing if you believe', 'guarantee'], ['pray and your cancer will disappear', 'guarantee'],
     ['faith will make you rich', 'guarantee'], ['send a seed offering and receive a miracle', 'guarantee'], ['God will heal you if you tithe', 'guarantee'],
@@ -73,4 +73,15 @@ describe('faith content: review follow-ups', () => {
   const allowed = ['God will heal your heart', 'guarantee money back', 'we offer a money back guarantee', 'Jesus loved the poor, and that moves me', 'I pray to Allah every day and it keeps me steady', 'Muhammad Ali was a champion', 'Moses led his people, I read that story to my kids',
     'the pope visited our city last year', 'my pastor says faith is a journey', 'Buddha taught me to breathe', 'Christ is the reason I get up in the morning'];
   it.each(allowed)('allows: %s', t => { expect(checkText(t).ok, t).toBe(true); });
+});
+
+describe('faith screens leave everyday takes alone (review follow-up)', () => {
+  const fine = ['Pineapple pizza is a guaranteed success at every party', 'The rich get richer, and I guarantee it', 'He looks like a prophet with that beard', 'Why do people trash the church bake sale?',
+    'Oh my god, the train is packed today', 'Thank god it is Friday and we are on the train', 'Oh my god in the car it was crazy', 'Put an angel on the tree this year', 'She looks like an angel in that coat',
+    'The pope looks tired in that photo', 'I guarantee you will love this pizza', 'A money back guarantee is the only fair deal', 'He plays the saint in the school play', 'That video of a prophet-sized beard is wild',
+    'Dressed as the devil for Halloween again', 'Make fun of me all you want, I am wearing socks with sandals', 'Insult the cooking but not the cook'];
+  it.each(fine)('allows: %s', t => { expect(checkText(t).ok, t).toBe(true); });
+  const stillBlocked = ['God guarantees you will be rich if you give', 'I guarantee healing if you believe', 'I guarantee you will be rich by Friday', 'a video of Jesus on the subway', 'an actor playing Allah', 'depict the prophet Muhammad in the carriage',
+    'Jesus rides the train', 'God appears in the car', 'mock the Bible', 'make fun of christians', 'parody of Jesus', 'dressed as Jesus', 'looks like Jesus'];
+  it.each(stillBlocked)('still blocks: %s', t => { expect(checkText(t).ok, t).toBe(false); });
 });

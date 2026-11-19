@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Search, X } from 'lucide-react';
 import { THEMES, THEME_LABELS, TRANSLATIONS, TRANSLATION_NAMES, TRANSLATION_LICENCE, MAX_TYPED_VERSE, allVerses, pickVerse, searchVersesRanked, textOf, typedVerse, type PickedVerse, type Translation } from '../../lib/bible';
 import { FindDialog, type FindItem } from './FindDialog';
@@ -17,6 +17,13 @@ export function VersePicker({ verse, onVerse }: { verse?: PickedVerse; onVerse: 
   const [typedText, setTypedText] = useState(verse?.source === 'typed' ? verse.text : '');
   const [typedRef, setTypedRef] = useState(verse?.source === 'typed' ? verse.ref : '');
 
+  // the picker follows the episode: when the verse changes from outside (undo, a reopened project, a template) the mode, translation and typed text follow it
+  useEffect(() => {
+    if (verse?.source === 'typed') { setTyped(true); if (typedVerse(typedText, typedRef).text !== verse.text) setTypedText(verse.text); if (typedVerse('x', typedRef).ref !== verse.ref) setTypedRef(verse.ref); }
+    else if (verse?.source === 'library') { setTyped(false); if (verse.translation !== 'custom') setTranslation(verse.translation); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verse]);
+  const toggleTyped = () => { const next = !typed; setTyped(next); onVerse(next && typedText.trim() ? typedVerse(typedText, typedRef) : undefined); };   // switching mode never leaves a hidden verse on the video
   const ranked = useMemo(() => searchVersesRanked({ query, theme: theme as never, translation }), [query, theme, translation]);
   const items: FindItem[] = useMemo(() => ranked.map(r => ({ id: r.item.ref, title: r.item.ref, text: textOf(r.item, translation), tag: THEME_LABELS[r.item.theme], hits: r.hits })), [ranked, translation]);
   const themes = useMemo(() => THEMES.map(t => ({ id: t, label: THEME_LABELS[t], count: allVerses().filter(v => v.theme === t).length })), []);
@@ -31,7 +38,7 @@ export function VersePicker({ verse, onVerse }: { verse?: PickedVerse; onVerse: 
           <button key={t} onClick={() => changeTranslation(t)} aria-pressed={translation === t && !typed} title={TRANSLATION_NAMES[t]}
             className={clsx('rounded-lg border px-2.5 py-1 text-[12px]', translation === t && !typed ? 'border-accent/60 bg-accent-soft text-white' : 'border-line text-zinc-400 hover:text-zinc-200')}>{t}</button>
         ))}
-        <button onClick={() => setTyped(v => !v)} aria-pressed={typed} className={clsx('ml-auto rounded-lg border px-2.5 py-1 text-[12px]', typed ? 'border-accent/60 bg-accent-soft text-white' : 'border-line text-zinc-400 hover:text-zinc-200')}>Type my own</button>
+        <button onClick={toggleTyped} aria-pressed={typed} className={clsx('ml-auto rounded-lg border px-2.5 py-1 text-[12px]', typed ? 'border-accent/60 bg-accent-soft text-white' : 'border-line text-zinc-400 hover:text-zinc-200')}>Type my own</button>
       </div>
 
       {!typed ? (<>

@@ -41,7 +41,11 @@ export function GenerateCaptionsModal({ project, aspect, videoClips, initialClip
   const [error, setError] = useState('');
   const abort = useRef<AbortController | null>(null);
   const playerRef = useRef<PlayerRef>(null);
-  useEffect(() => () => abort.current?.abort(), []);   // leaving the page stops the transcription
+  const mounted = useRef(true);
+  const runRef = useRef<{ walked: boolean } | null>(null);
+  const engineRef = useRef<EngineId>(engine); engineRef.current = engine;
+  // leaving the page stops an on-device transcription; a paid cloud job cannot be called back, so it is left to finish and its transcript is still saved for the clip (never lose what was paid for)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; if (engineRef.current !== 'cloud') abort.current?.abort(); }; }, []);   // set true again on every mount (React runs effects twice in development)
   const busy = step !== null && step < 3 && !error;
   const clip = videoClips.find(c => c.id === clipId);
   const preview = useMemo(() => sampleProject(project.fps, style, project), [project, style]);
@@ -49,7 +53,7 @@ export function GenerateCaptionsModal({ project, aspect, videoClips, initialClip
   async function start() {
     if (!clip?.src) return;
     setError(''); setNote(''); setStep(0); setPercent(undefined);
-    const ctl = new AbortController(); abort.current = ctl;
+    const ctl = new AbortController(); abort.current = ctl; const run = { walked: false }; runRef.current = run;
     const sourceSec = (clip.sourceFrames ?? clip.trimStart + clip.duration) / project.fps;
     try {
       const key = transcriptKey(clip.src, engine, model, language);
@@ -61,6 +65,7 @@ export function GenerateCaptionsModal({ project, aspect, videoClips, initialClip
           { engine, onFallback: (from, to, why) => setNote(`${ENGINES[from].label} could not run (${why}). Trying ${ENGINES[to].label}.`) });
         putCachedTranscript({ key, words: result.words, wordTimed: result.wordTimed, engine: result.engine });
       }
+      if (!mounted.current || run.walked) return;   // the transcript is saved above; nothing else happens after the customer walked away
       setStep(2); setPercent(undefined);
       const track = project.tracks.find(t => t.kind === 'caption')!;
       const final = { ...style, language };
@@ -70,12 +75,15 @@ export function GenerateCaptionsModal({ project, aspect, videoClips, initialClip
       setStep(3);
       onDone({ clip, captions, style: final, result });
     } catch (e) {
-      if (abort.current !== ctl) return;   // a newer run owns the screen now
+      if (abort.current !== ctl || run.walked || !mounted.current) return;   // a newer run owns the screen now, or the customer walked away
       if (e instanceof TranscribeError && e.kind === 'aborted') { setStep(null); return; }
       setError(e instanceof Error ? e.message : 'Captions failed.');
     } finally { if (abort.current === ctl) abort.current = null; }
   }
-  const cancel = () => { abort.current?.abort(); setStep(null); setError(''); };
+  const cancel = () => {
+    if (engine === 'cloud' && runRef.current) { runRef.current.walked = true; setStep(null); setNote('The cloud transcription is still running. When it finishes the transcript is saved for this clip, so running Generate again will not charge you twice.'); return; }
+    abort.current?.abort(); setStep(null); setError('');
+  };
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Generate captions">

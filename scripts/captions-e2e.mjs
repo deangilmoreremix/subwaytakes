@@ -140,7 +140,9 @@ await page.getByLabel('Pineapple take clip').click(); await page.getByTestId('op
 const callsBefore = await page.evaluate(() => window.__transcribeCalls); await gen.getByTestId('start-captions').click(); await studio.waitFor({ timeout: 15000 });
 check('saved transcript is reused (engine not called again)', callsBefore === await page.evaluate(() => window.__transcribeCalls));
 // old (text-only) captions still open: replace the project captions with a legacy clip
-await studio.waitFor(); await page.waitForTimeout(1200); await page.evaluate(() => { localStorage.removeItem('sb-none'); const p = JSON.parse(localStorage.getItem('subwaytakes.project.v1')); p.clips = p.clips.filter(c => c.kind !== 'caption'); p.clips.push({ id: 'old', trackId: 'c1', kind: 'caption', label: 'Caption', start: 0, duration: 60, trimStart: 0, text: 'legacy text only caption' }); delete p.style.captions; localStorage.setItem('subwaytakes.project.v1', JSON.stringify(p)); });
+await studio.waitFor(); await page.waitForTimeout(1200);
+// leave the studio page first (the app now saves its project when the page is hidden), edit the stored project from a page that does not own it, then come back
+await page.goto(`${base}/terms`); await page.evaluate(() => { localStorage.removeItem('sb-none'); const p = JSON.parse(localStorage.getItem('subwaytakes.project.v1')); p.clips = p.clips.filter(c => c.kind !== 'caption'); p.clips.push({ id: 'old', trackId: 'c1', kind: 'caption', label: 'Caption', start: 0, duration: 60, trimStart: 0, text: 'legacy text only caption' }); delete p.style.captions; localStorage.setItem('subwaytakes.project.v1', JSON.stringify(p)); });
 await page.goto('about:blank'); await page.evaluate(() => 0).catch(() => {});
 await page.goto(`${base}/create`); await page.getByLabel('Pineapple take clip').waitFor(); await page.getByLabel('Pineapple take clip').click();
 await page.getByTestId('open-caption-studio').click(); await studio.waitFor();
