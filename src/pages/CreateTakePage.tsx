@@ -138,9 +138,10 @@ export function CreateTakePage() {
     const cur = getProject();   // the newest project, not the copy this render captured (another effect may have just written to it)
     const t = resolveTitle(cur.style?.title);
     if (!t) return;
+    if (!cur.style?.take && specJson === DEFAULT_SPEC_JSON) return;   // an older project (a title but no saved episode): the untouched default spec must not replace its card
     const data = titleFor(spec);
     if (JSON.stringify(data) !== JSON.stringify(t.data)) setProject({ ...cur, style: { ...cur.style, title: { ...t, data } } }, false);
-  }, [spec, project, setProject, getProject]);
+  }, [spec, specJson, project, setProject, getProject]);
 
   // bind to the Remotion Player (mounted only once the timeline has clips)
   useEffect(() => {

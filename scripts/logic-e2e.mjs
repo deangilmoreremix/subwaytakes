@@ -139,6 +139,16 @@ await scenario({ owned: ['bible'], project: garbage }, async page => {
   check('a damaged saved episode loads without breaking the page (safe fallbacks)', (await show(page, 'Scripture').getAttribute('aria-pressed')) === 'true' && await page.getByTestId('picked-verse').count() === 0 && await page.getByRole('button', { name: 'Take', exact: true }).isVisible());
 });
 
+const legacy = { fps: 30, style: { title: { data: { variant: 'verse', badge: 'SCRIPTURE', badgeBg: '#e9dcb0', badgeFg: '#2b1d00', headline: VERSE, value: '1 John 4:19 · KJV' } } }, tracks: savedScripture.tracks, clips: [] };
+await scenario({ owned: ['bible'], project: legacy }, async page => {
+  await page.waitForTimeout(1500);
+  const p = await proj(page);
+  check('an older project (a Scripture card, no saved episode) keeps its card when opened: the default spec does not overwrite it', p.style?.title?.data?.variant === 'verse' && p.style.title.data.headline === VERSE);
+  await page.getByRole('button', { name: 'Take', exact: true }).click(); await page.locator('textarea').first().fill('A brand new take.'); await page.waitForTimeout(800);
+  const p2 = await proj(page);
+  check('and once the customer starts changing the episode, the card follows it again', p2.style?.take?.take === 'A brand new take.' && p2.style.title.data.variant === 'take');
+});
+
 // ---- 5. Templates respect the packs ---------------------------------------------------------------------------------------------------------------------
 await scenario({ owned: [] }, async page => {
   await page.getByRole('button', { name: /Start from a template/ }).click();

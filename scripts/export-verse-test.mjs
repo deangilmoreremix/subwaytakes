@@ -39,8 +39,9 @@ await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: show
 if (showLabel === 'Scripture') {
   const picker = page.getByTestId('verse-picker');
   await picker.getByRole('button', { name: tr, exact: true }).click();
-  await page.getByLabel('Search verses').fill(ref);
-  await picker.locator(`[data-verse="${ref}"]`).first().click();
+  await page.getByTestId('find-verse').click();
+  const d = page.getByRole('dialog', { name: 'Find a verse' }); await d.getByTestId('find-input').fill(ref); await page.waitForTimeout(300);
+  await d.locator(`[data-result="${ref}"]`).first().click(); await page.waitForTimeout(300);
 } else if (process.env.QUOTE_SEARCH) {
   await page.getByTestId('find-quote').click();
   const d = page.getByRole('dialog', { name: 'Find a quote' }); await d.getByTestId('find-input').fill(process.env.QUOTE_SEARCH); await page.waitForTimeout(300);
@@ -50,6 +51,7 @@ if (showLabel === 'Scripture') {
   await page.locator('textarea').first().fill(process.env.ANSWER || 'Do the next small thing. Nobody quits from one hard hour, they quit from a hundred skipped ones.');
 }
 await page.getByRole('button', { name: 'Output', exact: true }).click();
+if (process.env.ASPECT) await page.getByRole('button', { name: process.env.ASPECT, exact: true }).click();
 await page.getByText(/Show the on-screen graphic/).click();
 await page.getByRole('button', { name: 'Export', exact: true }).waitFor(); await page.waitForTimeout(1500);
 await page.getByRole('button', { name: 'Export', exact: true }).click();
