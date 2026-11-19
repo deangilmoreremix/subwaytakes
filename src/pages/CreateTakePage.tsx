@@ -36,13 +36,17 @@ import { applyTemplate, type Template } from '../lib/templates';
 import type { Clip } from '../lib/timeline/types';
 import { addClip, assembleBestOf, getTransitionContext, newId, projectDuration, setTransition, updateClip } from '../lib/timeline/ops';
 import { getMediaInfo } from '../lib/timeline/media';
-import { recomposeBible } from '../lib/bible/spec';
+import { applyTakeEdit, editableText, isComposed, recomposeBible } from '../lib/bible/spec';
+import { restoreSpec, snapshotSpec } from '../lib/interview/snapshot';
+import { hasFeature, showLocked } from '../lib/billing/features';
 import { GenerateCaptionsModal } from '../components/studio/captions/GenerateCaptionsModal';
 import { CaptionStudioModal } from '../components/studio/captions/CaptionStudioModal';
 import { DEFAULT_CAPTION_STYLE } from '../lib/captions/presets';
 import type { CaptionStyle } from '../lib/captions/model';
 import { DEFAULT_FONT } from '../lib/captions/fonts';
 import type { Sfx } from '../lib/timeline/sfx';
+
+const DEFAULT_SPEC_JSON = JSON.stringify(snapshotSpec(DEFAULT_TAKE));
 
 export function CreateTakePage() {
   const nav = useNavigate();
@@ -78,7 +82,7 @@ export function CreateTakePage() {
   const { flags: onboarding, update: updateOnboarding } = useOnboardingFlags();
   // keep the project's brand in step with the saved kit (and with whether the licence is owned)
   const { kit: brandKit, loaded: brandLoaded } = useBrandKit();
-  const { has: hasPack, loaded: billingLoaded } = useBilling();
+  const { has: hasPack, loaded: billingLoaded, owned: ownedPacks } = useBilling();
   const entitledBrand = hasPack('brand');
   useEffect(() => {
     if (!brandLoaded || !billingLoaded) return;
@@ -110,6 +114,25 @@ export function CreateTakePage() {
     if (imageRoute && cur?.mode !== 'image') setSlug('veo3.1-fast-image-to-video');
     if (!imageRoute && cur?.mode === 'image') setSlug('veo3.1-fast-text-to-video');
   }, [imageRoute, slug]);
+  // The episode being made is saved with the project (`style.take`) and read back when the project is loaded, opened from the library or undone. While the user edits, the spec
+  // is written into the project; when the project changes underneath us, the spec is restored from it (validated, never unlocking a pack).
+  const specJson = JSON.stringify(snapshotSpec(spec));
+  const projTakeJson = project.style?.take ? JSON.stringify(project.style.take) : '';
+  const syncedTake = useRef('');
+  useEffect(() => {
+    if (!billingLoaded && projTakeJson && projTakeJson !== syncedTake.current && projTakeJson !== specJson) return;   // wait: what the account has unlocked decides what may be restored
+    if (specJson === projTakeJson) { syncedTake.current = specJson; return; }
+    if (projTakeJson && projTakeJson !== syncedTake.current) {
+      syncedTake.current = projTakeJson;
+      const restored = restoreSpec(project.style?.take, { showLocked: id => showLocked(id, ownedPacks), cutsLocked: !hasFeature('cuts', ownedPacks) });
+      if (restored) { setSpec(restored); return; }
+    }
+    if (!projTakeJson && specJson === DEFAULT_SPEC_JSON) { syncedTake.current = specJson; return; }   // a fresh project with nothing chosen yet stays clean
+    syncedTake.current = specJson;
+    const cur = getProject();
+    setProject({ ...cur, style: { ...cur.style, take: snapshotSpec(spec) } }, false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [specJson, projTakeJson, billingLoaded]);
   // keep the on-screen graphic in step with the show and what is said
   useEffect(() => {
     const t = resolveTitle(project.style?.title);
@@ -140,7 +163,7 @@ export function CreateTakePage() {
       setSlug(chooseNativeModel('fast', 'text', v as TakeSpec['aspect']).slug);
     }
     if (k === 'quote' && !v && s.show === 'motivation') next = { ...next, take: s.reflection?.trim() || SAMPLE_ANSWERS.motivation[0], reflection: undefined };   // clearing the quote goes back to the guest's own advice
-    if (['show', 'verse', 'quote', 'reflection', 'durationSeconds', 'question'].includes(k)) next = recomposeBible(next);   // Scripture: keep the spoken line in step
+    if (['show', 'verse', 'quote', 'reflection', 'durationSeconds', 'question', 'format'].includes(k)) next = recomposeBible(next);   // Scripture: keep the spoken line in step
     return next;
   });
 
@@ -354,7 +377,7 @@ export function CreateTakePage() {
             <PreviewCanvas aspect={spec.aspect} job={previewJob} running={running} take={spec.take} question={spokenLines(spec).host} canGenerate={canGenerate} project={project} playerRef={playerRef} />
           </div>
           <div className="flex items-center gap-2 rounded-2xl border border-line bg-ink-850 p-2 shadow-panel">
-            <input value={spec.take} onChange={e => set('take', e.target.value)} placeholder="Type a hot take…" maxLength={220}
+            <input value={editableText(spec)} onChange={e => setSpec(s => applyTakeEdit(s, e.target.value))} placeholder={isComposed(spec) ? 'What it means to you…' : 'Type a hot take…'} maxLength={220} aria-label={isComposed(spec) ? 'Your own words' : 'Your take'}
               className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[14px] text-white placeholder:text-zinc-600 focus:outline-none" />
             <span className="hidden items-center gap-1 text-[11px] text-zinc-600 xl:flex"><Kbd>Ctrl</Kbd><Kbd>↵</Kbd></span>
             {canGenerate ? (

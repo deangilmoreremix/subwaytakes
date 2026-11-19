@@ -1,6 +1,7 @@
 import type { BrandSnapshot } from '../brand/model';
 import type { CaptionStyle, CaptionWord } from '../captions/model';
 import type { TitleData } from '../shows';
+import type { TakeSnapshot } from '../interview/snapshot';
 export const FPS = 30;
 
 export type TrackKind = 'video' | 'caption' | 'audio' | 'effect';
@@ -42,7 +43,7 @@ export interface Track { id: string; kind: TrackKind; name: string }
 export interface Project {
   fps: number;
   /** project-wide look */
-  style?: { /** how captions look and move (preset, motion engine, font, colours, position) */ captions?: CaptionStyle; /** label exports as AI-generated (default on) */ aiLabel?: boolean; /** the customer's brand (logo, colours, handle, sponsor); copied from their brand kit */ brand?: BrandSnapshot; captionFont?: 'inter' | 'anton' | 'bangers'; /** on-screen title; also accepts the older { take, guest, badge } shape (see resolveTitle) */ title?: { data?: TitleData; take?: string; guest?: string; badge?: boolean; showBadge?: boolean; series?: { name: string; episode: number } } };
+  style?: { /** the episode being made (show, take, verse, quote, place...), saved so reopening a project brings it back; validated on read (see interview/snapshot) */ take?: TakeSnapshot; /** how captions look and move (preset, motion engine, font, colours, position) */ captions?: CaptionStyle; /** label exports as AI-generated (default on) */ aiLabel?: boolean; /** the customer's brand (logo, colours, handle, sponsor); copied from their brand kit */ brand?: BrandSnapshot; captionFont?: 'inter' | 'anton' | 'bangers'; /** on-screen title; also accepts the older { take, guest, badge } shape (see resolveTitle) */ title?: { data?: TitleData; take?: string; guest?: string; badge?: boolean; showBadge?: boolean; series?: { name: string; episode: number } } };
   tracks: Track[];
   clips: Clip[];
 }

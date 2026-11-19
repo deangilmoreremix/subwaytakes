@@ -1,4 +1,4 @@
-import { guestWordBudget, type TakeSpec } from '../interview';
+import { guestWordBudget, isComposedShow, type TakeSpec } from '../interview';
 import { composeSpokenLine, type Composed } from './index';
 import { composeQuoteLine, type ComposedQuote } from '../quotes';
 
@@ -24,4 +24,15 @@ export function bibleComposition(spec: TakeSpec): Composed {
 }
 export function quoteComposition(spec: TakeSpec): ComposedQuote {
   return composeQuoteLine(spec.quote, spec.reflection ?? '', guestWordBudget(spec));
+}
+
+/** The spoken line is COMPOSED from a verse or quote plus the guest's own words, so typing into the prompt bar or the take box must change the guest's own words, not the composed line. */
+export const isComposed = (spec: TakeSpec): boolean => isComposedShow(spec);
+/** Which field the customer's typing goes to. */
+export const editableField = (spec: TakeSpec): 'reflection' | 'take' => (isComposed(spec) ? 'reflection' : 'take');
+/** What the prompt bar shows for editing: the guest's own words for composed shows, the take otherwise. */
+export const editableText = (spec: TakeSpec): string => (isComposed(spec) ? spec.reflection ?? '' : spec.take);
+/** Apply a typed edit and keep the composed spoken line in step. */
+export function applyTakeEdit<T extends TakeSpec>(spec: T, text: string): T {
+  return recomposeBible({ ...spec, [editableField(spec)]: text.slice(0, 220) });
 }

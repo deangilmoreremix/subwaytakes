@@ -84,18 +84,21 @@ const clip = (text: string, max: number) => {
  * Duel: the answer time is shared by guest A (`take`) and guest B (`take2`).
  */
 /** Words the guest (or each guest in a duel) can say in the clip, after the host's question. */
-export function guestWordBudget(t: Pick<TakeSpec, 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question'>>): number {
+/** Scripture, and Motivation with a quote: the spoken line is COMPOSED from a verse or quote plus the guest's own words. */
+export const isComposedShow = (t: Partial<Pick<TakeSpec, 'show' | 'quote'>>): boolean => t.show === 'bible' || (t.show === 'motivation' && !!t.quote);
+/** In Cuts the voice reads the whole line and the clip is as long as the audio (priced by the text), so a composed verse or quote is not squeezed into the clip-length slider. About 28 seconds of speech; the line also stays under the lip-sync script limit (600 characters). */
+export const CUTS_COMPOSED_WORDS = 75;
+export function guestWordBudget(t: Pick<TakeSpec, 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'format' | 'quote'>>): number {
+  if (t.format === 'cuts' && isComposedShow(t)) return CUTS_COMPOSED_WORDS;
   const host = questionFor(showOf(t.show), t.question);
   const hostSeconds = Math.max(OPENER_SECONDS, host.split(/\s+/).length / WORDS_PER_SECOND);
   return Math.max(6, Math.floor(Math.max(2, t.durationSeconds - hostSeconds) * WORDS_PER_SECOND));
 }
 
-export function spokenLines(t: Pick<TakeSpec, 'take' | 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'take2'>>): { host: string; guest: string; guest2?: string; trimmed: boolean } {
+export function spokenLines(t: Pick<TakeSpec, 'take' | 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'take2' | 'format' | 'quote'>>): { host: string; guest: string; guest2?: string; trimmed: boolean } {
   const show = showOf(t.show);
   const host = questionFor(show, t.question);
-  const hostWords = host.split(/\s+/).length;
-  const hostSeconds = Math.max(OPENER_SECONDS, hostWords / WORDS_PER_SECOND);
-  const budget = Math.max(6, Math.floor(Math.max(2, t.durationSeconds - hostSeconds) * WORDS_PER_SECOND));
+  const budget = guestWordBudget(t);
   if (show.guests === 2) {
     const each = Math.max(4, Math.floor(budget / 2));
     const a = clip(t.take, each), b = clip(t.take2 ?? '', each);
