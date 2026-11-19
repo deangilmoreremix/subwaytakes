@@ -33,6 +33,14 @@ export function useProject() {
     return () => clearTimeout(t);
   }, [project]);
 
+  // the draft is saved 300 ms after the last change; leaving or reloading the page inside that window must not lose it
+  useEffect(() => {
+    const flush = () => { try { localStorage.setItem(KEY, JSON.stringify(latest.current)); } catch { /* storage full or blocked */ } };
+    const onHide = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush); document.addEventListener('visibilitychange', onHide);
+    return () => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', onHide); };
+  }, []);
+
   const checkpoint = useCallback(() => { past.current.push(latest.current); if (past.current.length > 100) past.current.shift(); future.current = []; }, []);
   const set = useCallback((next: Project, record = true) => { if (record) checkpoint(); latest.current = next; setProject(next); }, [checkpoint]);
   const undo = useCallback(() => { const p = past.current.pop(); if (p) { future.current.push(latest.current); setProject(p); } }, []);

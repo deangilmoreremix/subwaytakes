@@ -135,11 +135,12 @@ export function CreateTakePage() {
   }, [specJson, projTakeJson, billingLoaded]);
   // keep the on-screen graphic in step with the show and what is said
   useEffect(() => {
-    const t = resolveTitle(project.style?.title);
+    const cur = getProject();   // the newest project, not the copy this render captured (another effect may have just written to it)
+    const t = resolveTitle(cur.style?.title);
     if (!t) return;
     const data = titleFor(spec);
-    if (JSON.stringify(data) !== JSON.stringify(t.data)) setProject({ ...project, style: { ...project.style, title: { ...t, data } } }, false);
-  }, [spec, project, setProject]);
+    if (JSON.stringify(data) !== JSON.stringify(t.data)) setProject({ ...cur, style: { ...cur.style, title: { ...t, data } } }, false);
+  }, [spec, project, setProject, getProject]);
 
   // bind to the Remotion Player (mounted only once the timeline has clips)
   useEffect(() => {
@@ -402,14 +403,14 @@ export function CreateTakePage() {
         <div className="min-w-0 lg:min-h-0">
           <Inspector aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
-            title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => setProject({ ...project, style: { ...project.style, title: t } })}
+            title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, title: t } }); }}
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}
             characters={characters} hostHint={route.hint} imageRoute={imageRoute}
             cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} />}
             lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} canGenerate={canGenerate} />}
             clip={clip} onClipChange={patch => clip && setProject(updateClip(project, clip.id, patch), false)} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
-            captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => setProject({ ...project, style: { ...project.style, captionFont: f } })}
+            captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, captionFont: f } }); }}
             captionCount={clip ? project.clips.filter(x => x.sourceClipId === clip.id).length : 0} hasCaptions={project.clips.some(x => x.kind === 'caption')} onGenerateCaptions={() => setCapModal('generate')} onOpenStudio={() => setCapModal('studio')} canGenerate={canGenerate} />
         </div>
       </div>
