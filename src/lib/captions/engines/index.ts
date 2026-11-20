@@ -1,7 +1,7 @@
 import { cloudEngine } from './cloud';
 import { transformersEngine } from './transformers';
 import { whisperCppEngine } from './whisperCpp';
-import { TranscribeError, type EngineId, type Transcriber, type TranscribeRequest, type TranscribeResult } from './types';
+import { TranscribeError, type Availability, type EngineId, type Transcriber, type TranscribeRequest, type TranscribeResult } from './types';
 
 export * from './types';
 export { dictationSupported, startDictation } from './webSpeech';
@@ -32,4 +32,24 @@ export async function transcribe(req: TranscribeRequest, opts: RunOptions): Prom
     }
   }
   throw last instanceof Error ? last : new TranscribeError('No transcription engine could run here.', opts.engine, 'unavailable');
+}
+
+export interface SelfTestRow { id: string; label: string; ok: boolean; detail: string }
+
+/** Quick check of what this browser can do for on-device captions. Never downloads a model. Injected pieces keep it testable. */
+export async function selfTest(env: { engines?: Record<EngineId, Transcriber>; gpu?: boolean; isolated?: boolean; speech?: boolean } = {}): Promise<SelfTestRow[]> {
+  const engines = env.engines ?? ENGINES;
+  const nav = typeof navigator !== 'undefined' ? (navigator as unknown as { gpu?: unknown }) : {};
+  const gpu = env.gpu ?? !!nav.gpu;
+  const isolated = env.isolated ?? (typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated);
+  const rows: SelfTestRow[] = [
+    { id: 'gpu', label: 'WebGPU', ok: gpu, detail: gpu ? 'Available: the on-device model can use the graphics chip.' : 'Not available: transcription uses the CPU, which is slower but works.' },
+    { id: 'isolation', label: 'Cross-origin isolation', ok: isolated, detail: isolated ? 'On: whisper.cpp can run.' : 'Off: only whisper.cpp needs this; the main engine does not.' },
+  ];
+  for (const id of FREE_ORDER) {
+    let a: Availability;
+    try { a = await engines[id].isAvailable(); } catch (e) { a = { ok: false, reason: e instanceof Error ? e.message : 'Check failed.' }; }
+    rows.push({ id, label: engines[id].label, ok: a.ok, detail: a.ok ? 'Ready to run.' : (a.reason ?? 'Not available in this browser.') });
+  }
+  return rows;
 }

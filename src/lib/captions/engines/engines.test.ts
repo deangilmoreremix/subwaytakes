@@ -97,3 +97,18 @@ describe('Web Speech dictation wrapper', () => {
     inst!.onerror({ error: 'not-allowed' }); expect(errs[0]).toMatch(/permission/);
   });
 });
+
+import { selfTest } from './index';
+describe('selfTest', () => {
+  const fake = (ok: boolean, reason?: string): never => ({ id: 'x', label: 'L', blurb: '', paid: false, isAvailable: async () => ({ ok, reason }), transcribe: async () => { throw new Error('no'); } }) as never;
+  it('reports each free engine, gpu and isolation without downloading', async () => {
+    const rows = await selfTest({ gpu: false, isolated: false, engines: { transformers: fake(true), whisper_cpp: fake(false, 'nope'), cloud: fake(true) } });
+    expect(rows.map(r => [r.id, r.ok])).toEqual([['gpu', false], ['isolation', false], ['transformers', true], ['whisper_cpp', false]]);
+    expect(rows[3].detail).toBe('nope');
+  });
+  it('a throwing check is a failed row', async () => {
+    const bad = { ...(fake(true) as object), isAvailable: async () => { throw new Error('boom'); } } as never;
+    const rows = await selfTest({ gpu: true, isolated: true, engines: { transformers: bad, whisper_cpp: fake(true), cloud: fake(true) } });
+    expect(rows[2]).toMatchObject({ ok: false, detail: 'boom' });
+  });
+});

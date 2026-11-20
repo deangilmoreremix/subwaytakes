@@ -4,7 +4,7 @@ import { X, Check, Loader2, AlertCircle, Captions, Cpu, Cloud } from 'lucide-rea
 import { PhonePreview } from './PhonePreview';
 import { PresetGrid } from './PresetGrid';
 import { Label, inputCls } from '../ui';
-import { ENGINES, MODEL_LABEL, transcribe, TranscribeError, type EngineId, type ModelSize, type Progress, type TranscribeResult } from '../../../lib/captions/engines';
+import { ENGINES, MODEL_LABEL, selfTest, transcribe, type SelfTestRow, TranscribeError, type EngineId, type ModelSize, type Progress, type TranscribeResult } from '../../../lib/captions/engines';
 import { getCachedTranscript, putCachedTranscript, transcriptKey } from '../../../lib/captions/cache';
 import { LANGUAGES } from '../../../lib/captions/scripts';
 import { clampPosition, type CaptionStyle } from '../../../lib/captions/model';
@@ -33,6 +33,8 @@ export function GenerateCaptionsModal({ project, aspect, videoClips, initialClip
   const [clipId, setClipId] = useState(initialClipId ?? videoClips[0]?.id ?? '');
   const [engine, setEngine] = useState<EngineId>('transformers');
   const [model, setModel] = useState<ModelSize>('base');
+  const [test, setTest] = useState<SelfTestRow[] | null>(null);
+  const [testing, setTesting] = useState(false);
   const [language, setLanguage] = useState('auto');
   const [style, setStyle] = useState<CaptionStyle>(initialStyle);
   const [step, setStep] = useState<number | null>(null);
@@ -123,6 +125,8 @@ export function GenerateCaptionsModal({ project, aspect, videoClips, initialClip
                 })}
               </div>
               <p className="mt-1.5 text-[11px] text-zinc-600">On-device engines never upload your audio. The first run downloads the model, then it is saved in your browser. If the first one cannot run, the other on-device engine is tried (never the paid cloud one).</p>
+              <button type="button" disabled={busy || testing} onClick={async () => { setTesting(true); try { setTest(await selfTest()); } finally { setTesting(false); } }} className="mt-1.5 text-[11px] text-accent hover:underline disabled:opacity-50" data-testid="self-test">{testing ? 'Checking…' : 'Run a quick self-test'}</button>
+              {test && <ul className="mt-1 space-y-0.5 text-[11px]" data-testid="self-test-result">{test.map(r => <li key={r.id} className={r.ok ? 'text-emerald-400' : 'text-zinc-500'}>{r.ok ? '✓' : '•'} {r.label}: {r.detail}</li>)}</ul>}
             </div>
 
             <div><Label>Style</Label><PresetGrid style={style} onPick={id => setStyle(styleFromPreset(id, { positionY: style.positionY, language }))} compact /></div>
