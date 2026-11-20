@@ -195,7 +195,33 @@ const HINTS = [
   [148, 'discipline', 'Lose no time; be always employed in something useful'],
   [148, 'growth', 'I made a little book in which I allotted a page for each of the virtues'],
   [148, 'discipline', 'Order. Let all your things have their places; let each part of your business have its time'],
+  // more depth for thin authors and for Perseverance; every hint is still matched against the book and dropped if the book does not say it
+  [[16287, 26659, 5116, 621], 'action', 'Seize the moment of excited curiosity on any subject to solve your doubts'],
+  [[16287, 26659, 5116, 621], 'mindset', 'Faith in a fact can help create the fact'],
+  [[16287, 26659, 5116, 621], 'discipline', 'The more of the details of our daily life we can hand over to the effortless custody of automatism, the more our higher powers of mind will be set free'],
+  [[16287, 26659, 5116, 621], 'perseverance', 'Everyone knows what it is to start a piece of work, either intellectual or muscular, feeling stale'],
+  [[16287, 26659, 5116, 621], 'growth', 'Begin to be now what you will be hereafter'],
+  [4363, 'mindset', 'Convictions are more dangerous enemies of truth than lies'],
+  [4363, 'growth', 'There is a conscience for the intellect'],
+  [4363, 'courage', 'He who has a thing to defend must be prepared'],
+  [1091, 'purpose', 'The man who cannot wonder, who does not habitually wonder'],
+  [1091, 'action', 'Man is a tool-using animal'],
+  [1091, 'perseverance', 'Genius, which means transcendent capacity of taking trouble'],
+  [1091, 'courage', 'the great man is he who lives in the inward sphere of things'],
+  [935, 'perseverance', 'The best of men have been the most patient and persevering'],
+  [935, 'perseverance', 'Energy of will'],
+  [935, 'perseverance', 'Nothing that is of real worth can be achieved without courageous working'],
+  [935, 'perseverance', 'It is not eminent talent that is required to ensure success in any pursuit, so much as purpose'],
+  [935, 'perseverance', 'The great secret of success in life is to be ready when your opportunity comes'],
+  [4507, 'perseverance', 'He who cherishes a beautiful vision, a lofty ideal in his heart, will one day realise it'],
+  [4507, 'perseverance', 'Until thought is linked with purpose there is no intelligent accomplishment'],
+  [4507, 'mindset', 'They who have conquered doubt and fear have conquered failure'],
+  [2680, 'perseverance', 'Do not be disgraced at being helped'],
+  [[2680, 8438, 3330], 'perseverance', 'It does not matter how slowly you go so long as you do not stop'],
 ];
+
+// A quote's id comes from its own words, so adding or removing other quotes never changes it (saved episodes point at quotes by id).
+const stableHash = t => { let h = 0x811c9dc5; for (const c of t) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); };
 
 // ---- text handling --------------------------------------------------------------------------------------------------
 const cleanBook = raw => {
@@ -337,7 +363,7 @@ const add = (id, theme, hint, best, source) => {
   }
   if (quotes.some(q => q.text === f.text || q.text.includes(f.text) || f.text.includes(q.text))) return;   // never both a quote and a longer version of it
   theme = Object.entries(THEME_OVERRIDE).find(([k]) => f.text.startsWith(k))?.[1] ?? theme;
-  quotes.push({ id: `${id}-${quotes.length + 1}`, text: f.text, author: WORKS[id].author, work: WORKS[id].work, note: WORKS[id].note, year: WORKS[id].year, gutenberg: Number(id), theme, score: Number(best.sc.toFixed(2)), source });
+  quotes.push({ id: `${id}-${stableHash(f.text)}`, text: f.text, author: WORKS[id].author, work: WORKS[id].work, note: WORKS[id].note, year: WORKS[id].year, gutenberg: Number(id), theme, score: Number(best.sc.toFixed(2)), source });
   perAuthor.set(WORKS[id].author, (perAuthor.get(WORKS[id].author) ?? 0) + 1);
 };
 // 1. hand-written hints (matched with the looser threshold)
