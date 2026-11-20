@@ -46,6 +46,8 @@ To deploy this mode you need: the Supabase migrations the app uses (clip_jobs an
 
 **Shared Supabase project.** The backend lives in its own schema `subwaytakes` (migration `20261125000000_subwaytakes_schema.sql`, tested by `scripts/test-subwaytakes-sql.sh`), the bucket `subwaytakes-media` and the edge function `subwaytakes-byok`. Applied to the shared project on 2026-11-20: 11 tables (all with row-level security and an `[app: subwaytakes]` comment), 4 functions, the bucket with 4 policies, and `subwaytakes` appended to the exposed schemas. Nothing outside that was changed. To deploy the function: `node scripts/bundle-byok.mjs /tmp/index.ts`, then deploy that single file as `index.ts` with JWT verification on. To remove everything: `DROP SCHEMA subwaytakes CASCADE`, delete the bucket and the function, and take `subwaytakes` out of the exposed schemas.
 
+**Real-key check.** `node scripts/byok-smoke.mjs` (dry run) and `--run` with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `ST_EMAIL`, `ST_PASSWORD`, `MUAPI_KEY` set: reads your wallet balance, asks for one price, and checks a wrong key, a missing key, a path outside the allowlist and the content screen. Read-only; it cannot generate or spend.
+
 Verified: the proxy logic and the key store by unit tests, and the dialog and flows by a stubbed browser run (`scripts/byok-e2e.mjs`). Not verified: the deployed `muapi-byok` against a real key, muapi's exact balance response (the dialog shows the number it returns as "muapi credits"), and whether muapi calls are accepted from your production domain.
 
 ## Deploying the backend (once)

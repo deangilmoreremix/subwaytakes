@@ -9,7 +9,8 @@ import { SPEED_RANGE, TTS_SLUG, buildTtsInput, clampSpeed, type VoiceProvider } 
 import { runModel } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
 import { BlockAction } from '../components/BlockAction';
-import { BLOCK_TEXT, usdToCredits } from '../lib/credits';
+import { BLOCK_TEXT, formatCredits, usdToCredits } from '../lib/credits';
+import { IS_BYOK } from '../lib/mode';
 import { UnlockPrompt } from '../components/UnlockPrompt';
 import { FaceConsent } from '../components/FaceConsent';
 import { useFaceConsent } from '../lib/consent';
@@ -50,7 +51,7 @@ export function CastPage() {
           <button onClick={() => add('guest')} className="flex h-9 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot px-3 text-[13px] font-semibold text-black"><Plus className="h-4 w-4" />Guest</button>
         </div>
       </div>
-      {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} <BlockAction block={block} /> Generating portraits and previewing voices uses credits.</div>}
+      {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} <BlockAction block={block} /> Generating portraits and previewing voices {IS_BYOK ? 'is billed by muapi to your account' : 'uses credits'}.</div>}
       {error && <p className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">{error}</p>}
 
       {list === null && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map(i => <div key={i} className="skeleton h-32 rounded-2xl" />)}</div>}
@@ -137,7 +138,7 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
               <Upload className="h-3.5 w-3.5" />Upload
               <input type="file" accept="image/*" className="sr-only" aria-label="Upload portrait" disabled={!consent.accepted} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run('upload', async () => { await persist({ portrait_url: await uploadPortrait(f) }); }); }} />
             </label>
-            <button disabled={!canGenerate || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~{usdToCredits(0.03)} credits</button>
+            <button disabled={!canGenerate || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~{formatCredits(usdToCredits(0.03))}</button>
           </div>
         </div>
 

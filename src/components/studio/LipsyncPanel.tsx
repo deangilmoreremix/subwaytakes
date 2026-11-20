@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, Mic, UserRound, Clock, Trash2 } from 'lucide-react';
 import { recordingSupported } from '../../lib/audio/record';
+import { formatCredits } from '../../lib/credits';
 import { Label } from './ui';
 import { clsx } from '../../lib/format';
 import { LIPSYNC_MODELS, MAX_SCRIPT_CHARS, estimateLipsync, validateLipsync, type LipsyncModel } from '../../lib/muapi/lipsync';
@@ -85,7 +86,7 @@ export function LipsyncPanel({ characters, speakerId, onSpeaker, model, onModel,
 
       <div className="space-y-1.5 rounded-xl border border-line bg-ink-950 p-3 text-[12px]">
         <div className="flex items-center justify-between"><span className="text-zinc-500">Estimated cost</span>
-          <span className="tnum font-medium text-zinc-100">{!canGenerate ? '—' : cost.loading ? '…' : cost.value !== null ? `${cost.value.toLocaleString("en-US")} credits` : '—'}</span></div>
+          <span className="tnum font-medium text-zinc-100">{!canGenerate ? '—' : cost.loading ? '…' : cost.value !== null ? formatCredits(cost.value) : '—'}</span></div>
         <p className="flex items-center gap-1 text-[10px] text-zinc-600"><Clock className="h-3 w-3" />Rendering typically takes a few minutes (about 4 in testing).</p>
       </div>
       {problem && speaker && <p className="flex gap-1.5 text-[11px] text-amber-300/90"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{problem}</p>}

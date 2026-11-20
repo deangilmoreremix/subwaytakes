@@ -14,6 +14,7 @@ import { newId } from '../../../lib/timeline/ops';
 import type { Clip, Project } from '../../../lib/timeline/types';
 import type { Aspect } from '../../../lib/muapi/registry';
 import { clsx } from '../../../lib/format';
+import { IS_BYOK } from '../../../lib/mode';
 
 const STEPS = ['Load model', 'Transcribe', 'Build captions', 'Done'] as const;
 const stepOf = (s: Progress['stage'] | 'done'): number => (s === 'checking' || s === 'loading_model' ? 0 : s === 'decoding_audio' || s === 'transcribing' ? 1 : s === 'building' ? 2 : 3);
@@ -150,7 +151,7 @@ export function GenerateCaptionsModal({ project, aspect, videoClips, initialClip
           {note && <p className="text-[11px] text-zinc-400" role="status">{note}</p>}
           {error && <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-[12px] text-red-300"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[11px] text-zinc-600">{engine === 'cloud' ? 'Cloud captions use credits and have line-level timing (words are spread across each line).' : 'Free. Word-level timing.'}</p>
+            <p className="text-[11px] text-zinc-600">{engine === 'cloud' ? `Cloud captions ${IS_BYOK ? 'are billed by muapi to your account' : 'use credits'} and have line-level timing (words are spread across each line).` : 'Free. Word-level timing.'}</p>
             <div className="flex gap-2">
               {busy ? <button onClick={cancel} className="h-9 rounded-xl border border-line px-4 text-[13px] text-zinc-300 hover:text-white">Cancel</button>
                 : <button onClick={start} disabled={!clip?.src} data-testid="start-captions" className="h-9 rounded-xl bg-gradient-to-br from-accent to-accent-hot px-4 text-[13px] font-semibold text-black disabled:opacity-40">{error ? 'Try again' : 'Generate captions'}</button>}

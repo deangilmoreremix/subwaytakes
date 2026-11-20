@@ -1,9 +1,10 @@
+import { IS_BYOK } from '../../mode';
 import { spreadLines } from './map';
 import { TranscribeError, type Availability, type Transcriber, type TranscribeRequest, type TranscribeResult } from './types';
 
 /** Cloud Whisper through the gateway. Costs credits; only used when the person picks it. Line times only, so words are spread evenly across each line. */
 export const cloudEngine: Transcriber = {
-  id: 'cloud', label: 'Cloud (uses credits)', blurb: 'For slow devices. Sends the clip to be transcribed and charges credits.', paid: true,
+  id: 'cloud', label: IS_BYOK ? 'Cloud (billed by muapi)' : 'Cloud (uses credits)', blurb: IS_BYOK ? 'For slow devices. Sends the clip to be transcribed by muapi, billed to your account.' : 'For slow devices. Sends the clip to be transcribed and charges credits.', paid: true,
   async isAvailable(): Promise<Availability> { return { ok: true }; },
   async transcribe(req: TranscribeRequest): Promise<TranscribeResult> {
     req.onProgress?.({ stage: 'transcribing' });
