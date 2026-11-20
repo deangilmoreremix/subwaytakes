@@ -1,4 +1,4 @@
-import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { takeCardLayout, titleLines } from '../../lib/interview';
 import { verseFontSize } from '../../lib/shows';
 import type { StoredTitle } from '../../lib/shows/stored';
@@ -12,6 +12,9 @@ const SHADOW = '0 4px 0 rgba(0,0,0,0.85), 0 0 18px rgba(0,0,0,0.6)';
  */
 export function TitleOverlay({ title, fontFamily, fontWeight }: { title: StoredTitle; fontFamily: string; fontWeight: number }) {
   const frame = useCurrentFrame();
+  const vc = useVideoConfig();
+  // In a wide frame the verse or quote card sits in the left part so faces in the middle and right stay visible.
+  const wide = vc.width > vc.height * 1.2;
   const d = title.data;
   const pop = interpolate(frame, [0, 10], [0.6, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const fade = interpolate(frame, [0, 8], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
@@ -29,8 +32,8 @@ export function TitleOverlay({ title, fontFamily, fontWeight }: { title: StoredT
       )}
 
       {(d.variant === 'verse' || d.variant === 'quote') && d.headline && (
-        <div style={{ position: 'absolute', top: '7%', left: '6%', right: '6%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 22 }}>
-          <div style={{ ...base, background: 'rgba(14,10,4,0.78)', border: `4px solid ${d.badgeBg}`, borderRadius: 28, padding: '34px 38px', color: '#fff7e0', fontSize: verseFontSize(d.headline), lineHeight: 1.18, textShadow: '0 2px 0 rgba(0,0,0,0.6)' }}>
+        <div style={{ position: 'absolute', top: wide ? '8%' : '7%', left: wide ? '4%' : '6%', right: wide ? '46%' : '6%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 22 }}>
+          <div style={{ ...base, background: 'rgba(14,10,4,0.78)', border: `4px solid ${d.badgeBg}`, borderRadius: 28, padding: wide ? '20px 26px' : '34px 38px', color: '#fff7e0', fontSize: Math.round(verseFontSize(d.headline) * (wide ? 0.62 : 1)), lineHeight: 1.18, textShadow: '0 2px 0 rgba(0,0,0,0.6)' }}>
             {'\u201C'}{d.headline}{'\u201D'}
           </div>
           {d.value && <div style={{ ...base, fontSize: 40, letterSpacing: 1, color: d.badgeFg, background: d.badgeBg, padding: '8px 26px', borderRadius: 999 }}>{d.value}</div>}
