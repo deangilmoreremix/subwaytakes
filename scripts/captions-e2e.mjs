@@ -54,6 +54,7 @@ await page.evaluate(words => {
 await page.getByRole('tab', { name: /Take/ }).click().catch(() => {});
 await page.getByTestId('dictate').click();
 await page.evaluate(() => window.__rec.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: 'tacos are overrated' }], { isFinal: true })] }));
+await page.waitForFunction(() => (document.querySelector('textarea')?.value ?? '').includes('tacos are overrated'), null, { timeout: 5000 }).catch(() => {});
 check('dictation fills the take', (await page.locator('textarea').first().inputValue()).includes('tacos are overrated'));
 await page.getByTestId('dictate').click();
 // ---- Modal 1: Generate captions
