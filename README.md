@@ -34,7 +34,11 @@ cp .env.example .env   # then fill in the two Supabase values
 npm run dev
 ```
 
-### Record your own voice (free)
+### Project files (free)
+
+Output tab, "Project file": **Save to file** writes the episode as `<name>.subwaytakes.json` (the native save dialog in Chrome and Edge, a download elsewhere) and **Open file** loads one back, with a confirmation before replacing what you have and undo afterwards. The file holds the timeline and the links to your clips, never the clips themselves and never your muapi key; opening refuses anything that is not a SubwayTakes project, is from a newer version, is over 5 MB, or points at non-https media. Verified by unit tests and `scripts/projectfile-e2e.mjs` (real file download and upload; the native save dialog itself is not testable headless). Not done: mirroring the draft into IndexedDB (the draft still lives in localStorage).
+
+## Record your own voice (free)
 
 In Voice + lipsync, "Use your own voice" opens a teleprompter, records the microphone in the browser (MediaRecorder, mono WAV made with the Web Audio API), and uploads the WAV to your own media folder. The paid text-to-speech step is skipped and the character needs no voice. A recording belongs to the exact line it was made for: edit the take and it no longer applies. Verified: the pure teleprompter and limits logic and the pipeline (unit tests), and the whole flow with Chromium's fake microphone (`scripts/record-e2e.mjs`). It works in Voice + lipsync and in Cuts (host, guest, or guest B in a duel). Not verified: real microphones and voices, other browsers (Safari records audio/mp4).
 

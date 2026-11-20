@@ -57,8 +57,10 @@ function QuoteNote({ spec }: { spec: TakeSpec }) {
   );
 }
 
-export function Inspector({ aiLabel, onAiLabel, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
+export function Inspector({ aiLabel, onAiLabel, fileSlot, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
   aiLabel: boolean; onAiLabel: (on: boolean) => void;
+  /** extra content at the end of the Output tab (the project file card) */
+  fileSlot?: ReactNode;
   onTemplate: (t: Template) => void; onAddDub: (url: string, label: string, seconds: number) => Promise<void>;
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
@@ -290,6 +292,7 @@ export function Inspector({ aiLabel, onAiLabel, onAddDub, onTemplate, spec, set,
         </>)}
 
         {tab === 'output' && (<>
+          {fileSlot}
           <div><Label>On-screen title</Label>
             <label className="flex items-center gap-2 text-[12px] text-zinc-300"><input type="checkbox" aria-label="Label as AI-generated" checked={aiLabel} onChange={e => onAiLabel(e.target.checked)} />Label the video "AI-generated" <span className="text-[10px] text-zinc-600">(recommended; many platforms require it)</span></label>
             <label className="flex items-center gap-2 text-[12px] text-zinc-300"><input type="checkbox" checked={!!title} onChange={e => onTitle(e.target.checked ? { data: titleFor(spec), showBadge: true } : undefined)} />Show the on-screen graphic ({show.label})</label>

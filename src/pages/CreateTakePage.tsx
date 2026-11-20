@@ -18,6 +18,8 @@ import { CutsPanel } from '../components/studio/CutsPanel';
 import { NATIVE_MODELS, chooseNativeModel, type Pipeline } from '../lib/muapi/registry';
 import { LipsyncPanel } from '../components/studio/LipsyncPanel';
 import { RecordPanel } from '../components/studio/RecordPanel';
+import { ProjectFileCard } from '../components/studio/ProjectFileCard';
+import { getProjectMeta, requestRename, subscribeProjectMeta } from '../lib/projects/store';
 import { LIPSYNC_MODELS, estimateLipsync, runLipsyncJob, validateLipsync, type LipsyncModel } from '../lib/muapi/lipsync';
 import { listCharacters } from '../lib/characters';
 import type { CharacterBible } from '../lib/types';
@@ -63,6 +65,7 @@ export function CreateTakePage() {
   const [capModal, setCapModal] = useState<'generate' | 'studio' | null>(null);
   const { generationBlock: block, profile } = useAuth();
   const keyed = useSyncExternalStore(subscribeKey, hasKey);
+  const projectName = useSyncExternalStore(subscribeProjectMeta, getProjectMeta).name;
   const canGenerate = !block;
   /** Say so up front when the balance cannot cover a plan, so nothing starts that cannot finish. Returns true when it is fine to go on. */
   const affordable = (needed: number): boolean => {
@@ -443,7 +446,7 @@ export function CreateTakePage() {
           )}
         </div>
         <div className="min-w-0 lg:min-h-0">
-          <Inspector aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
+          <Inspector fileSlot={<ProjectFileCard getProject={getProject} name={projectName} onOpen={(proj, n) => { setProject(proj); requestRename(n); }} />} aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, title: t } }); }}
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}
