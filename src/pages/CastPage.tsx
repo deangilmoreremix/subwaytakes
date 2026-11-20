@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Upload, Sparkles, Loader2, Play, Square, AlertCircle, UserRound, Mic, Eraser } from 'lucide-react';
+import { Plus, Trash2, Upload, Sparkles, Loader2, Play, Square, AlertCircle, UserRound, Mic, Eraser, Crop } from 'lucide-react';
 import { Segmented, Label, inputCls } from '../components/studio/ui';
 import { clsx } from '../lib/format';
 import { DEFAULT_HOST, buildPortraitPrompt, createCharacter, deleteCharacter, generateRandomGuest, listCharacters, updateCharacter } from '../lib/characters';
@@ -10,6 +10,7 @@ import { runModel } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
 import { BlockAction } from '../components/BlockAction';
 import { BackgroundRemover } from '../components/studio/BackgroundRemover';
+import { PortraitCrop } from '../components/studio/PortraitCrop';
 import { BLOCK_TEXT, formatCredits, usdToCredits } from '../lib/credits';
 import { IS_BYOK } from '../lib/mode';
 import { UnlockPrompt } from '../components/UnlockPrompt';
@@ -108,6 +109,7 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
     onSaved();
   }
   const [bgOpen, setBgOpen] = useState(false);
+  const [cropOpen, setCropOpen] = useState(false);
   const run = async (kind: typeof busy, fn: () => Promise<void>) => { setErr(''); setBusy(kind); try { await fn(); } catch (e) { setErr(e instanceof Error ? e.message : 'Something went wrong'); } finally { setBusy(''); } };
 
   async function preview() {
@@ -122,6 +124,7 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
 
   return (
     <div className="space-y-5 rounded-2xl border border-line bg-ink-850 p-5 shadow-panel">
+      {cropOpen && c.portrait_url && <PortraitCrop portraitUrl={c.portrait_url} onClose={() => setCropOpen(false)} onUse={async url => { await persist({ portrait_url: url }); setCropOpen(false); }} />}
       {bgOpen && c.portrait_url && <BackgroundRemover portraitUrl={c.portrait_url} onClose={() => setBgOpen(false)} onUse={async url => { await persist({ portrait_url: url }); setBgOpen(false); }} />}
       <div className="flex items-center justify-between gap-3">
         <input value={c.name} onChange={e => set('name', e.target.value)} onBlur={() => persist({ name: c.name })} aria-label="Character name" className="min-w-0 bg-transparent font-display text-xl font-semibold text-white focus:outline-none" />
@@ -143,6 +146,7 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
             </label>
             <button disabled={!canGenerate || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~{formatCredits(usdToCredits(0.03))}</button>
             <button disabled={!c.portrait_url || !consent.accepted || !!busy} onClick={() => setBgOpen(true)} data-testid="remove-bg" title={c.portrait_url ? 'Cut the person out, free, on this device' : 'Add a portrait first'} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white/5 text-[12px] font-medium text-zinc-200 hover:bg-white/10 disabled:opacity-40"><Eraser className="h-3.5 w-3.5" />Remove background</button>
+            <button disabled={!c.portrait_url || !consent.accepted || !!busy} onClick={() => setCropOpen(true)} data-testid="crop-portrait" title={c.portrait_url ? 'Crop to 9:16, 1:1 or 16:9' : 'Add a portrait first'} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white/5 text-[12px] font-medium text-zinc-200 hover:bg-white/10 disabled:opacity-40"><Crop className="h-3.5 w-3.5" />Crop</button>
           </div>
         </div>
 

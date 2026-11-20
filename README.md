@@ -34,7 +34,12 @@ cp .env.example .env   # then fill in the two Supabase values
 npm run dev
 ```
 
-### Remove a portrait's background (free, on device)
+### Crop and reframe (free)
+
+- **Portraits** (Cast, "Crop"): crop to 9:16, 1:1 or 16:9 with zoom; only "Use this crop" uploads a PNG to your own media folder. Verified with a real portrait (`scripts/portrait-crop-e2e.mjs`: the square crop is decoded and measured).
+- **Video clips** (select a clip, Clip tab, "Reframe"): zoom 1 to 3 and choose what stays in the middle over a still from the clip; the clip file is not changed, only a zoom and a focal point are stored (clips without one render exactly as before; project files re-check them). It uses plain 2D CSS so the web exporter renders it. Verified by a REAL web export of a position-coded test video, with pixels measured (`scripts/export-crop-test.mjs`: with zoom 2 at (0.75, 0.5) the middle of the frame shows the picture at 75% across, within compression error) and the editor flow with a real video file (`scripts/reframe-e2e.mjs`). Not verified: dragging by hand on touch screens, very wide sources into tall frames (the focal point is approximate when the shapes differ).
+
+## Remove a portrait's background (free, on device)
 
 Cast, "Remove background": Google's open MediaPipe selfie segmenter cuts the person out of a portrait on this device (the model, about 250 KB, and its WebAssembly runtime download from their official hosts the first time and are cached). Pick transparent, white, soft grey, subway yellow or the original blurred, compare before and after, and only "Use this portrait" uploads a PNG to your own media folder. It is behind the same face-photo consent as uploads. Verified with the real model on a real portrait in headless Chromium (`scripts/cutout-test.mjs`: 1.2 s on CPU, person found, corner transparent or white, centre opaque) and through the real Cast UI (`scripts/cutout-ui-e2e.mjs`, Supabase stubbed). Not verified: other browsers, phones, group photos (it is a selfie model: one person), very busy or low-contrast backgrounds.
 

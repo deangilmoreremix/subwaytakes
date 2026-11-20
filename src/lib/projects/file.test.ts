@@ -45,3 +45,12 @@ describe('project files', () => {
     if (r.ok) expect(r.project.tracks.length).toBeGreaterThan(0);
   });
 });
+
+describe('reframed clips in files', () => {
+  it('a crop is kept when valid, clamped when wild, and dropped when junk', () => {
+    const mk = (crop: unknown) => parseProjectFile(serializeProjectFile(proj({ clips: [{ ...proj().clips[0], crop } as never] }), 'x'));
+    const ok = mk({ zoom: 2, x: 0.6, y: 0.4 }); expect(ok.ok && ok.project.clips[0].crop).toEqual({ zoom: 2, x: 0.6, y: 0.4 });
+    const wild = mk({ zoom: 50, x: 9, y: -9 }); expect(wild.ok && wild.project.clips[0].crop?.zoom).toBe(3);
+    const junk = mk('nope'); expect(junk.ok && junk.project.clips[0].crop).toBeUndefined();
+  });
+});

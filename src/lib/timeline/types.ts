@@ -32,6 +32,8 @@ export interface Clip {
    * (this clip starts `frames` before the previous one ends). Kept consistent by ops.normalizeTransitions.
    */
   transitionIn?: { type: TransitionType; frames: number };
+  /** video: zoom and focal point (see crop.ts); absent means the whole picture, as before */
+  crop?: import('./crop').ClipCrop;
   /** effect clips: which overlay and its parameters */
   effect?: { type: 'light-leak'; seed: number; hueShift: number };
 }

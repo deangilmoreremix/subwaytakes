@@ -1,6 +1,7 @@
 import type React from 'react';
 import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion';
 import { Audio, Video } from '@remotion/media';
+import { cropStyle } from '../../lib/timeline/crop';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { LightLeak } from '@remotion/light-leaks';
 import { buildChains } from '../../lib/timeline/chains';
@@ -16,7 +17,10 @@ import { resolveTitle } from '../../lib/shows/stored';
 export type EpisodeProps = { project: Project };
 
 function ClipVideo({ clip }: { clip: Project['clips'][number] }) {
-  return <Video src={clip.src!} trimBefore={clip.trimStart} volume={clip.volume ?? 1} objectFit="cover" style={{ width: '100%', height: '100%' }} />;
+  const crop = cropStyle(clip.crop);
+  // a reframed clip is zoomed inside a frame that clips it (plain 2D CSS, so the web exporter renders it too)
+  if (!crop.transform) return <Video src={clip.src!} trimBefore={clip.trimStart} volume={clip.volume ?? 1} objectFit="cover" style={{ width: '100%', height: '100%' }} />;
+  return <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}><Video src={clip.src!} trimBefore={clip.trimStart} volume={clip.volume ?? 1} objectFit="cover" style={{ width: '100%', height: '100%', ...crop }} /></div>;
 }
 
 export function EpisodeComposition({ project }: EpisodeProps) {
