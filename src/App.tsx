@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { IS_BYOK } from './lib/mode';
 import { AuthProvider, useAuth } from './lib/auth';
 import { StudioShell as AppShell } from './components/studio/StudioShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -91,9 +92,9 @@ function AppContent() {
                     <Route path="/recast" element={<RecastPage />} />
                     <Route path="/library" element={<GalleryPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/billing/success" element={<BillingSuccessPage />} />
-                    <Route path="/billing/cancel" element={<BillingCancelPage />} />
-                    <Route path="/admin" element={<AdminPage />} />
+                    <Route path="/billing/success" element={IS_BYOK ? <Navigate to="/create" replace /> : <BillingSuccessPage />} />
+                    <Route path="/billing/cancel" element={IS_BYOK ? <Navigate to="/create" replace /> : <BillingCancelPage />} />
+                    <Route path="/admin" element={IS_BYOK ? <Navigate to="/create" replace /> : <AdminPage />} />
                     <Route path="*" element={<Navigate to="/create" replace />} />
                   </Routes>
                 </Suspense>

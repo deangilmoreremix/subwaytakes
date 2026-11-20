@@ -1,3 +1,4 @@
+import { IS_BYOK } from '../mode';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from '../auth';
@@ -11,6 +12,8 @@ export interface StepInput {
   /** The take has been written by the customer. */
   tookTake: boolean;
   balance: number | null;
+  /** bringing your own key: a muapi key is saved in this browser */
+  hasKey?: boolean;
   videoClips: number;
   captionClips: number;
   exported: boolean;
@@ -22,7 +25,9 @@ export function onboardingSteps(i: StepInput): Step[] {
   return [
     { id: 'choose', label: 'Pick a show, a city or a template', hint: 'Templates are one-click starting points. Browsing and the Ideas list are free.', done: i.customised },
     { id: 'take', label: 'Write your take', hint: 'Type it in the box under the preview, or pick one from Ideas.', done: i.tookTake },
-    { id: 'credits', label: 'Add credits to generate', hint: 'Generation uses credits. Studio Starter in Settings gets you going.', done: (i.balance ?? 0) > 0 || i.videoClips > 0 },
+    IS_BYOK
+      ? { id: 'credits', label: 'Connect your muapi key', hint: 'You pay muapi directly for what you generate. The key stays in this browser.', done: !!i.hasKey || i.videoClips > 0 }
+      : { id: 'credits', label: 'Add credits to generate', hint: 'Generation uses credits. Studio Starter in Settings gets you going.', done: (i.balance ?? 0) > 0 || i.videoClips > 0 },
     { id: 'generate', label: 'Generate your first shot', hint: 'Press Generate. You see the price first.', done: i.videoClips > 0 },
     { id: 'captions', label: 'Add captions', hint: 'Select the clip, then Inspector, Clip, Generate captions.', done: i.captionClips > 0 },
     { id: 'export', label: 'Export your episode', hint: 'Top right. MP4 is made in your browser.', done: i.exported },

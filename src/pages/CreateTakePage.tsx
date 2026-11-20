@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Sparkles, UserPlus } from 'lucide-react';
+import { KeyRound, Loader2, Sparkles, UserPlus } from 'lucide-react';
 import type { PlayerRef } from '@remotion/player';
 import { PreviewCanvas, type Running } from '../components/studio/PreviewCanvas';
 import { Inspector } from '../components/studio/Inspector';
@@ -22,6 +22,7 @@ import { listCharacters } from '../lib/characters';
 import type { CharacterBible } from '../lib/types';
 import { muapi } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
+import { hasKey, openKeyModal, subscribeKey } from '../lib/muapi/key';
 import { BLOCK_TEXT, CONFIRM_CREDITS, formatCredits } from '../lib/credits';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
@@ -59,6 +60,7 @@ export function CreateTakePage() {
   const [exporting, setExporting] = useState(false);
   const [capModal, setCapModal] = useState<'generate' | 'studio' | null>(null);
   const { generationBlock: block, profile } = useAuth();
+  const keyed = useSyncExternalStore(subscribeKey, hasKey);
   const canGenerate = !block;
   /** Say so up front when the balance cannot cover a plan, so nothing starts that cannot finish. Returns true when it is fine to go on. */
   const affordable = (needed: number): boolean => {
@@ -377,7 +379,7 @@ export function CreateTakePage() {
       {!onboarding.dismissed && (
         <OnboardingCard onDismiss={() => updateOnboarding({ dismissed: true })} input={{
           customised: spec.show !== DEFAULT_TAKE.show || spec.place.city !== DEFAULT_TAKE.place.city || spec.place.scene !== DEFAULT_TAKE.place.scene || spec.place.time !== DEFAULT_TAKE.place.time,
-          tookTake: spec.take.trim() !== '' && spec.take !== DEFAULT_TAKE.take, balance: profile?.credits_balance ?? null,
+          tookTake: spec.take.trim() !== '' && spec.take !== DEFAULT_TAKE.take, balance: profile?.credits_balance ?? null, hasKey: keyed,
           videoClips: project.clips.filter(c => c.kind === 'video').length, captionClips: project.clips.filter(c => c.kind === 'caption').length, exported: !!onboarding.exported }} />
       )}
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-4 p-4 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -397,7 +399,9 @@ export function CreateTakePage() {
                 {model && <span className="hidden rounded-md bg-black/15 px-1.5 py-0.5 text-[10px] font-semibold sm:inline">{model.label}</span>}
               </button>
             ) : (
-              <Link to={block === 'guest' ? '/login' : '/settings'} title={block ? BLOCK_TEXT[block] : undefined} className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-4 text-[13px] font-semibold text-accent"><UserPlus className="h-4 w-4" />{block === 'unverified' ? 'Confirm your email' : 'Create an account'}</Link>
+              block === 'nokey'
+                ? <button onClick={() => openKeyModal()} title={BLOCK_TEXT.nokey} data-testid="create-add-key" className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-4 text-[13px] font-semibold text-accent"><KeyRound className="h-4 w-4" />Add muapi key</button>
+                : <Link to={block === 'guest' ? '/login' : '/settings'} title={block ? BLOCK_TEXT[block] : undefined} className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-4 text-[13px] font-semibold text-accent"><UserPlus className="h-4 w-4" />{block === 'unverified' ? 'Confirm your email' : 'Create an account'}</Link>
             )}
           </div>
           {error && <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">{error}</p>}

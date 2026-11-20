@@ -1,3 +1,5 @@
+import { IS_BYOK } from '../lib/mode';
+import { openKeyModal } from '../lib/muapi/key';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, ChevronDown, X } from 'lucide-react';
@@ -10,7 +12,7 @@ export function OnboardingCard({ input, onDismiss }: { input: StepInput; onDismi
   if (allDone(steps)) return null;
   const done = steps.filter(s => s.done).length;
   const next = nextStep(steps);
-  const noCredits = (input.balance ?? 0) <= 0 && input.videoClips === 0;
+  const noCredits = IS_BYOK ? !input.hasKey && input.videoClips === 0 : (input.balance ?? 0) <= 0 && input.videoClips === 0;
   return (
     <section aria-label="Getting started" className="mx-4 mt-4 rounded-2xl border border-line bg-ink-850 p-3 shadow-panel">
       <div className="flex items-center gap-2">
@@ -34,7 +36,9 @@ export function OnboardingCard({ input, onDismiss }: { input: StepInput; onDismi
           </ol>
           {noCredits && (
             <p className="mt-2 rounded-lg bg-accent-soft px-3 py-2 text-[12px] text-zinc-200">
-              You have no credits yet. You can explore everything for free, and when you are ready to generate, <Link to="/settings" className="font-medium text-accent underline">get credits in Settings</Link>.
+              {IS_BYOK
+                ? <>You can explore everything for free. To generate, <button onClick={() => openKeyModal()} className="font-medium text-accent underline" data-testid="onboarding-key">connect your muapi key</button>.</>
+                : <>You have no credits yet. You can explore everything for free, and when you are ready to generate, <Link to="/settings" className="font-medium text-accent underline">get credits in Settings</Link>.</>}
             </p>
           )}
         </>

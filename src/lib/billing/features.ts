@@ -1,3 +1,4 @@
+import { IS_BYOK } from '../mode';
 /**
  * Paid features, as the app shows them. The gateway enforces the same keys on the server for anything that spends muapi money
  * (supabase/functions/_shared/entitlements.ts). Cities and shows are prompt text, so for those this is a display lock only.
@@ -29,7 +30,8 @@ export const FEATURES: Record<Feature, FeatureInfo> = {
 /** Cities everyone can use. The rest come with the Pro Pack. */
 export const FREE_CITIES: readonly string[] = ['nyc', 'london', 'tokyo', 'paris', 'generic', 'custom'];
 
-export const hasFeature = (f: Feature, owned: readonly string[]): boolean => FEATURES[f].needs.some(k => owned.includes(k));
+// Bringing your own muapi key there is nothing to buy: every show, city and feature is open.
+export const hasFeature = (f: Feature, owned: readonly string[]): boolean => IS_BYOK || FEATURES[f].needs.some(k => owned.includes(k));
 export const cityLocked = (cityId: string, owned: readonly string[]): boolean => !FREE_CITIES.includes(cityId) && !hasFeature('extra_cities', owned);
 /** Shows that come with a paid pack. Like cities these are prompt text (they cost us nothing to run), so the lock is a display lock only. */
 export const SHOW_FEATURE: Readonly<Record<string, Feature>> = { happiness: 'happiness', bible: 'bible', motivation: 'motivation' };

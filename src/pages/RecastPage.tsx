@@ -6,6 +6,7 @@ import { Label, Segmented, inputCls } from '../components/studio/ui';
 import { clsx } from '../lib/format';
 import { muapi } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
+import { BlockAction } from '../components/BlockAction';
 import { BLOCK_TEXT, CONFIRM_CREDITS, formatCredits, usdToCredits } from '../lib/credits';
 import { UnlockPrompt } from '../components/UnlockPrompt';
 import { FaceConsent } from '../components/FaceConsent';
@@ -188,7 +189,7 @@ export function RecastPage() {
       </div>
       {locked && <UnlockPrompt feature="recast" className="mb-4" />}
       {!consent.accepted && <div className="mb-4"><FaceConsent onAccept={consent.accept} error={consent.error} /></div>}
-      {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} {block === 'guest' && <Link to="/login" className="underline">Sign up or sign in</Link>}</div>}
+      {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} <BlockAction block={block} /></div>}
 
       {resumable.length > 0 && !running && (
         <div className="mb-4 space-y-2">

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Plus, Trash2, Upload, Sparkles, Loader2, Play, Square, AlertCircle, UserRound, Mic } from 'lucide-react';
 import { Segmented, Label, inputCls } from '../components/studio/ui';
 import { clsx } from '../lib/format';
@@ -9,6 +8,7 @@ import { useVoices } from '../lib/muapi/useVoices';
 import { SPEED_RANGE, TTS_SLUG, buildTtsInput, clampSpeed, type VoiceProvider } from '../lib/muapi/voices';
 import { runModel } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
+import { BlockAction } from '../components/BlockAction';
 import { BLOCK_TEXT, usdToCredits } from '../lib/credits';
 import { UnlockPrompt } from '../components/UnlockPrompt';
 import { FaceConsent } from '../components/FaceConsent';
@@ -50,7 +50,7 @@ export function CastPage() {
           <button onClick={() => add('guest')} className="flex h-9 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot px-3 text-[13px] font-semibold text-black"><Plus className="h-4 w-4" />Guest</button>
         </div>
       </div>
-      {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} {block === 'guest' && <Link to="/login" className="underline">Sign up or sign in</Link>} Generating portraits and previewing voices uses credits.</div>}
+      {block && <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] text-accent"><AlertCircle className="h-4 w-4" />{BLOCK_TEXT[block]} <BlockAction block={block} /> Generating portraits and previewing voices uses credits.</div>}
       {error && <p className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">{error}</p>}
 
       {list === null && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map(i => <div key={i} className="skeleton h-32 rounded-2xl" />)}</div>}
