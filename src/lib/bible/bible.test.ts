@@ -168,3 +168,11 @@ describe('translations and licences', () => {
   it('KJV, WEB and BSB are offered, each with a public-domain licence line', () => { expect(TRANSLATIONS).toEqual(['KJV', 'WEB', 'BSB']); for (const t of TRANSLATIONS) expect(TRANSLATION_LICENCE[t]).toMatch(/public domain/i); });
   it('search works in every translation', () => { for (const t of TRANSLATIONS) expect(searchVerses({ query: 'love', translation: t }).length, t).toBeGreaterThan(3); });
 });
+
+import { fitWords } from '../compose';
+describe('fitWords', () => {
+  it('does not stop on a dangling word', () => {
+    expect(fitWords('That verse reminded me I am not alone, and it stays with me', 9)).toBe('That verse reminded me I am not alone.');
+    expect(fitWords('one two three', 5)).toBe('one two three');
+  });
+});

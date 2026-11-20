@@ -12,18 +12,29 @@ import { join } from 'node:path';
 import { DEFAULT_TAKE, buildNativePrompt } from '../src/lib/interview';
 import { STILL_MODEL, buildAnimateInput, buildStillInput } from '../src/lib/interview/twoshot';
 import { DEFAULT_PLACE } from '../src/lib/places';
+import { applyShow } from '../src/lib/shows';
+import { findVerse, pickVerse } from '../src/lib/bible';
+import { recomposeBible } from '../src/lib/bible/spec';
 import { NATIVE_MODELS } from '../src/lib/muapi/registry';
 import { extractError, extractMediaUrl, normalizeStatus } from '../src/lib/muapi/result';
 
 const argv = process.argv.slice(2).filter(a => a !== '--');
 const opt = (n: string) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-const outDir = argv.find(a => !a.startsWith('--') && ![opt('--city'), opt('--scene'), opt('--model'), opt('--cap'), opt('--host-image')].includes(a));
+const outDir = argv.find(a => !a.startsWith('--') && ![opt('--city'), opt('--scene'), opt('--model'), opt('--cap'), opt('--host-image'), opt('--verse'), opt('--translation')].includes(a));
 if (!outDir) { console.error('usage: live-interview.ts <outDir> [--city id] [--scene id] [--run --model slug --cap USD]'); process.exit(2); }
 mkdirSync(outDir, { recursive: true });
 const RUN = argv.includes('--run');
 const CAP = Number(opt('--cap')) || 1;
 const spec = { ...DEFAULT_TAKE, place: { ...DEFAULT_PLACE, city: opt('--city') ?? 'nyc', scene: (opt('--scene') ?? 'train_seated') as typeof DEFAULT_PLACE.scene } };
-const prompt = buildNativePrompt(spec);
+// --verse "Psalm 23:1" makes a Scripture episode with that library verse (the exact text is what a transcript is later compared with)
+let finalSpec = spec;
+const verseRef = opt('--verse');
+if (verseRef) {
+  const v = findVerse(verseRef); if (!v) { console.error('verse not in the library:', verseRef); process.exit(2); }
+  finalSpec = recomposeBible({ ...applyShow(spec, 'bible'), verse: pickVerse(v, (opt('--translation') ?? 'KJV') as 'KJV' | 'WEB' | 'BSB') });
+  console.log('Spoken line:', finalSpec.take);
+}
+const prompt = buildNativePrompt(finalSpec);
 const API = 'https://api.muapi.ai';
 const headers: Record<string, string> = { 'content-type': 'application/json', ...(process.env.MUAPI_KEY ? { 'x-api-key': process.env.MUAPI_KEY } : {}) };
 const candidates = NATIVE_MODELS.filter(m => m.mode === 'text' && m.nativeAudio && m.aspects.includes('9:16') && ['fast', 'budget'].includes(m.tier));
