@@ -17,6 +17,7 @@ import { runTwoShotImageJob, STILL_APPROX_CREDITS, STILL_MODEL, buildStillInput,
 import { CutsPanel } from '../components/studio/CutsPanel';
 import { NATIVE_MODELS, chooseNativeModel, type Pipeline } from '../lib/muapi/registry';
 import { LipsyncPanel } from '../components/studio/LipsyncPanel';
+import { RecordPanel } from '../components/studio/RecordPanel';
 import { LIPSYNC_MODELS, estimateLipsync, runLipsyncJob, validateLipsync, type LipsyncModel } from '../lib/muapi/lipsync';
 import { listCharacters } from '../lib/characters';
 import type { CharacterBible } from '../lib/types';
@@ -65,6 +66,8 @@ export function CreateTakePage() {
   const canGenerate = !block;
   /** Say so up front when the balance cannot cover a plan, so nothing starts that cannot finish. Returns true when it is fine to go on. */
   const affordable = (needed: number): boolean => {
+    // bringing your own key the wallet is muapi's (its unit is not ours to compare): muapi refuses a job it cannot pay for, and we show that message
+    if (IS_BYOK) return true;
     const have = profile?.credits_balance;
     if (typeof have === 'number' && have < needed) { setError(`You need ${(needed - have).toLocaleString('en-US')} more credits (this costs about ${needed.toLocaleString('en-US')}, you have ${have.toLocaleString('en-US')}). Open Settings to see your credits.`); return false; }
     return true;
@@ -237,17 +240,22 @@ export function CreateTakePage() {
 
   const LIPSYNC_STAGES = ['Writing the voice', 'Preparing audio', 'Rendering the video'];
 
+  // A recording belongs to the exact line it was made for: edit the take and it no longer applies.
+  const [recording, setRecording] = useState<{ url: string; seconds: number; script: string } | null>(null);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const ownVoice = recording && recording.script === spec.take ? recording : null;
+
   async function generateLipsync() {
     const speaker = characters.find(c => c.id === speakerId);
     if (!speaker) { setError('Choose who speaks in the Model tab.'); return; }
-    const problem = validateLipsync({ speaker, script: spec.take, model: lipModel });
+    const problem = validateLipsync({ speaker, script: spec.take, model: lipModel, recordedAudioUrl: ownVoice?.url });
     if (problem) { setError(problem); return; }
-    const cost = await estimateLipsync(speaker, spec.take, lipModel).catch(() => null);
+    const cost = await estimateLipsync(speaker, spec.take, lipModel, { ownVoice: !!ownVoice }).catch(() => null);
     if (cost !== null && !affordable(cost)) return;
     if (cost !== null && cost > CONFIRM_CREDITS && !window.confirm(`This will cost about ${formatCredits(cost)}. Continue?`)) return;
     setError(''); setRunning({ status: 'processing', startedAt: Date.now(), stages: LIPSYNC_STAGES, stageIdx: 0 });
     try {
-      const job = await runLipsyncJob({ speaker, script: spec.take, model: lipModel, scene: `${placePrompt(spec.place)}. ${spec.tone} tone, natural expressions.`, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'voice' ? 0 : s === 'prepare' ? 1 : 2 }) });
+      const job = await runLipsyncJob({ speaker, script: spec.take, model: lipModel, recordedAudioUrl: ownVoice?.url, scene: `${placePrompt(spec.place)}. ${spec.tone} tone, natural expressions.`, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'voice' ? 0 : s === 'prepare' ? 1 : 2 }) });
       await refresh();
       setRunning(null);
       await addJobToTimeline(job);
@@ -437,7 +445,7 @@ export function CreateTakePage() {
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}
             characters={characters} hostHint={route.hint} imageRoute={imageRoute}
             cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} />}
-            lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} canGenerate={canGenerate} />}
+            lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} canGenerate={canGenerate} recording={ownVoice} onRecord={() => setRecordOpen(true)} onClearRecording={() => setRecording(null)} />}
             clip={clip} onClipChange={patch => { const cur = getProject(); if (clip) setProject(updateClip(cur, clip.id, patch), false); }} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, captionFont: f } }); }}
@@ -447,7 +455,8 @@ export function CreateTakePage() {
       <TimelineEditor project={project} setProject={setProject} checkpoint={checkpoint} undo={undo} redo={redo}
         frame={Math.min(frame, Math.max(0, projectDuration(project)))} playing={playing} onSeek={seek} onToggle={toggle}
         selectedId={selectedClip} onSelect={setSelectedClip} captionDefault={spec.take} onExport={() => setExporting(true)} />
-      {capModal === 'generate' && <GenerateCaptionsModal project={project} aspect={spec.aspect} videoClips={project.clips.filter(c => c.kind === 'video' && c.src?.startsWith('http'))} initialClipId={clip?.kind === 'video' ? clip.id : undefined}
+      {recordOpen && <RecordPanel script={spec.take} onClose={() => setRecordOpen(false)} onUse={r => { setRecording({ ...r, script: spec.take }); setRecordOpen(false); }} />}
+        {capModal === 'generate' && <GenerateCaptionsModal project={project} aspect={spec.aspect} videoClips={project.clips.filter(c => c.kind === 'video' && c.src?.startsWith('http'))} initialClipId={clip?.kind === 'video' ? clip.id : undefined}
         initialStyle={project.style?.captions ?? DEFAULT_CAPTION_STYLE} canUseCloud={canGenerate} onClose={() => setCapModal(null)} onDone={applyGenerated} />}
       {capModal === 'studio' && <CaptionStudioModal project={project} aspect={spec.aspect} projectKey={openId ?? 'local'} onApply={applyStudio} onClose={() => setCapModal(null)} onBurn={(caps, st) => { applyStudio(caps, st); setCapModal(null); setExporting(true); }} />}
       {exporting && <ExportDialog project={project} aspect={spec.aspect} onClose={() => setExporting(false)} onDone={() => updateOnboarding({ exported: true })} />}

@@ -25,6 +25,8 @@ export interface LipsyncOptions {
   model: LipsyncModel;
   /** short scene/motion hint for the render prompt */
   scene?: string;
+  /** A hosted recording of the customer's OWN voice reading the script. When set, the paid text-to-speech step is skipped and the speaker needs no voice. */
+  recordedAudioUrl?: string;
   onStage?: (s: LipsyncStage) => void;
   signal?: AbortSignal;
 }
@@ -40,10 +42,11 @@ export interface LipsyncDeps {
 const realDeps: LipsyncDeps = { runModel: client.runModel, prepareAudio, uploadMedia, createJob: jobs.createJob, patchJob: jobs.patchJob };
 
 /** Pure: validate inputs before spending anything. Returns an error message or null. */
-export function validateLipsync(o: Pick<LipsyncOptions, 'speaker' | 'script' | 'model'>): string | null {
+export function validateLipsync(o: Pick<LipsyncOptions, 'speaker' | 'script' | 'model'> & { recordedAudioUrl?: string }): string | null {
   if (!o.speaker.portrait_url) return 'This character has no portrait yet. Upload or generate one in Cast.';
   if (!/^https:\/\//.test(o.speaker.portrait_url)) return 'The portrait must be a hosted https image.';
-  if (!o.speaker.voice_provider || !o.speaker.voice_id) return 'This character has no voice yet. Pick one in Cast.';
+  if (o.recordedAudioUrl !== undefined && !/^https:\/\//.test(o.recordedAudioUrl)) return 'The recording must be a hosted https audio file.';
+  if (o.recordedAudioUrl === undefined && (!o.speaker.voice_provider || !o.speaker.voice_id)) return 'This character has no voice yet. Pick one in Cast, or record your own voice.';
   if (!o.script.trim()) return 'The script is empty.';
   if (o.script.length > MAX_SCRIPT_CHARS) return `The script is too long (${o.script.length}/${MAX_SCRIPT_CHARS} characters).`;
   if (!LIPSYNC_MODELS.some(m => m.slug === o.model)) return `Unknown lipsync model ${o.model}.`;
@@ -65,18 +68,25 @@ export async function runLipsyncJob(o: LipsyncOptions, deps: LipsyncDeps = realD
   if (problem) throw new Error(problem);
   const def = LIPSYNC_MODELS.find(m => m.slug === o.model)!;
   // validateLipsync guarantees these are present
-  const sp = { portrait_url: o.speaker.portrait_url as string, voice_provider: o.speaker.voice_provider as VoiceProvider, voice_id: o.speaker.voice_id as string, voice_speed: o.speaker.voice_speed };
+  const sp = { portrait_url: o.speaker.portrait_url as string, voice_provider: o.speaker.voice_provider as VoiceProvider | undefined, voice_id: o.speaker.voice_id as string | undefined, voice_speed: o.speaker.voice_speed };
+  const own = o.recordedAudioUrl;
 
-  const job = await deps.createJob('lipsync', o.model, { script: o.script, take: o.script, voice: `${sp.voice_provider}:${sp.voice_id}`, portrait_url: sp.portrait_url });
+  const job = await deps.createJob('lipsync', o.model, { script: o.script, take: o.script, voice: own ? 'own recording' : `${sp.voice_provider}:${sp.voice_id}`, portrait_url: sp.portrait_url });
   let stage: LipsyncStage = 'voice';
   const setStage = async (s: LipsyncStage) => { stage = s; o.onStage?.(s); await deps.patchJob(job.id, { stage: s }); };
   try {
-    await setStage('voice');
-    const tts = await deps.runModel(TTS_SLUG[sp.voice_provider], buildTtsInput(sp.voice_provider, o.script, sp.voice_id, sp.voice_speed), { signal: o.signal, intervalMs: 2500 });
+    // the customer's own recording replaces the paid voice step entirely
+    let voiceUrl: string;
+    if (own) voiceUrl = own;
+    else {
+      await setStage('voice');
+      const tts = await deps.runModel(TTS_SLUG[sp.voice_provider as VoiceProvider], buildTtsInput(sp.voice_provider as VoiceProvider, o.script, sp.voice_id as string, sp.voice_speed), { signal: o.signal, intervalMs: 2500 });
+      voiceUrl = tts.url;
+    }
 
     await setStage('prepare');
-    const prepared = await deps.prepareAudio(tts.url, def.minAudioSec, o.signal);
-    const audioUrl = prepared.padded ? await deps.uploadMedia(prepared.blob, 'voice.wav') : tts.url;
+    const prepared = await deps.prepareAudio(voiceUrl, def.minAudioSec, o.signal);
+    const audioUrl = prepared.padded ? await deps.uploadMedia(prepared.blob, 'voice.wav') : voiceUrl;
 
     await setStage('render');
     const render = await deps.runModel(o.model, buildRenderInput(o.model, sp.portrait_url, audioUrl, o.scene), { signal: o.signal, intervalMs: 5000, timeoutMs: 20 * 60_000 });
@@ -99,9 +109,12 @@ export function sumCost(parts: Array<number | null | undefined>): number | null 
 }
 
 /** Live quote in CREDITS (TTS + render) before the user commits. */
-export async function estimateLipsync(speaker: Speaker, script: string, model: LipsyncModel): Promise<number | null> {
-  if (!speaker.voice_provider || !speaker.voice_id || !script.trim()) return null;
+export async function estimateLipsync(speaker: Speaker, script: string, model: LipsyncModel, opts: { ownVoice?: boolean } = {}): Promise<number | null> {
+  if (!script.trim()) return null;
   const read = (r: Record<string, unknown>) => (typeof r.cost === 'number' ? r.cost : null);
+  // with the customer's own recording there is no voice step to pay for
+  if (opts.ownVoice) return client.muapi.estimate(model, buildRenderInput(model, speaker.portrait_url ?? 'https://example.com/portrait.png', 'https://example.com/voice.wav')).then(read);
+  if (!speaker.voice_provider || !speaker.voice_id) return null;
   const [tts, render] = await Promise.all([
     client.muapi.estimate(TTS_SLUG[speaker.voice_provider], buildTtsInput(speaker.voice_provider, script, speaker.voice_id, speaker.voice_speed)).then(read),
     client.muapi.estimate(model, buildRenderInput(model, speaker.portrait_url ?? 'https://example.com/portrait.png', 'https://example.com/voice.wav')).then(read),

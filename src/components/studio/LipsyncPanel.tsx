@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, Mic, UserRound, Clock } from 'lucide-react';
+import { AlertCircle, Mic, UserRound, Clock, Trash2 } from 'lucide-react';
+import { recordingSupported } from '../../lib/audio/record';
 import { Label } from './ui';
 import { clsx } from '../../lib/format';
 import { LIPSYNC_MODELS, MAX_SCRIPT_CHARS, estimateLipsync, validateLipsync, type LipsyncModel } from '../../lib/muapi/lipsync';
@@ -8,12 +9,14 @@ import type { CharacterBible } from '../../lib/types';
 
 const TIER_STYLE: Record<string, string> = { best: 'text-fuchsia-300 bg-fuchsia-500/10', balanced: 'text-sky-300 bg-sky-500/10' };
 
-export function LipsyncPanel({ characters, speakerId, onSpeaker, model, onModel, script, canGenerate }: {
+export function LipsyncPanel({ characters, speakerId, onSpeaker, model, onModel, script, canGenerate, recording, onRecord, onClearRecording }: {
   characters: CharacterBible[]; speakerId?: string; onSpeaker: (id: string) => void;
   model: LipsyncModel; onModel: (m: LipsyncModel) => void; script: string; canGenerate: boolean;
+  /** the customer's own recording of THIS line, when there is one */
+  recording?: { url: string; seconds: number } | null; onRecord?: () => void; onClearRecording?: () => void;
 }) {
   const speaker = characters.find(c => c.id === speakerId);
-  const problem = speaker ? validateLipsync({ speaker, script, model }) : 'Choose who speaks.';
+  const problem = speaker ? validateLipsync({ speaker, script, model, recordedAudioUrl: recording?.url }) : 'Choose who speaks.';
   const [cost, setCost] = useState<{ value: number | null; loading: boolean }>({ value: null, loading: false });
 
   useEffect(() => {
@@ -21,10 +24,10 @@ export function LipsyncPanel({ characters, speakerId, onSpeaker, model, onModel,
     let live = true;
     setCost(c => ({ ...c, loading: true }));
     const t = setTimeout(() => {
-      estimateLipsync(speaker, script, model).then(v => live && setCost({ value: v, loading: false })).catch(() => live && setCost({ value: null, loading: false }));
+      estimateLipsync(speaker, script, model, { ownVoice: !!recording }).then(v => live && setCost({ value: v, loading: false })).catch(() => live && setCost({ value: null, loading: false }));
     }, 500);
     return () => { live = false; clearTimeout(t); };
-  }, [speaker, script, model, problem, canGenerate]);
+  }, [speaker, script, model, problem, canGenerate, recording]);
 
   if (characters.length === 0) {
     return (
@@ -54,6 +57,19 @@ export function LipsyncPanel({ characters, speakerId, onSpeaker, model, onModel,
       <div><Label hint={`${script.length}/${MAX_SCRIPT_CHARS}`}>Says</Label>
         <p className="rounded-xl border border-line bg-ink-950 p-2.5 text-[12px] italic text-zinc-300">“{script || '…'}”</p>
         <p className="mt-1 text-[10px] text-zinc-600">Edit the take in the prompt bar or Take tab. Audio shorter than 4s is padded with silence automatically.</p></div>
+
+      {onRecord && (
+        <div className="rounded-xl border border-line bg-ink-950 p-3" data-testid="own-voice">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0"><p className="flex items-center gap-1.5 text-[12px] font-medium text-zinc-100"><Mic className="h-3.5 w-3.5 text-accent" />Use your own voice <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-300">free</span></p>
+              <p className="mt-0.5 text-[11px] text-zinc-500">{recording ? `Using your recording (${Math.round(recording.seconds)}s). The paid AI voice is skipped.` : 'Read the line from a teleprompter and skip the AI voice.'}</p></div>
+            {recording
+              ? <button onClick={onClearRecording} aria-label="Remove recording" className="shrink-0 rounded-lg border border-line p-1.5 text-zinc-400 hover:border-red-400/50 hover:text-red-300"><Trash2 className="h-3.5 w-3.5" /></button>
+              : <button onClick={onRecord} disabled={!script.trim() || !recordingSupported()} data-testid="own-voice-record" className="h-8 shrink-0 rounded-lg border border-accent/50 px-3 text-[12px] font-semibold text-accent disabled:opacity-40">Record</button>}
+          </div>
+          {recording && <button onClick={onRecord} className="mt-2 text-[11px] text-accent underline">Record again</button>}
+        </div>
+      )}
 
       <div><Label>Lipsync model</Label>
         <div className="grid gap-1.5">

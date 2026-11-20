@@ -88,3 +88,39 @@ describe('helpers', () => {
     expect(sumCost([0.1, NaN])).toBeNull();
   });
 });
+
+describe('your own voice (free)', () => {
+  const mine = 'https://storage.example/my-take.wav';
+  const mute = { portrait_url: speaker.portrait_url };   // no voice picked in Cast
+
+  it('needs no voice on the character when a recording is given, but still a portrait', () => {
+    expect(validateLipsync({ speaker: mute, script: 'hi', model: 'omnihuman-2-0' })).toMatch(/no voice/);
+    expect(validateLipsync({ speaker: mute, script: 'hi', model: 'omnihuman-2-0', recordedAudioUrl: mine })).toBeNull();
+    expect(validateLipsync({ speaker: { portrait_url: null }, script: 'hi', model: 'omnihuman-2-0', recordedAudioUrl: mine })).toMatch(/portrait/);
+  });
+  it('refuses a recording that is not a hosted https file', () => {
+    expect(validateLipsync({ speaker, script: 'hi', model: 'omnihuman-2-0', recordedAudioUrl: 'blob:http://x/1' })).toMatch(/https/);
+    expect(validateLipsync({ speaker, script: 'hi', model: 'omnihuman-2-0', recordedAudioUrl: '' })).toMatch(/https/);
+  });
+  it('skips the paid text-to-speech step and renders with the recording', async () => {
+    const { d, calls } = deps({ prepareAudio: vi.fn(async () => ({ blob: new Blob(['x']), durationSec: 7, padded: false, sourceSec: 7 })) as never });
+    const stages: LipsyncStage[] = [];
+    const out = await runLipsyncJob({ speaker: mute, script: 'Pineapple on pizza', model: 'omnihuman-2-0', recordedAudioUrl: mine, onStage: s => stages.push(s) }, d);
+    expect(stages).toEqual(['prepare', 'render']);
+    expect(calls).toEqual(['omnihuman-2-0']);                       // no tts model was called
+    expect((d.runModel as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatchObject({ audio_url: mine });
+    expect((d.createJob as ReturnType<typeof vi.fn>).mock.calls[0][2]).toMatchObject({ voice: 'own recording' });
+    expect(out.status).toBe('completed');
+  });
+  it('a short recording is still padded to the model minimum and the padded copy is rendered', async () => {
+    const { d } = deps();
+    await runLipsyncJob({ speaker: mute, script: 'Hi', model: 'omnihuman-2-0', recordedAudioUrl: mine }, d);
+    expect((d.prepareAudio as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(mine);
+    expect((d.runModel as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatchObject({ audio_url: 'https://storage.example/voice.wav' });
+  });
+  it('a failed render keeps the recording usable and surfaces the real error', async () => {
+    const { d, patches } = deps({ runModel: vi.fn(async () => { throw new Error('model said no'); }) as never });
+    await expect(runLipsyncJob({ speaker: mute, script: 'Hi', model: 'omnihuman-2-0', recordedAudioUrl: mine }, d)).rejects.toThrow('model said no');
+    expect(patches[patches.length - 1]).toMatchObject({ status: 'failed', error: 'model said no' });
+  });
+});

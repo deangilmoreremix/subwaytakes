@@ -5,6 +5,7 @@ import { UnlockPrompt } from '../UnlockPrompt';
 import { useBilling } from '../../lib/billing/useBilling';
 import { useAuth } from '../../lib/auth';
 import { CONFIRM_CREDITS, formatCredits } from '../../lib/credits';
+import { IS_BYOK } from '../../lib/mode';
 import { DUB_LANGUAGES, MAX_DUB_LANGUAGES, languageOf } from '../../lib/dubbing/languages';
 import { dubProblem, estimateDub, resumeFrom, runDub, type DubResult, type DubStage, type DubState, type DubVoice } from '../../lib/dubbing/pipeline';
 import type { ClipJob } from '../../lib/muapi/jobs';
@@ -53,7 +54,7 @@ export function DubPanel({ clip, fps, characters, canGenerate, onAddDub }: {
   async function start(resume?: { job: ClipJob; state: DubState }) {
     const voice = resume ? resume.state.voice : resolveVoice();
     if (!clip.src || !voice || langs.length === 0 || problem) { setError(problem ?? 'Pick a voice and at least one language.'); return; }
-    if (!resume && typeof profile?.credits_balance === 'number' && profile.credits_balance < est.total) { setError(`You need ${(est.total - profile.credits_balance).toLocaleString('en-US')} more credits (this costs about ${est.total.toLocaleString('en-US')}). Add credits in Settings.`); return; }
+    if (!IS_BYOK && !resume && typeof profile?.credits_balance === 'number' && profile.credits_balance < est.total) { setError(`You need ${(est.total - profile.credits_balance).toLocaleString('en-US')} more credits (this costs about ${est.total.toLocaleString('en-US')}). Add credits in Settings.`); return; }
     if (!resume && est.total > CONFIRM_CREDITS && !window.confirm(`Dubbing into ${langs.length} language${langs.length === 1 ? '' : 's'} costs about ${formatCredits(est.total)}. Continue?`)) return;
     setError(''); setResult(null); setAdded([]); setPaused(null); setRunning(true);
     setProgress(Object.fromEntries(langs.map(l => [l, { stage: 'translate' as DubStage, status: 'waiting' as Status }])));

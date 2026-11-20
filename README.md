@@ -34,7 +34,11 @@ cp .env.example .env   # then fill in the two Supabase values
 npm run dev
 ```
 
-### Bring your own muapi key (the default)
+### Record your own voice (free)
+
+In Voice + lipsync, "Use your own voice" opens a teleprompter, records the microphone in the browser (MediaRecorder, mono WAV made with the Web Audio API), and uploads the WAV to your own media folder. The paid text-to-speech step is skipped and the character needs no voice. A recording belongs to the exact line it was made for: edit the take and it no longer applies. Verified: the pure teleprompter and limits logic and the pipeline (unit tests), and the whole flow with Chromium's fake microphone (`scripts/record-e2e.mjs`). Not verified: real microphones and voices, other browsers (Safari records audio/mp4), Cuts (the recording applies to the single-speaker Voice + lipsync path for now).
+
+## Bring your own muapi key (the default)
 
 Customers create their own muapi account and paste their key into the key dialog (top bar, Settings, or any Generate button). The key stays in their browser and is sent per request to the `muapi-byok` edge function, which forwards it to muapi and keeps nothing. They pay muapi directly and see a price before each run. There are no credits, packs or checkout in this mode.
 
