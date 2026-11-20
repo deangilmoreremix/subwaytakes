@@ -88,11 +88,30 @@ const clip = (text: string, max: number) => {
 export const isComposedShow = (t: Partial<Pick<TakeSpec, 'show' | 'quote'>>): boolean => t.show === 'bible' || (t.show === 'motivation' && !!t.quote);
 /** In Cuts the voice reads the whole line and the clip is as long as the audio (priced by the text), so a composed verse or quote is not squeezed into the clip-length slider. About 28 seconds of speech; the line also stays under the lip-sync script limit (600 characters). */
 export const CUTS_COMPOSED_WORDS = 75;
+/** The hand-off takes about this long: the host holds the card across, the guest takes it. */
+export const PASS_SECONDS = 1;
+
+/**
+ * One interview, one card. The Two-shot clip is planned in beats so the card changes hands ONCE and the guest only speaks once it is in their hand:
+ * (1) the host asks with the card at their own mouth, (2) the host hands it across, (3) the guest answers with it. Times are in seconds from the start.
+ */
+export function twoShotBeats(t: Pick<TakeSpec, 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question'>>): { askEnd: number; passEnd: number; end: number } {
+  const host = questionFor(showOf(t.show), t.question);
+  const total = Math.max(4, t.durationSeconds);
+  const ask = Math.max(OPENER_SECONDS, host.split(/\s+/).length / WORDS_PER_SECOND);
+  // the guest always keeps at least half of what is left after the hand-off, so a long question cannot swallow the answer
+  const askEnd = Math.min(ask, total / 2 - PASS_SECONDS / 2);
+  const round = (n: number) => Math.round(n * 10) / 10;
+  return { askEnd: round(askEnd), passEnd: round(askEnd + PASS_SECONDS), end: round(total) };
+}
+
 export function guestWordBudget(t: Pick<TakeSpec, 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'format' | 'quote'>>): number {
   if (t.format === 'cuts' && isComposedShow(t)) return CUTS_COMPOSED_WORDS;
   const host = questionFor(showOf(t.show), t.question);
   const hostSeconds = Math.max(OPENER_SECONDS, host.split(/\s+/).length / WORDS_PER_SECOND);
-  return Math.max(6, Math.floor(Math.max(2, t.durationSeconds - hostSeconds) * WORDS_PER_SECOND));
+  // in a Two-shot the hand-off takes a second in which nobody speaks; Cuts and Solo have no hand-off
+  const handOff = t.format === 'cuts' || t.format === 'solo' ? 0 : PASS_SECONDS;
+  return Math.max(6, Math.floor(Math.max(2, t.durationSeconds - hostSeconds - handOff) * WORDS_PER_SECOND));
 }
 
 export function spokenLines(t: Pick<TakeSpec, 'take' | 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'take2' | 'format' | 'quote'>>): { host: string; guest: string; guest2?: string; trimmed: boolean } {
@@ -129,7 +148,7 @@ export function buildNativePrompt(t: TakeSpec): string {
       `Handheld vertical documentary shot of three people: the host (${t.hostDescription}) between two guests, guest A (${t.guestDescription}) and guest B (${t.guest2Description || 'a different local commuter, clearly distinct from guest A'}).`,
       `Setting: ${sceneText(t)}.`,
       `${sitting ? 'They sit' : 'They stand'} close together, the host in the middle, framed from the chest up.`,
-      `The host holds ${card} and turns it toward each guest in turn. ${NO_MIC_RULE}`,
+      `There is exactly ONE card in the scene, ${card}, and only the person who is speaking holds it: the host holds it to their own mouth to ask, then hands it to guest A, who hands it back, then to guest B. ${NO_MIC_RULE}`,
       `The host asks: "${host}" Guest A, ${tone}, argues: "${guest}" Guest B, ${tone}, argues back: "${guest2 ?? ''}" ${show.reaction}`,
       `Each of the three voices is distinct and the lips match the words. Slight camera sway, natural ambient sound of the place. ${noText}${guard}`,
     ].join(' ');
@@ -145,13 +164,15 @@ export function buildNativePrompt(t: TakeSpec): string {
   }
   // twoshot (cuts also uses this wording for a single combined fallback)
   const sitting = t.place.mode === 'transit' && t.place.scene === 'train_seated';
+  const beats = twoShotBeats(t);
   return [
     `Handheld vertical documentary two-shot of two people: the host (${t.hostDescription}) and the guest (${t.guestDescription}).`,
     `Setting: ${sceneText(t)}.`,
     sitting ? 'They sit shoulder to shoulder, close together, framed from the chest up.' : 'They stand shoulder to shoulder, close together, framed from the chest up.',
-    `Both hold ${card}, so the card is clearly visible near their mouths, passing it between them as they talk.`,
-    NO_MIC_RULE,
-    `The host, card at their mouth, asks the guest: "${host}" The guest, ${tone}, takes the card and answers: "${guest}" ${show.reaction}`,
+    `There is exactly ONE card in the scene, ${card}, and only the person who is speaking holds it. ${NO_MIC_RULE}`,
+    `Beat 1, from 0 to ${beats.askEnd} seconds: the host holds the card to their own mouth and asks the guest: "${host}" The guest listens, both hands empty in their lap.`,
+    `Beat 2, from ${beats.askEnd} to ${beats.passEnd} seconds: in one clear movement the host hands the card across to the guest's mouth and the guest takes it. The host's hands are empty afterwards. Nobody speaks during the hand-off.`,
+    `Beat 3, from ${beats.passEnd} seconds to the end: the guest holds the card to their own mouth, ${tone}, and answers: "${guest}" The guest does not start speaking until the card is in their hand. The host listens with empty hands. ${show.reaction}`,
     `Visible lip movement matches each speaker's words and each voice is distinct. Slight camera sway, natural ambient sound of the place. ${noText}${guard}`,
   ].join(' ');
 }
@@ -258,7 +279,7 @@ export function buildTwoShotStillPrompt(t: TakeSpec, opts: { guestHasReference?:
     `The host is the person in the first reference image: keep their face, hair and look exactly the same.`,
     opts.guestHasReference ? 'The guest is the person in the second reference image: keep their face exactly the same.' : `The guest is ${t.guestDescription}.`,
     `Setting: ${sceneText(t)}.`,
-    `Both hold ${card}, near their mouths like a microphone, and are mid-conversation. ${NO_MIC_RULE}`,
+    `There is exactly one card, ${card}: the host holds it to their own mouth as if asking a question, and the guest's hands are empty in their lap, ready to take it. ${NO_MIC_RULE}`,
     'Handheld documentary look, natural light, photorealistic, no text or watermarks.',
   ].join(' ');
 }

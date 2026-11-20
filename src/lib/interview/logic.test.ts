@@ -115,7 +115,7 @@ describe('every show x format x city builds safe prompts that keep the rules', (
 describe('Cuts reads the whole verse or quote exactly (it is not squeezed into the clip-length slider)', () => {
   it('a composed show gets the Cuts budget, other shows keep the slider budget', () => {
     expect(guestWordBudget({ ...BIBLE(), format: 'cuts' })).toBe(CUTS_COMPOSED_WORDS); expect(guestWordBudget({ ...BIBLE(), format: 'twoshot' })).toBeLessThan(CUTS_COMPOSED_WORDS);
-    expect(guestWordBudget({ ...DEFAULT_TAKE, format: 'cuts' })).toBe(guestWordBudget({ ...DEFAULT_TAKE, format: 'twoshot' }));
+    expect(guestWordBudget({ ...DEFAULT_TAKE, format: 'cuts' })).toBeGreaterThan(guestWordBudget({ ...DEFAULT_TAKE, format: 'twoshot' }));   // Two-shot loses the hand-off second
     expect(isComposedShow(MOTIV())).toBe(true); expect(isComposedShow(applyShow(DEFAULT_TAKE, 'motivation'))).toBe(false);
   });
   it('EVERY library verse in EVERY translation is spoken in full in Cuts at the default clip length, with the longest reflection, and fits the lip-sync script limit', () => {
@@ -168,7 +168,8 @@ describe('packs and templates', () => {
 
 describe('what a customer types is screened before any credit is reserved', () => {
   const hostile: Array<[string, Partial<TakeSpec>]> = [
-    ['a typed verse that depicts a holy figure', { verse: typedVerse('A video of Jesus walking through the train car', 'Scripture') }],
+    ['a typed verse that depicts a holy figure', { verse: typedVerse('A video of Jesus walking through the train car', 'Scripture'), durationSeconds: 15 }],   // long enough that the verse is spoken, so it is in the prompt
+
     ['a reflection that promises healing', { reflection: 'Pray and your cancer will disappear, God guarantees it.' }],
     ['a reflection about a child', { reflection: 'My 9 year old boy sits next to me and reads it.' }],
     ['a reflection naming a celebrity', { reflection: 'Taylor Swift reads this one with me.' }],
