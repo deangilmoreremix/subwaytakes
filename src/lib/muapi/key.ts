@@ -83,3 +83,8 @@ export function parseBalance(json: unknown): number | null {
   }
   return null;
 }
+
+// ---- errors the client raises so the UI can react (open the modal, show a top-up hint)
+export class MissingKeyError extends Error { constructor() { super('Add your muapi key to generate.'); this.name = 'MissingKeyError'; } }
+export class InvalidKeyError extends Error { constructor(message = 'muapi did not accept this key.') { super(message); this.name = 'InvalidKeyError'; } }
+export class MuapiBalanceError extends Error { constructor(message = 'Your muapi balance is too low. Top up your muapi account and try again.') { super(message); this.name = 'MuapiBalanceError'; } }

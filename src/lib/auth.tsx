@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { supabase } from './supabase';
 import type { User, Session } from '@supabase/supabase-js';
 import { generationBlock, subscribeBalance } from './credits';
+import { hasKey, subscribeKey } from './muapi/key';
 
 let _currentAuthUserId: string | null = null;
 
@@ -34,7 +35,7 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: string | null }>;
   /** null when this account can generate, else why not */
-  generationBlock: 'guest' | 'unverified' | null;
+  generationBlock: 'guest' | 'unverified' | 'nokey' | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -149,7 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the gateway reports the new balance on every paid call: keep the pill current without refetching
   useEffect(() => subscribeBalance(n => setProfile(p => (p ? { ...p, credits_balance: n } : p))), []);
 
-  const block = generationBlock(user ? { isGuest: !!user.is_anonymous, emailConfirmed: !!user.email_confirmed_at } : null);
+  const keyed = useSyncExternalStore(subscribeKey, hasKey);
+  const block = generationBlock(user ? { isGuest: !!user.is_anonymous, emailConfirmed: !!user.email_confirmed_at, hasKey: keyed } : null);
 
   const value = useMemo(() => ({
     user,

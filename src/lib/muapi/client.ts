@@ -3,6 +3,8 @@ import { extractError, extractMediaUrl, normalizeStatus, pickMessage } from './r
 export { pickMessage };
 import { checkBody, ContentBlockedError } from '../safety';
 import { AccountRequiredError, InsufficientCreditsError, LockedFeatureError, publishBalance } from '../credits';
+import { IS_BYOK } from '../mode';
+import { getKey, InvalidKeyError, MissingKeyError, MuapiBalanceError, openKeyModal, parseBalance, publishKeyBalance, scrubKey } from './key';
 
 export type PredictionStatus = 'queued' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export interface Prediction {
@@ -26,7 +28,7 @@ export async function describeError(error: { message?: string; context?: unknown
       if (m) return m;
     } catch { /* body not JSON: fall through */ }
   }
-  return error.message || 'The generator failed';
+  return scrubKey(error.message || 'The generator failed');
 }
 
 /** Turn a failed gateway call into the right error: not enough credits, account problems, or muapi's own message. */
@@ -35,6 +37,9 @@ export async function interpretGatewayFailure(error: { message?: string; context
   if (ctx && typeof ctx.clone === 'function') {
     try {
       const b = await ctx.clone().json() as { code?: string; needed?: unknown; balance?: unknown; error?: unknown; entitlement?: unknown; category?: unknown };
+      if (b.code === 'no_key') { openKeyModal('Add your muapi key to generate.'); return new MissingKeyError(); }
+      if (b.code === 'invalid_key') { openKeyModal('muapi did not accept the saved key. Check it or paste a new one.'); return new InvalidKeyError(typeof b.error === 'string' ? b.error : undefined); }
+      if (b.code === 'muapi_balance') return new MuapiBalanceError(typeof b.error === 'string' ? b.error : undefined);
       if (b.code === 'insufficient_credits') {
         const balance = Number(b.balance) || 0;
         publishBalance(balance);
@@ -52,7 +57,14 @@ export async function interpretGatewayFailure(error: { message?: string; context
 async function proxy<T>(method: 'GET' | 'POST', path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
   // the same content screen the gateway runs: a clear message before anything is sent (the server still enforces it)
   if (method === 'POST' && !path.endsWith('/estimate-cost')) { const v = checkBody(body); if (!v.ok) throw new ContentBlockedError(v.category, `${v.message} You were not charged.`); }
-  const { data, error } = await supabase.functions.invoke('muapi-gateway', { body: { method, path, body, idempotencyKey } });
+  let fn = 'muapi-gateway'; let headers: Record<string, string> | undefined;
+  if (IS_BYOK) {
+    // bring-your-own-key: the key stays in this browser and rides in a header to the proxy, which forwards it and keeps nothing
+    const key = getKey();
+    if (!key) { openKeyModal('Add your muapi key to generate.'); throw new MissingKeyError(); }
+    fn = 'muapi-byok'; headers = { 'x-muapi-key': key };
+  }
+  const { data, error } = await supabase.functions.invoke(fn, { body: IS_BYOK ? { method, path, body } : { method, path, body, idempotencyKey }, headers });
   if (error) throw await interpretGatewayFailure(error);
   if (data && typeof data === 'object' && 'error' in data && !('status' in data)) {
     throw new Error(String((data as { error: unknown }).error));
@@ -68,10 +80,18 @@ export const muapi = {
     proxy<{ request_id: string }>('POST', `/api/v1/${slug}`, input, crypto.randomUUID()),
   result: (requestId: string) => proxy<Prediction>('GET', `/api/v1/predictions/${requestId}/result`),
   model: (slug: string) => proxy<Record<string, unknown>>('GET', `/api/v1/models/${slug}`),
-  /** Price of a call in CREDITS (the gateway never reveals muapi dollars or the margin). */
+  /** Price of a call in CREDITS, or in whole CENTS when bringing your own key (1 unit = $0.01 either way). */
   estimate: (slug: string, input: Record<string, unknown>) =>
     proxy<{ cost: number; unit?: string }>('POST', `/api/v1/models/${slug}/estimate-cost`, input),
 };
+
+/** The customer's own muapi wallet (BYOK). Publishes it for the top-bar pill; returns null when the shape is unknown. */
+export async function refreshKeyBalance(): Promise<number | null> {
+  const json = await proxy<unknown>('GET', '/api/v1/account/balance');
+  const n = parseBalance(json);
+  publishKeyBalance(n);
+  return n;
+}
 
 export function outputUrl(p: Prediction): string | undefined {
   return extractMediaUrl(p);
@@ -100,6 +120,7 @@ export async function runModel(
     const status = normalizeStatus(p);
     if (status === 'completed') {
       const url = outputUrl(p);
+      if (IS_BYOK) void refreshKeyBalance().catch(() => { /* the pill just keeps its last value */ });
       if (!url && opts.requireUrl !== false) throw new Error('muapi completed without an output URL');
       return { requestId, url: url ?? '', prediction: p };
     }

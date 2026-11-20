@@ -1,10 +1,12 @@
+import { IS_BYOK } from '../mode';
+
 /**
  * Credits: what customers pay in. 1 credit = $0.01. The server (muapi-gateway) is the only authority on prices;
  * everything here is for display, errors and keeping the balance in step with what the gateway reports.
  */
 
 /** Display-only margin, used for the few built-in USD price tables (Recast steps). Live quotes always win. */
-export const CREDIT_MARGIN = 2.5;
+export const CREDIT_MARGIN = IS_BYOK ? 1 : 2.5;   // bringing your own key: the price is muapi's own, no margin
 /** Ask for confirmation before any action that costs more than this many credits ($1). */
 export const CONFIRM_CREDITS = 100;
 
@@ -18,6 +20,8 @@ export function creditLevel(balance: number | null | undefined): CreditLevel {
 }
 
 export function formatCredits(n: number): string {
+  // bringing your own key, one unit is one cent: show dollars
+  if (IS_BYOK) return `$${(Math.round(n) / 100).toFixed(2)}`;
   const r = Math.round(n);
   return `${r.toLocaleString('en-US')} credit${r === 1 ? '' : 's'}`;
 }
@@ -54,15 +58,17 @@ export function subscribeBalance(l: (n: number) => void): () => void {
 }
 
 /** Why this account cannot generate, or null when it can. */
-export function generationBlock(a: { isGuest: boolean; emailConfirmed: boolean } | null): 'guest' | 'unverified' | null {
+export function generationBlock(a: { isGuest: boolean; emailConfirmed: boolean; hasKey?: boolean } | null): 'guest' | 'unverified' | 'nokey' | null {
   if (!a || a.isGuest) return 'guest';
   if (!a.emailConfirmed) return 'unverified';
+  if (IS_BYOK && a.hasKey === false) return 'nokey';
   return null;
 }
 
 export const BLOCK_TEXT = {
   guest: 'Create an account to generate.',
   unverified: 'Confirm your email address to generate. Check your inbox.',
+  nokey: 'Add your muapi key to generate. You pay muapi directly for what you make.',
 } as const;
 
 /** The gateway refused a model because the account has not unlocked the pack it belongs to. Nothing was charged. */

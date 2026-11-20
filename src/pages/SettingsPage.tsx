@@ -9,6 +9,8 @@ import { BrandKitCard } from '../components/BrandKitCard';
 import { UsageCard } from '../components/UsageCard';
 import { LegalLinks } from './LegalPage';
 import { ReferralCard } from '../components/ReferralCard';
+import { MuapiKeyCard } from '../components/MuapiKeyCard';
+import { IS_BYOK } from '../lib/mode';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -79,9 +81,11 @@ export function SettingsPage() {
 
       <h1 className="text-2xl font-semibold text-zinc-100 mb-8">Settings</h1>
 
-      <div className="mb-6"><CreditsCard /></div>
-      <div className="mb-6"><UsageCard /></div>
-      <div className="mb-6"><ReferralCard /></div>
+      {IS_BYOK ? <div className="mb-6"><MuapiKeyCard /></div> : <>
+        <div className="mb-6"><CreditsCard /></div>
+        <div className="mb-6"><UsageCard /></div>
+        <div className="mb-6"><ReferralCard /></div>
+      </>}
       <div className="mb-6"><BrandKitCard /></div>
       <LegalLinks className="mb-8" />
 
