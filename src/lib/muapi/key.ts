@@ -1,6 +1,6 @@
 /**
  * The customer's own muapi key. It lives ONLY in this browser (localStorage, with an in-memory fallback when storage is blocked) and is sent
- * per request to the muapi-byok proxy, which forwards it and never stores or logs it. Never put it in a project, a cloud save, a URL or an error report.
+ * per request to the subwaytakes-byok proxy, which forwards it and never stores or logs it. Never put it in a project, a cloud save, a URL or an error report.
  */
 const STORAGE_KEY = 'subwaytakes.muapi.key';
 

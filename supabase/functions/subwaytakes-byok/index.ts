@@ -21,15 +21,18 @@ const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
+// everything of this app lives in the `subwaytakes` schema of the shared project
+const db = admin.schema("subwaytakes");
+
 let terms: string[] = []; let termsAt = 0;
 const deps: ByokDeps = {
   hit: async (userId, kind) => {
-    const { error } = await admin.rpc("credit_hit", { p_user: userId, p_kind: kind });
+    const { error } = await db.rpc("rate_hit", { p_user: userId, p_kind: kind });
     if (error) throw new Error(error.message.includes("rate_limited") ? "rate_limited" : "hit_failed");
   },
   blockedTerms: async () => {
     if (Date.now() - termsAt > 60_000) {
-      const { data, error } = await admin.from("safety_terms").select("term").limit(500);
+      const { data, error } = await db.from("safety_terms").select("term").limit(500);
       if (!error && data) { terms = data.map((r: { term: string }) => r.term); termsAt = Date.now(); }
     }
     return terms;

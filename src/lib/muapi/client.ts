@@ -62,7 +62,7 @@ async function proxy<T>(method: 'GET' | 'POST', path: string, body?: unknown, id
     // bring-your-own-key: the key stays in this browser and rides in a header to the proxy, which forwards it and keeps nothing
     const key = getKey();
     if (!key) { openKeyModal('Add your muapi key to generate.'); throw new MissingKeyError(); }
-    fn = 'muapi-byok'; headers = { 'x-muapi-key': key };
+    fn = 'subwaytakes-byok'; headers = { 'x-muapi-key': key };
   }
   const { data, error } = await supabase.functions.invoke(fn, { body: IS_BYOK ? { method, path, body } : { method, path, body, idempotencyKey }, headers });
   if (error) throw await interpretGatewayFailure(error);

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 
-const BUCKET = 'media';
+// its own bucket in a shared project (BYOK); the credits mode keeps the older `media` bucket
+export const BUCKET = import.meta.env.VITE_BILLING_MODE === 'credits' ? 'media' : 'subwaytakes-media';
 
 const SAFE = (s: string) => s.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/\.{2,}/g, '.').replace(/^[-.]+|[-.]+$/g, '').slice(0, 80) || 'file';
 
@@ -9,7 +10,7 @@ export function mediaPath(userId: string, name: string, now = Date.now(), rand =
   return `${userId}/${now}-${rand}-${SAFE(name)}`;
 }
 
-/** Upload to the public `media` bucket and return a public URL that muapi and the web renderer can read. */
+/** Upload to the public media bucket and return a public URL that muapi and the web renderer can read. */
 export async function uploadMedia(blob: Blob, name: string): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not signed in');

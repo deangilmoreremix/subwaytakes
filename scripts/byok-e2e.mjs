@@ -34,7 +34,7 @@ async function open({ width = 1280, height = 900, key = null } = {}) {
     if (u.includes('/auth/v1/user')) return json(r, user);
     if (u.includes('/auth/v1/')) return json(r, { ...session, user });
     if (u.includes('/functions/v1/muapi-gateway')) { st.gatewayCalls++; return json(r, { error: 'gateway must not be used', code: 'internal' }, 500); }
-    if (u.includes('/functions/v1/muapi-byok')) {
+    if (u.includes('/functions/v1/subwaytakes-byok')) {
       const headers = req.headers(); const { method, path, body } = JSON.parse(req.postData() || '{}');
       st.proxy.push({ method, path, key: headers['x-muapi-key'], body });
       const k = headers['x-muapi-key'];

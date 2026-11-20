@@ -50,3 +50,17 @@ describe('bring your own key mode', () => {
     expect(onboarding.onboardingSteps(base).map(s => `${s.label} ${s.hint}`).join(" ")).not.toMatch(/credits|Starter/i);
   });
 });
+
+describe('shared project labelling', () => {
+  async function load(mode: string) {
+    vi.resetModules(); vi.stubEnv('VITE_BILLING_MODE', mode); vi.stubEnv('VITE_SUPABASE_URL', 'https://stub.supabase.test'); vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'stub'); vi.stubEnv('VITE_SUPABASE_SCHEMA', '');
+    const [sb, storage] = await Promise.all([import('./supabase'), import('./storage')]);
+    return { schema: sb.DB_SCHEMA, bucket: storage.BUCKET };
+  }
+  it('bringing your own key uses the subwaytakes schema and its own bucket', async () => {
+    expect(await load('byok')).toEqual({ schema: 'subwaytakes', bucket: 'subwaytakes-media' });
+  });
+  it('the credits mode keeps the older public tables and media bucket', async () => {
+    expect(await load('credits')).toEqual({ schema: 'public', bucket: 'media' });
+  });
+});
