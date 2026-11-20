@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Download, Loader2, CheckCircle2, AlertCircle, Film } from 'lucide-react';
+import { X, Download, Loader2, CheckCircle2, AlertCircle, Film, Image as ImageIcon } from 'lucide-react';
 import { Segmented, Label } from './ui';
 import { checkExportSupport, exportEpisode, type ExportContainer, type ExportResolution } from '../../lib/timeline/export';
 import { projectDuration } from '../../lib/timeline/ops';
 import type { Project } from '../../lib/timeline/types';
 import type { Aspect } from '../../lib/muapi/registry';
+import { shareFileName } from '../../lib/share/gif';
 
 type Phase = 'idle' | 'checking' | 'rendering' | 'done' | 'error';
 
@@ -18,6 +19,7 @@ export function ExportDialog({ project, aspect, onClose, onDone }: { project: Pr
   const [warnings, setWarnings] = useState<string[]>([]);
   const [result, setResult] = useState<{ url: string; mb: number } | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const [share, setShare] = useState<{ busy: 'poster' | 'gif' | null; note: string; ok: boolean; caption: string }>({ busy: null, note: '', ok: true, caption: '' });
   const secs = projectDuration(project) / project.fps;
 
   useEffect(() => () => { abort.current?.abort(); if (result) URL.revokeObjectURL(result.url); }, [result]);
@@ -25,6 +27,20 @@ export function ExportDialog({ project, aspect, onClose, onDone }: { project: Pr
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && phase !== 'rendering') onClose(); };
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, [phase, onClose]);
+
+  // a poster picture or a short looping GIF made in the browser from the file that was just exported (loaded only when asked for)
+  async function makeShare(kind: 'poster' | 'gif') {
+    if (!result) return;
+    setShare(s => ({ ...s, busy: kind, note: kind === 'gif' ? 'Making the GIF…' : 'Making the picture…', ok: true }));
+    try {
+      const m = await import('../../lib/share/gifBrowser');
+      const blob = kind === 'gif' ? await m.makeGif(result.url, (d, t) => setShare(s => ({ ...s, note: `Making the GIF… ${d}/${t}` }))) : await m.makePoster(result.url, share.caption);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = shareFileName(kind); document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setShare(s => ({ ...s, busy: null, ok: true, note: kind === 'gif' ? `GIF saved (${(blob.size / 1_048_576).toFixed(1)} MB).` : 'Picture saved.' }));
+    } catch (e) { setShare(s => ({ ...s, busy: null, ok: false, note: e instanceof Error ? e.message : 'Could not make that.' })); }
+  }
 
   async function start() {
     setError(''); setWarnings([]); setPhase('checking');
@@ -88,6 +104,15 @@ export function ExportDialog({ project, aspect, onClose, onDone }: { project: Pr
               <p className="text-[13px] font-medium text-white">Export ready</p>
               <p className="text-[12px] text-zinc-500 tnum">{container.toUpperCase()} · {resolution} · {result.mb.toFixed(1)} MB</p>
               <a href={result.url} download={`subwaytakes-episode.${container}`} className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent-hot px-5 text-[13px] font-semibold text-black shadow-glow"><Download className="h-4 w-4" />Download</a>
+              <div className="mx-auto max-w-xs space-y-2 border-t border-line pt-3 text-left" data-testid="share-box">
+                <p className="text-[12px] font-medium text-zinc-200">Share it</p>
+                <input value={share.caption} onChange={e => setShare(s => ({ ...s, caption: e.target.value }))} maxLength={80} placeholder="Optional line on the picture" aria-label="Line on the share picture" data-testid="share-caption" className="w-full rounded-lg border border-line bg-ink-950 px-2.5 py-1.5 text-[12px] text-zinc-100 placeholder:text-zinc-600" />
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => void makeShare('poster')} disabled={!!share.busy} data-testid="share-poster" className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-white/5 text-[12px] font-medium text-zinc-200 hover:bg-white/10 disabled:opacity-50"><ImageIcon className="h-3.5 w-3.5" />Share image</button>
+                  <button onClick={() => void makeShare('gif')} disabled={!!share.busy} data-testid="share-gif" className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-white/5 text-[12px] font-medium text-zinc-200 hover:bg-white/10 disabled:opacity-50">{share.busy === 'gif' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Film className="h-3.5 w-3.5" />}GIF teaser</button>
+                </div>
+                {share.note && <p role={share.ok ? 'status' : 'alert'} data-testid="share-note" className={`text-[11px] ${share.ok ? 'text-zinc-400' : 'text-red-300'}`}>{share.note}</p>}
+              </div>
             </div>
           )}
         </div>

@@ -34,7 +34,11 @@ cp .env.example .env   # then fill in the two Supabase values
 npm run dev
 ```
 
-### Crop and reframe (free)
+### Share image and GIF teaser (free)
+
+After an export finishes, the export dialog has "Share it": **Share image** saves a poster PNG from the best moment of your episode (optionally with one line of text along the bottom) and **GIF teaser** saves a looping GIF of up to 3 seconds, 10 frames a second, 480 px wide, refused if it would be too big to share (over about 8 MB). Both are made in the browser from the file you just exported, loaded only when you press the button. Verified with the real GIF encoder on a real exported MP4 (`scripts/share-test.mjs`: real GIF89a, 480 px wide, right shape, 18 frames for a 2-second video, about 1 MB, loops, caption bar present) and through the real export dialog (`SHARE_DIR=<dir> node scripts/export-project.mjs ...`). Not verified: very long or very detailed videos on slow phones (the GIF takes about 2 seconds per second of teaser here on CPU), and how a particular app displays the GIF.
+
+## Crop and reframe (free)
 
 - **Portraits** (Cast, "Crop"): crop to 9:16, 1:1 or 16:9 with zoom; only "Use this crop" uploads a PNG to your own media folder. Verified with a real portrait (`scripts/portrait-crop-e2e.mjs`: the square crop is decoded and measured).
 - **Video clips** (select a clip, Clip tab, "Reframe"): zoom 1 to 3 and choose what stays in the middle over a still from the clip; the clip file is not changed, only a zoom and a focal point are stored (clips without one render exactly as before; project files re-check them). It uses plain 2D CSS so the web exporter renders it. Verified by a REAL web export of a position-coded test video, with pixels measured (`scripts/export-crop-test.mjs`: with zoom 2 at (0.75, 0.5) the middle of the frame shows the picture at 75% across, within compression error) and the editor flow with a real video file (`scripts/reframe-e2e.mjs`). Not verified: dragging by hand on touch screens, very wide sources into tall frames (the focal point is approximate when the shapes differ).

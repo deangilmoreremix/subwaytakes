@@ -24,6 +24,7 @@
     "@remotion/web-renderer": "4.0.542",
     "@remotion/whisper-web": "4.0.542",
     "@supabase/supabase-js": "^2.57.4",
+    "gifenc": "1.0.3",
     "lucide-react": "^0.344.0",
     "mediabunny": "1.64.0",
     "react": "^18.3.1",

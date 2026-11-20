@@ -28,6 +28,16 @@ await page.getByRole('button', { name: 'Export', exact: true }).click();
 await page.getByRole('button', { name: 'Start export' }).click();
 const r = await Promise.race([page.getByText('Export ready').waitFor({ timeout: 300000 }).then(() => 'done'), page.getByText('Try again').waitFor({ timeout: 300000 }).then(() => 'error')]);
 if (r === 'error') { console.log('EXPORT_ERROR', await page.locator('[role=dialog] .text-red-300').allInnerTexts()); console.log(logs.join('\n')); await browser.close(); process.exit(2); }
+// SHARE_DIR=<dir>: also use the Share buttons of the finished export and save what they download (poster and GIF)
+if (process.env.SHARE_DIR) {
+  const { mkdirSync } = await import('node:fs'); mkdirSync(process.env.SHARE_DIR, { recursive: true });
+  await page.getByTestId('share-caption').fill('So what is ur take?');
+  for (const id of ['share-poster', 'share-gif']) {
+    const [d] = await Promise.all([page.waitForEvent('download', { timeout: 120000 }), page.getByTestId(id).click()]);
+    await d.saveAs(join(process.env.SHARE_DIR, d.suggestedFilename()));
+    console.log('SHARED', d.suggestedFilename(), '|', await page.getByTestId('share-note').innerText());
+  }
+}
 const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Download/ }).click()]);
 await dl.saveAs(outFile);
 console.log('EXPORT_OK', outFile); if (process.env.SHOW_LOGS) console.log(logs.join('\n'));
