@@ -15,6 +15,7 @@ The 33 presets in `src/lib/captions/presets.ts` are this app's own colour, font 
 ## On-device speech recognition (free, runs in the browser)
 
 - **Transformers.js** (`@huggingface/transformers`), Apache-2.0, running OpenAI Whisper ONNX conversions from the Hugging Face hub (`onnx-community/whisper-*_timestamped`).
+- **MediaPipe Tasks Vision** (`@mediapipe/tasks-vision` 1.2.0), Apache-2.0, with Google's MediaPipe selfie segmentation model (`selfie_segmenter.tflite`) for on-device background removal. The model and the WebAssembly runtime are downloaded at run time from their official hosts and are not bundled.
 - **whisper.cpp** compiled to WebAssembly through `@remotion/whisper-web` (Remotion licence: free for individuals and companies of up to three people; check https://remotion.dev/license if your team grows), models from `ggerganov/whisper.cpp`.
 - **Web Speech API** (browser built-in) for optional dictation.
 - Fonts: Google Fonts families through `@remotion/google-fonts` (SIL Open Font Licence / Apache-2.0).

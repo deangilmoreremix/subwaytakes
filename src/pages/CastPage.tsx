@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Upload, Sparkles, Loader2, Play, Square, AlertCircle, UserRound, Mic } from 'lucide-react';
+import { Plus, Trash2, Upload, Sparkles, Loader2, Play, Square, AlertCircle, UserRound, Mic, Eraser } from 'lucide-react';
 import { Segmented, Label, inputCls } from '../components/studio/ui';
 import { clsx } from '../lib/format';
 import { DEFAULT_HOST, buildPortraitPrompt, createCharacter, deleteCharacter, generateRandomGuest, listCharacters, updateCharacter } from '../lib/characters';
@@ -9,6 +9,7 @@ import { SPEED_RANGE, TTS_SLUG, buildTtsInput, clampSpeed, type VoiceProvider } 
 import { runModel } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
 import { BlockAction } from '../components/BlockAction';
+import { BackgroundRemover } from '../components/studio/BackgroundRemover';
 import { BLOCK_TEXT, formatCredits, usdToCredits } from '../lib/credits';
 import { IS_BYOK } from '../lib/mode';
 import { UnlockPrompt } from '../components/UnlockPrompt';
@@ -106,6 +107,7 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
     await updateCharacter(c.id, { name: next.name, portrait_url: next.portrait_url ?? null, voice_provider: next.voice_provider ?? null, voice_id: next.voice_id ?? null, voice_speed: next.voice_speed ?? 1, distinguishing_features: next.distinguishing_features, energy_persona: next.energy_persona, clothing_style: next.clothing_style, hair_description: next.hair_description });
     onSaved();
   }
+  const [bgOpen, setBgOpen] = useState(false);
   const run = async (kind: typeof busy, fn: () => Promise<void>) => { setErr(''); setBusy(kind); try { await fn(); } catch (e) { setErr(e instanceof Error ? e.message : 'Something went wrong'); } finally { setBusy(''); } };
 
   async function preview() {
@@ -120,6 +122,7 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
 
   return (
     <div className="space-y-5 rounded-2xl border border-line bg-ink-850 p-5 shadow-panel">
+      {bgOpen && c.portrait_url && <BackgroundRemover portraitUrl={c.portrait_url} onClose={() => setBgOpen(false)} onUse={async url => { await persist({ portrait_url: url }); setBgOpen(false); }} />}
       <div className="flex items-center justify-between gap-3">
         <input value={c.name} onChange={e => set('name', e.target.value)} onBlur={() => persist({ name: c.name })} aria-label="Character name" className="min-w-0 bg-transparent font-display text-xl font-semibold text-white focus:outline-none" />
         <button onClick={() => run('save', async () => { await deleteCharacter(c.id); onDeleted(); })} aria-label="Delete character" className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-red-500/10 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
@@ -139,6 +142,7 @@ function CharacterEditor({ character, canGenerate, onSaved, onDeleted }: { chara
               <input type="file" accept="image/*" className="sr-only" aria-label="Upload portrait" disabled={!consent.accepted} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run('upload', async () => { await persist({ portrait_url: await uploadPortrait(f) }); }); }} />
             </label>
             <button disabled={!canGenerate || !!busy} onClick={() => run('generate', async () => { await persist({ portrait_url: await generatePortrait(buildPortraitPrompt(c)) }); })} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-accent to-accent-hot text-[12px] font-semibold text-black disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Generate · ~{formatCredits(usdToCredits(0.03))}</button>
+            <button disabled={!c.portrait_url || !consent.accepted || !!busy} onClick={() => setBgOpen(true)} data-testid="remove-bg" title={c.portrait_url ? 'Cut the person out, free, on this device' : 'Add a portrait first'} className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white/5 text-[12px] font-medium text-zinc-200 hover:bg-white/10 disabled:opacity-40"><Eraser className="h-3.5 w-3.5" />Remove background</button>
           </div>
         </div>
 

@@ -34,7 +34,11 @@ cp .env.example .env   # then fill in the two Supabase values
 npm run dev
 ```
 
-### Project files (free)
+### Remove a portrait's background (free, on device)
+
+Cast, "Remove background": Google's open MediaPipe selfie segmenter cuts the person out of a portrait on this device (the model, about 250 KB, and its WebAssembly runtime download from their official hosts the first time and are cached). Pick transparent, white, soft grey, subway yellow or the original blurred, compare before and after, and only "Use this portrait" uploads a PNG to your own media folder. It is behind the same face-photo consent as uploads. Verified with the real model on a real portrait in headless Chromium (`scripts/cutout-test.mjs`: 1.2 s on CPU, person found, corner transparent or white, centre opaque) and through the real Cast UI (`scripts/cutout-ui-e2e.mjs`, Supabase stubbed). Not verified: other browsers, phones, group photos (it is a selfie model: one person), very busy or low-contrast backgrounds.
+
+## Project files (free)
 
 Output tab, "Project file": **Save to file** writes the episode as `<name>.subwaytakes.json` (the native save dialog in Chrome and Edge, a download elsewhere) and **Open file** loads one back, with a confirmation before replacing what you have and undo afterwards. The file holds the timeline and the links to your clips, never the clips themselves and never your muapi key; opening refuses anything that is not a SubwayTakes project, is from a newer version, is over 5 MB, or points at non-https media. Verified by unit tests and `scripts/projectfile-e2e.mjs` (real file download and upload; the native save dialog itself is not testable headless). Not done: mirroring the draft into IndexedDB (the draft still lives in localStorage).
 
