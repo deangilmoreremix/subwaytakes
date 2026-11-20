@@ -44,6 +44,8 @@ Customers create their own muapi account and paste their key into the key dialog
 
 To deploy this mode you need: the Supabase migrations the app uses (clip_jobs and media, retention, launch ops, and the credits migration only because it holds the rate-limit function `credit_hit` and the `safety_terms` table), and `supabase functions deploy muapi-byok`. No `MUAPI_API_KEY`, Stripe or reaper is needed. To bring the credits model back, set `VITE_BILLING_MODE=credits` and follow the sections below.
 
+**Shared Supabase project.** The backend lives in its own schema `subwaytakes` (migration `20261125000000_subwaytakes_schema.sql`, tested by `scripts/test-subwaytakes-sql.sh`), the bucket `subwaytakes-media` and the edge function `subwaytakes-byok`. Applied to the shared project on 2026-11-20: 11 tables (all with row-level security and an `[app: subwaytakes]` comment), 4 functions, the bucket with 4 policies, and `subwaytakes` appended to the exposed schemas. Nothing outside that was changed. To deploy the function: `node scripts/bundle-byok.mjs /tmp/index.ts`, then deploy that single file as `index.ts` with JWT verification on. To remove everything: `DROP SCHEMA subwaytakes CASCADE`, delete the bucket and the function, and take `subwaytakes` out of the exposed schemas.
+
 Verified: the proxy logic and the key store by unit tests, and the dialog and flows by a stubbed browser run (`scripts/byok-e2e.mjs`). Not verified: the deployed `muapi-byok` against a real key, muapi's exact balance response (the dialog shows the number it returns as "muapi credits"), and whether muapi calls are accepted from your production domain.
 
 ## Deploying the backend (once)
