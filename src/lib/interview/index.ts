@@ -179,15 +179,17 @@ export function cutsPlan(t: TakeSpec): CutShot[] {
 }
 
 /** Whether Cuts has everything it needs (both characters need a portrait and a voice). */
-type Person = { portrait_url?: string | null; voice_id?: string | null };
+/** `ownVoice`: the customer recorded this person's line themselves, so no Cast voice is needed. */
+type Person = { portrait_url?: string | null; voice_id?: string | null; ownVoice?: boolean };
+const needsVoice = (p: Person) => !p.voice_id && !p.ownVoice;
 export function cutsProblem(host: Person | undefined, guest: Person | undefined, guest2?: Person | undefined, needsSecondGuest = false): string | null {
   if (needsSecondGuest) {
     if (!guest2) return 'Pick a second guest from Cast for the duel.';
-    if (!guest2.portrait_url || !guest2.voice_id) return 'The second guest needs a portrait and a voice in Cast.';
+    if (!guest2.portrait_url || needsVoice(guest2)) return 'The second guest needs a portrait and a voice in Cast, or record their line yourself.';
   }
   if (!host || !guest) return 'Pick a host and a guest from Cast.';
-  if (!host.portrait_url || !host.voice_id) return 'The host needs a portrait and a voice in Cast.';
-  if (!guest.portrait_url || !guest.voice_id) return 'The guest needs a portrait and a voice in Cast.';
+  if (!host.portrait_url || needsVoice(host)) return 'The host needs a portrait and a voice in Cast, or record the line yourself.';
+  if (!guest.portrait_url || needsVoice(guest)) return 'The guest needs a portrait and a voice in Cast, or record the line yourself.';
   return null;
 }
 

@@ -194,3 +194,14 @@ describe('Motivation: the customer\'s own advice is kept when they try a quote a
     expect(removed.take).toBe('Show up for the next hour, nothing more.');
   });
 });
+
+describe('Cuts with your own recorded line', () => {
+  const pic = 'https://x/p.png';
+  it('needs no Cast voice for a person whose line you recorded, but still a portrait', async () => {
+    const { cutsProblem } = await import('./index');
+    expect(cutsProblem({ portrait_url: pic, voice_id: 'v' }, { portrait_url: pic }, undefined, false)).toMatch(/guest needs a portrait and a voice/);
+    expect(cutsProblem({ portrait_url: pic, voice_id: 'v' }, { portrait_url: pic, ownVoice: true }, undefined, false)).toBeNull();
+    expect(cutsProblem({ portrait_url: pic, voice_id: 'v' }, { ownVoice: true }, undefined, false)).toMatch(/guest needs/);
+    expect(cutsProblem({ portrait_url: pic, ownVoice: true }, { portrait_url: pic, ownVoice: true }, { portrait_url: pic }, true)).toMatch(/second guest/);
+  });
+});

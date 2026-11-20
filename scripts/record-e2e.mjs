@@ -22,6 +22,10 @@ const session = { access_token: jwt, refresh_token: 'r', token_type: 'bearer', e
 // a guest with a portrait but NO voice picked in Cast
 const CHAR = { id: 'c1', user_id: 'u-1', name: 'Maya', role: 'guest', age_range: 'late-20s', gender: 'woman', ethnicity: 'latina', clothing_style: 'a yellow raincoat', hair_description: 'big curls', distinguishing_features: null, energy_persona: 'warm', voice_style: '', is_default: false, created_at: new Date().toISOString(), portrait_url: 'https://stub.media.test/portrait.png', voice_provider: null, voice_id: null, voice_speed: 1 };
 
+
+// a real 5 second WAV (a quiet tone) standing in for the host's text-to-speech result
+const TONE = (() => { const sr = 16000, n = sr * 5, b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40); for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(3000 * Math.sin(i / 20)), 44 + i * 2); return b; })();
+
 const browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2, permissions: ['microphone'] });
 await ctx.addInitScript(([s, k]) => { localStorage.setItem('sb-stub-auth-token', JSON.stringify(s)); localStorage.setItem('subwaytakes.muapi.key', k); }, [session, GOOD]);
@@ -112,6 +116,66 @@ await page.getByRole('button', { name: 'Take', exact: true }).click();
 await page.locator('textarea').first().fill('A completely different line now.');
 await page.getByRole('button', { name: 'Model', exact: true }).click();
 check('editing the line drops the old recording (it was made for another line)', !/Using your recording/.test(await page.getByTestId('own-voice').innerText()));
+
+// ---- Cuts: the host keeps the Cast voice, the guest's line is recorded
+{
+  const HOST = { ...CHAR, id: 'c2', name: 'Host Hank', role: 'host', voice_provider: 'elevenlabs', voice_id: 'v-host' };
+  const c2 = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['microphone'] });
+  await c2.addInitScript(([s, k]) => { localStorage.setItem('sb-stub-auth-token', JSON.stringify(s)); localStorage.setItem('subwaytakes.muapi.key', k); }, [session, GOOD]);
+  const p3 = await c2.newPage();
+  p3.on('dialog', d => d.accept());
+  const calls = []; const stored2 = new Map();
+  await p3.route('https://stub.media.test/**', r => /\.mp3$/.test(r.request().url()) ? r.fulfill({ status: 200, contentType: 'audio/wav', headers: { 'access-control-allow-origin': '*' }, body: TONE }) : r.fulfill({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: PNG }));
+  await p3.route(`${SB}/**`, async r => {
+    const req = r.request(); const u = req.url(); const m = req.method();
+    if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
+    if (u.includes('/auth/v1/user')) return json(r, user);
+    if (u.includes('/auth/v1/')) return json(r, { ...session, user });
+    if (u.includes('/storage/v1/object/subwaytakes-media/')) { const b = req.postDataBuffer(); const a = b.indexOf('RIFF'), z = b.lastIndexOf('\r\n--'); stored2.set(decodeURIComponent(u.split('/object/subwaytakes-media/')[1].split('?')[0]), b.subarray(a, z > a ? z : b.length)); return json(r, { Key: 'x' }); }
+    if (u.includes('/storage/v1/object/public/subwaytakes-media/')) { const b = stored2.get(decodeURIComponent(u.split('/public/subwaytakes-media/')[1])); return b ? r.fulfill({ status: 200, contentType: 'audio/wav', headers: { 'access-control-allow-origin': '*' }, body: b }) : r.fulfill({ status: 404 }); }
+    if (u.includes('/functions/v1/subwaytakes-byok')) {
+      const { method, path, body } = JSON.parse(req.postData() || '{}'); calls.push({ method, path, body });
+      if (path === '/api/v1/account/balance') return json(r, { balance: 20 });
+      if (path.endsWith('/estimate-cost')) return json(r, { cost: 40, unit: 'cents' });
+      if (method === 'POST' && /^\/api\/v1\/[\w.\-]+$/.test(path)) return json(r, { request_id: 'req-' + calls.length, status: 'processing' });
+      if (/predictions\/req-\d+\/result/.test(path)) return json(r, { status: 'completed', outputs: [/tts/.test(JSON.stringify(calls)) ? 'https://stub.media.test/voice.mp3' : 'https://stub.media.test/out.mp4'] });
+      return json(r, {});
+    }
+    if (u.includes('/rest/v1/character_bibles')) return json(r, m === 'GET' ? [HOST, CHAR] : CHAR);
+    if (u.includes('/rest/v1/clip_jobs')) return m === 'GET' ? json(r, []) : json(r, { id: 'j1', created_at: new Date().toISOString(), error: null, output_url: null, request_id: null }, 201);
+    if (u.includes('user_profiles')) return json(r, { id: 'u-1', credits_balance: 0, subscription_tier: 'free' });
+    return json(r, []);
+  });
+  await p3.goto(`${base}/create`);
+  await p3.getByRole('button', { name: 'Model', exact: true }).click();
+  await p3.getByRole('button', { name: /^Cuts/ }).first().click();
+  await p3.getByTestId('cuts-own-voice').first().waitFor({ timeout: 20000 });
+  await p3.getByRole('button', { name: /Host Hank/ }).first().click();        // host picker
+  await p3.getByRole('button', { name: /Maya/ }).nth(1).click();              // guest picker (Maya has a portrait and no voice)
+  check('Cuts offers "read this line yourself" for the host and the guest', (await p3.getByTestId('cuts-own-voice').count()) >= 2);
+  check('with the guest having no voice, Cuts says so', /guest needs a portrait and a voice/.test(await p3.locator('body').innerText()));
+  await p3.getByTestId('cuts-record').nth(1).click();           // the guest's line
+  await p3.getByTestId('record-modal').waitFor();
+  await p3.getByTestId('record-start').click();
+  await p3.getByTestId('record-stop').waitFor({ timeout: 8000 });
+  await p3.waitForTimeout(3000);
+  await p3.getByTestId('record-stop').click();
+  await p3.getByTestId('record-review').waitFor({ timeout: 10000 });
+  await p3.getByTestId('record-use').click();
+  await p3.getByTestId('record-modal').waitFor({ state: 'detached', timeout: 10000 });
+  check('the guest line shows as recorded and the voice problem is gone', /Using your recording/.test(await p3.getByTestId('cuts-own-voice').nth(1).innerText()) && !/guest needs a portrait and a voice/.test(await p3.locator('body').innerText()));
+  await p3.screenshot({ path: `${out}/08-cuts-own-voice.png` });
+  calls.length = 0;
+  await p3.getByRole('button', { name: /^Generate/ }).first().click();
+  await p3.waitForTimeout(12000);
+  const posts = calls.filter(c => c.method === 'POST' && !c.path.endsWith('/estimate-cost'));
+  const tts = posts.filter(c => /tts|speech/.test(c.path));
+  const renders = posts.filter(c => /omnihuman|avatar/.test(c.path));
+  check('only the HOST line is turned into speech (one paid voice step, not two)', tts.length === 1, JSON.stringify(posts.map(c => c.path)));
+  check('both shots are rendered', renders.length === 2, String(renders.length));
+  check('the guest shot is rendered with your recording (padded copy in your own folder), the host shot with the Cast voice', renders.some(r => /subwaytakes-media\/u-1\/.*voice\.wav$/.test(String(r.body?.audio_url))) && renders.some(r => /voice\.mp3$/.test(String(r.body?.audio_url))), JSON.stringify(renders.map(r => r.body?.audio_url)));
+  await c2.close();
+}
 
 // ---- permission denied is explained, not a dead button
 const denied = await browser.newContext({ viewport: { width: 1280, height: 900 } });

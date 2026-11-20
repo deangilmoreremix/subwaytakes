@@ -1,11 +1,26 @@
 import { Link } from 'react-router-dom';
-import { Mic, UserRound } from 'lucide-react';
+import { Mic, Trash2, UserRound } from 'lucide-react';
+import { recordingSupported } from '../../lib/audio/record';
 import { Label } from './ui';
 import { clsx } from '../../lib/format';
 import { cutsProblem } from '../../lib/interview';
 import type { CharacterBible } from '../../lib/types';
 
-function Picker({ title, characters, value, onChange }: { title: string; characters: CharacterBible[]; value?: string; onChange: (id: string) => void }) {
+export interface CutsRecording { line: string; recorded?: { seconds: number } | null; onRecord: () => void; onClear: () => void }
+
+/** One line the customer may read themselves instead of using the Cast voice (free). */
+function OwnVoice({ r }: { r: CutsRecording }) {
+  return (
+    <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-line bg-ink-950 px-2.5 py-1.5" data-testid="cuts-own-voice">
+      <p className="min-w-0 truncate text-[11px] text-zinc-500">{r.recorded ? `Using your recording (${Math.round(r.recorded.seconds)}s)` : 'Read this line yourself: free'}</p>
+      {r.recorded
+        ? <button onClick={r.onClear} aria-label="Remove recording" className="shrink-0 text-zinc-500 hover:text-red-300"><Trash2 className="h-3.5 w-3.5" /></button>
+        : <button onClick={r.onRecord} disabled={!r.line.trim() || !recordingSupported()} data-testid="cuts-record" className="shrink-0 rounded-md border border-accent/50 px-2 py-0.5 text-[11px] font-semibold text-accent disabled:opacity-40"><Mic className="mr-1 inline h-3 w-3" />Record</button>}
+    </div>
+  );
+}
+
+function Picker({ title, characters, value, onChange, own }: { title: string; characters: CharacterBible[]; value?: string; onChange: (id: string) => void; own?: CutsRecording }) {
   return (
     <div><Label>{title}</Label>
       <div className="grid gap-1.5">
@@ -18,12 +33,17 @@ function Picker({ title, characters, value, onChange }: { title: string; charact
           </button>
         ))}
       </div>
+      {own && <OwnVoice r={own} />}
     </div>
   );
 }
 
-export function CutsPanel({ characters, hostId, onHost, guestId, onGuest, duel = false, guest2Id, onGuest2 }: { characters: CharacterBible[]; hostId?: string; onHost: (id: string) => void; guestId?: string; onGuest: (id: string) => void; duel?: boolean; guest2Id?: string; onGuest2?: (id: string) => void }) {
-  const problem = cutsProblem(characters.find(c => c.id === hostId), characters.find(c => c.id === guestId), characters.find(c => c.id === guest2Id), duel);
+export function CutsPanel({ characters, hostId, onHost, guestId, onGuest, duel = false, guest2Id, onGuest2, recordings }: {
+  /** per role: the line, the customer's recording of it (if any) and the actions */
+  recordings?: { host?: CutsRecording; guest?: CutsRecording; guest2?: CutsRecording };
+ characters: CharacterBible[]; hostId?: string; onHost: (id: string) => void; guestId?: string; onGuest: (id: string) => void; duel?: boolean; guest2Id?: string; onGuest2?: (id: string) => void }) {
+  const withOwn = (id: string | undefined, r?: CutsRecording) => { const c = characters.find(x => x.id === id); return c ? { ...c, ownVoice: !!r?.recorded } : undefined; };
+  const problem = cutsProblem(withOwn(hostId, recordings?.host), withOwn(guestId, recordings?.guest), withOwn(guest2Id, recordings?.guest2), duel);
   if (characters.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
@@ -36,9 +56,9 @@ export function CutsPanel({ characters, hostId, onHost, guestId, onGuest, duel =
   return (
     <div className="space-y-4">
       <p className="text-[11px] leading-relaxed text-zinc-500">Two lip-synced shots, host asks then guest answers, placed back to back. Each person is shown holding a card to their mouth.</p>
-      <Picker title="Host" characters={characters} value={hostId} onChange={onHost} />
-      <Picker title={duel ? 'Guest A' : 'Guest'} characters={characters} value={guestId} onChange={onGuest} />
-      {duel && onGuest2 && <Picker title="Guest B" characters={characters} value={guest2Id} onChange={onGuest2} />}
+      <Picker title="Host" characters={characters} value={hostId} onChange={onHost} own={recordings?.host} />
+      <Picker title={duel ? 'Guest A' : 'Guest'} characters={characters} value={guestId} onChange={onGuest} own={recordings?.guest} />
+      {duel && onGuest2 && <Picker title="Guest B" characters={characters} value={guest2Id} onChange={onGuest2} own={recordings?.guest2} />}
       {problem && <p className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">{problem}</p>}
     </div>
   );

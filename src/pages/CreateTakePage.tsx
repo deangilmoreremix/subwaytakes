@@ -241,9 +241,11 @@ export function CreateTakePage() {
   const LIPSYNC_STAGES = ['Writing the voice', 'Preparing audio', 'Rendering the video'];
 
   // A recording belongs to the exact line it was made for: edit the take and it no longer applies.
-  const [recording, setRecording] = useState<{ url: string; seconds: number; script: string } | null>(null);
-  const [recordOpen, setRecordOpen] = useState(false);
-  const ownVoice = recording && recording.script === spec.take ? recording : null;
+  const [recordings, setRecordings] = useState<Record<string, { url: string; seconds: number }>>({});
+  const [recordFor, setRecordFor] = useState<string | null>(null);   // the line being recorded
+  const ownVoice = recordings[spec.take] ?? null;
+  const cutsLines = spokenLines(spec);
+  const recordingFor = (line: string) => ({ line, recorded: recordings[line] ?? null, onRecord: () => setRecordFor(line), onClear: () => setRecordings(r => { const n = { ...r }; delete n[line]; return n; }) });
 
   async function generateLipsync() {
     const speaker = characters.find(c => c.id === speakerId);
@@ -268,16 +270,18 @@ export function CreateTakePage() {
   async function generateCuts() {
     const host = characters.find(c => c.id === hostId), guest = characters.find(c => c.id === speakerId), guest2 = characters.find(c => c.id === guest2Id);
     const duel = showOf(spec.show).guests === 2;
-    const problem = cutsProblem(host, guest, guest2, duel);
-    if (problem || !host || !guest || (duel && !guest2)) { setError(problem ?? 'Pick a host and a guest.'); return; }
     const plan = cutsPlan(spec);
+    const lineOf = (role: 'host' | 'guest' | 'guest2') => plan.find(s => s.role === role)?.text ?? '';
+    const own = (role: 'host' | 'guest' | 'guest2') => recordings[lineOf(role)];
+    const problem = cutsProblem(host && { ...host, ownVoice: !!own('host') }, guest && { ...guest, ownVoice: !!own('guest') }, guest2 && { ...guest2, ownVoice: !!own('guest2') }, duel);
+    if (problem || !host || !guest || (duel && !guest2)) { setError(problem ?? 'Pick a host and a guest.'); return; }
     const speakers = { host, guest, guest2: guest2 ?? guest };
     const roleName = { host: 'Host', guest: duel ? 'Guest A' : 'Guest', guest2: 'Guest B' } as const;
     for (const shot of plan) {
-      const p = validateLipsync({ speaker: speakers[shot.role], script: shot.text, model: lipModel });
+      const p = validateLipsync({ speaker: speakers[shot.role], script: shot.text, model: lipModel, recordedAudioUrl: recordings[shot.text]?.url });
       if (p) { setError(`${roleName[shot.role]}: ${p}`); return; }
     }
-    const costs = await Promise.all(plan.map(shot => estimateLipsync(speakers[shot.role], shot.text, lipModel).catch(() => null)));
+    const costs = await Promise.all(plan.map(shot => estimateLipsync(speakers[shot.role], shot.text, lipModel, { ownVoice: !!recordings[shot.text] }).catch(() => null)));
     const total = costs.every((c): c is number => c !== null) ? costs.reduce((a, b) => a + b, 0) : null;
     if (total !== null && !affordable(total)) return;
     if (total !== null && total > CONFIRM_CREDITS && !window.confirm(`All ${plan.length} shots will cost about ${formatCredits(total)}. Continue?`)) return;
@@ -286,7 +290,7 @@ export function CreateTakePage() {
       for (const shot of plan) {
         const who = roleName[shot.role];
         setRunning({ status: 'processing', startedAt: Date.now(), stages: LIPSYNC_STAGES.map(s => `${who}: ${s}`), stageIdx: 0 });
-        const job = await runLipsyncJob({ speaker: speakers[shot.role], script: shot.text, model: lipModel, scene: `${placePrompt(spec.place)}. ${spec.tone} tone, natural expressions.`, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'voice' ? 0 : s === 'prepare' ? 1 : 2 }) });
+        const job = await runLipsyncJob({ speaker: speakers[shot.role], script: shot.text, model: lipModel, recordedAudioUrl: recordings[shot.text]?.url, scene: `${placePrompt(spec.place)}. ${spec.tone} tone, natural expressions.`, onStage: s => setRunning(r => r && { ...r, stageIdx: s === 'voice' ? 0 : s === 'prepare' ? 1 : 2 }) });
         await addJobToTimeline(job); // appended in order: host first, then guest
       }
       await refresh();
@@ -444,8 +448,8 @@ export function CreateTakePage() {
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, title: t } }); }}
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}
             characters={characters} hostHint={route.hint} imageRoute={imageRoute}
-            cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} />}
-            lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} canGenerate={canGenerate} recording={ownVoice} onRecord={() => setRecordOpen(true)} onClearRecording={() => setRecording(null)} />}
+            cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} recordings={{ host: recordingFor(cutsLines.host), guest: recordingFor(cutsLines.guest), guest2: cutsLines.guest2 ? recordingFor(cutsLines.guest2) : undefined }} />}
+            lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} canGenerate={canGenerate} recording={ownVoice} onRecord={() => setRecordFor(spec.take)} onClearRecording={() => setRecordings(r => { const n = { ...r }; delete n[spec.take]; return n; })} />}
             clip={clip} onClipChange={patch => { const cur = getProject(); if (clip) setProject(updateClip(cur, clip.id, patch), false); }} onAddSfx={addSfx} onAddEffect={addEffect} fps={project.fps}
             transition={clip ? getTransitionContext(project, clip.id) : { available: false, maxFrames: 0 }} onTransition={t => clip && setProject(setTransition(project, clip.id, t))}
             captionFont={project.style?.captionFont ?? DEFAULT_FONT} onCaptionFont={f => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, captionFont: f } }); }}
@@ -455,7 +459,7 @@ export function CreateTakePage() {
       <TimelineEditor project={project} setProject={setProject} checkpoint={checkpoint} undo={undo} redo={redo}
         frame={Math.min(frame, Math.max(0, projectDuration(project)))} playing={playing} onSeek={seek} onToggle={toggle}
         selectedId={selectedClip} onSelect={setSelectedClip} captionDefault={spec.take} onExport={() => setExporting(true)} />
-      {recordOpen && <RecordPanel script={spec.take} onClose={() => setRecordOpen(false)} onUse={r => { setRecording({ ...r, script: spec.take }); setRecordOpen(false); }} />}
+      {recordFor !== null && <RecordPanel script={recordFor} onClose={() => setRecordFor(null)} onUse={r => { const line = recordFor; setRecordings(all => ({ ...all, [line]: r })); setRecordFor(null); }} />}
         {capModal === 'generate' && <GenerateCaptionsModal project={project} aspect={spec.aspect} videoClips={project.clips.filter(c => c.kind === 'video' && c.src?.startsWith('http'))} initialClipId={clip?.kind === 'video' ? clip.id : undefined}
         initialStyle={project.style?.captions ?? DEFAULT_CAPTION_STYLE} canUseCloud={canGenerate} onClose={() => setCapModal(null)} onDone={applyGenerated} />}
       {capModal === 'studio' && <CaptionStudioModal project={project} aspect={spec.aspect} projectKey={openId ?? 'local'} onApply={applyStudio} onClose={() => setCapModal(null)} onBurn={(caps, st) => { applyStudio(caps, st); setCapModal(null); setExporting(true); }} />}
