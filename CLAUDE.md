@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SubwayTakes Studio: Vite + React 18 + TypeScript + Tailwind, Supabase (auth, storage, `clip_jobs`), muapi for all generation, Remotion (free license) for the timeline player and in-browser export.
+SubwayTakes Studio: Vite + React 18 + TypeScript + Tailwind, Supabase (auth, storage, `clip_jobs`), muapi for all generation (**bring your own key**: each customer pastes their own muapi key and pays muapi directly), Remotion (free license) for the timeline player and in-browser export.
 
 ## Commands
 
@@ -36,6 +36,9 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (dummy values are fine for 
 - `lib/ideas.ts` + `lib/questionBank.ts`: take ideas for the Take tab.
 
 ## Rules that matter
+
+- **BYOK rules (the default mode, `VITE_BILLING_MODE` unset).** The customer's muapi key lives ONLY in their browser (`lib/muapi/key.ts`, localStorage with an in-memory fallback). It rides in the `x-muapi-key` header to the `muapi-byok` edge function (`_shared/byok.ts`), which forwards it and NEVER stores, logs, echoes or puts it in an error; it must never be written to a project, a cloud save, a URL, `client_errors` (the reporter scrubs it) or analytics. The proxy needs a signed-in, confirmed, non-guest account, counts every call with `credit_hit`, only passes known paths (`_shared/paths.ts` plus the balance read) and runs the content screen on submits. Prices come from muapi's `estimate-cost` (the proxy returns whole cents; 1 unit = $0.01) and are shown before a run; confirm above $1. Everything is unlocked: `hasFeature` is true in BYOK. The key modal (`components/ApiKeyModal.tsx`) opens from the top-bar pill, the add-key buttons, or any `no_key`/`invalid_key` answer. No silent fallback: a missing or rejected key says so and opens the modal.
+- **The credits, checkout, ledger and pack-lock rules below describe the earlier credits mode.** That code stays in the repo and is switched off; set `VITE_BILLING_MODE=credits` to run it (the unit tests run in credits mode, `src/lib/byokMode.test.ts` covers BYOK). Do not delete it without being asked.
 
 - **Money rules.** `credits_balance` changes ONLY through the ledger functions (service_role). Never add a client-side credit write, a free-credit default, or a code path that calls muapi without the gateway. A paid call is reserved first and refunded exactly once on failure. If a price cannot be determined, refuse; never guess. Customers never see muapi dollars or the margin. Any change to the migration must keep `scripts/test-credits-sql.sh` passing (it also races concurrent reserves).
 - **Checkout rules.** Credits are granted for a purchase ONLY by `order_fulfil`, called by the signature-verified Stripe webhook; never from the browser or from the success page. The price always comes from the `products` table. The webhook must verify the signature on the raw body, dedupe, match amount and currency to the order, and return 500 only for transient failures. Refunds and disputes go through `order_reverse` (claw back at most the remaining balance). Paid models are gated by `supabase/functions/_shared/entitlements.ts`; keep it in step with `src/lib/billing/features.ts` (a test checks).

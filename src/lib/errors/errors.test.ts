@@ -24,3 +24,11 @@ describe('scrub', () => {
     expect(scrub('x'.repeat(5000), 300)).toHaveLength(300);
   });
 });
+
+import { clearKey, setKey } from '../muapi/key';
+describe('error reports never carry the muapi key', () => {
+  it('removes a saved key from a message or stack', () => {
+    setKey('mk_live_ABCDEFGHIJKLMNOP1234');
+    try { expect(scrub('request failed for mk_live_ABCDEFGHIJKLMNOP1234 (x-muapi-key)', 300)).toBe('request failed for [key removed] (x-muapi-key)'); } finally { clearKey(); }
+  });
+});

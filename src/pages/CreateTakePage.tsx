@@ -23,6 +23,7 @@ import type { CharacterBible } from '../lib/types';
 import { muapi } from '../lib/muapi/client';
 import { useAuth } from '../lib/auth';
 import { hasKey, openKeyModal, subscribeKey } from '../lib/muapi/key';
+import { IS_BYOK } from '../lib/mode';
 import { BLOCK_TEXT, CONFIRM_CREDITS, formatCredits } from '../lib/credits';
 import { runNativeJob, listJobs, type ClipJob } from '../lib/muapi/jobs';
 import { useProject } from '../lib/timeline/useProject';
@@ -338,12 +339,28 @@ export function CreateTakePage() {
     } finally { setRunning(null); }
   }
 
+  // Bringing your own key the money is the customer's own: show the price of a plain clip before they press Generate (asked once per model, shape and length)
+  const [nativePrice, setNativePrice] = useState<{ key: string; cost: number } | null>(null);
+  const priceKey = `${slug}|${spec.aspect}|${spec.durationSeconds}`;
+  useEffect(() => {
+    if (!IS_BYOK || !canGenerate || pipeline !== 'native' || spec.format === 'cuts') return;
+    let live = true;
+    const t = setTimeout(() => {
+      muapi.estimate(slug, { prompt: buildNativePrompt(spec), aspect_ratio: spec.aspect, duration: spec.durationSeconds })
+        .then(r => { if (live && typeof r.cost === 'number') setNativePrice({ key: priceKey, cost: r.cost }); }).catch(() => { /* the price is a courtesy: generating still works */ });
+    }, 700);
+    return () => { live = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [priceKey, canGenerate, pipeline, spec.format]);
+  const shownPrice = nativePrice && nativePrice.key === priceKey ? nativePrice.cost : null;
+
   async function generate() {
     if (running || !canGenerate) return;
     if (spec.format === 'cuts') { await generateCuts(); return; }
     if (pipeline === 'recast') { nav('/recast'); return; }
     if (pipeline === 'lipsync') { await generateLipsync(); return; }
     if (imageRoute && hostChar?.portrait_url) { await generateTwoShotImage({ ...hostChar, portrait_url: hostChar.portrait_url }); return; }
+    if (IS_BYOK && shownPrice !== null && shownPrice > CONFIRM_CREDITS && !window.confirm(`This will cost about ${formatCredits(shownPrice)} from your muapi balance. Continue?`)) return;
     setError(''); setRunning({ status: 'queued', startedAt: Date.now() });
     try {
       const job = await runNativeJob({ spec, tier: 'fast', modelSlug: slug, onUpdate: p => setRunning(r => r && { ...r, status: p.status }) });
@@ -397,6 +414,7 @@ export function CreateTakePage() {
                 {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 {running ? 'Rendering' : 'Generate'}
                 {model && <span className="hidden rounded-md bg-black/15 px-1.5 py-0.5 text-[10px] font-semibold sm:inline">{model.label}</span>}
+                {shownPrice !== null && <span data-testid="native-price" className="rounded-md bg-black/15 px-1.5 py-0.5 text-[10px] font-semibold tnum">~{formatCredits(shownPrice)}</span>}
               </button>
             ) : (
               block === 'nokey'

@@ -98,7 +98,7 @@ export function ApiKeyModal() {
         </div>
 
         <div className="space-y-4 overflow-y-auto p-4">
-          {modal.reason && <div className="flex items-start gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[12px] text-accent" data-testid="key-reason"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{modal.reason}</div>}
+          {modal.reason && check.s !== 'valid' && <div className="flex items-start gap-2 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[12px] text-accent" data-testid="key-reason"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{modal.reason}</div>}
 
           <p className="text-[13px] leading-relaxed text-zinc-300">
             SubwayTakes Studio makes your videos with <strong className="font-semibold text-white">your own muapi account</strong>. You pay muapi directly for what you generate, and you see a price before each run.
@@ -134,7 +134,7 @@ export function ApiKeyModal() {
 
             <div className="mt-2 min-h-[20px] text-[12px]" aria-live="polite" data-testid="key-status">
               {check.s === 'checking' && <span className="inline-flex items-center gap-1.5 text-zinc-400"><Loader2 className="h-3.5 w-3.5 animate-spin" />Checking with muapi…</span>}
-              {check.s === 'valid' && <span className="inline-flex items-center gap-1.5 text-emerald-400"><Check className="h-3.5 w-3.5" />Key accepted. {fmtBalance(check.balance)}.</span>}
+              {check.s === 'valid' && <span className="inline-flex items-center gap-1.5 text-emerald-400"><Check className="h-3.5 w-3.5" />Key accepted and saved. {fmtBalance(check.balance)}.</span>}
               {check.s === 'invalid' && <span className="inline-flex items-start gap-1.5 text-red-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{check.message}</span>}
               {check.s === 'problem' && <span className="inline-flex items-start gap-1.5 text-amber-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{check.message} You can still save the key and try again later.</span>}
             </div>

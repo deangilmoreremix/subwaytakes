@@ -1,3 +1,4 @@
+import { scrubKey } from '../muapi/key';
 import { supabase } from '../supabase';
 
 // Browser error reporting. Reports go to a rate-limited database function; the page never fails because a report failed, and the same
@@ -21,7 +22,7 @@ export function shouldSend(message: string, now = Date.now()): boolean {
 export function resetReporter(): void { sent = []; last = ''; }
 
 /** Remove query strings and hashes from any URL inside a message or stack, and cap the length (a rejection reason can carry a signed URL or a prompt). */
-export function scrub(text: string, max: number): string { return text.replace(/(https?:\/\/[^\s)'"]+?)[?#][^\s)'"]*/g, '$1').slice(0, max); }
+export function scrub(text: string, max: number): string { return scrubKey(text).replace(/(https?:\/\/[^\s)'"]+?)[?#][^\s)'"]*/g, '$1').slice(0, max); }
 
 export function reportError(rawMessage: string, rawStack?: string): void {
   const message = scrub(rawMessage, 300); const stack = rawStack ? scrub(rawStack, 2000) : undefined;

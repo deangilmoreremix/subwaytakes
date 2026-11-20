@@ -34,7 +34,15 @@ cp .env.example .env   # then fill in the two Supabase values
 npm run dev
 ```
 
-### Deploying the backend (once)
+### Bring your own muapi key (the default)
+
+Customers create their own muapi account and paste their key into the key dialog (top bar, Settings, or any Generate button). The key stays in their browser and is sent per request to the `muapi-byok` edge function, which forwards it to muapi and keeps nothing. They pay muapi directly and see a price before each run. There are no credits, packs or checkout in this mode.
+
+To deploy this mode you need: the Supabase migrations the app uses (clip_jobs and media, retention, launch ops, and the credits migration only because it holds the rate-limit function `credit_hit` and the `safety_terms` table), and `supabase functions deploy muapi-byok`. No `MUAPI_API_KEY`, Stripe or reaper is needed. To bring the credits model back, set `VITE_BILLING_MODE=credits` and follow the sections below.
+
+Verified: the proxy logic and the key store by unit tests, and the dialog and flows by a stubbed browser run (`scripts/byok-e2e.mjs`). Not verified: the deployed `muapi-byok` against a real key, muapi's exact balance response (the dialog shows the number it returns as "muapi credits"), and whether muapi calls are accepted from your production domain.
+
+## Deploying the backend (once)
 
 1. **Apply the migrations** in `supabase/migrations/`. The newest three add `clip_jobs`, Cast voice columns and the `media` bucket, and the **credits ledger** (`20261120000000_credits_ledger.sql`). The ledger migration also locks down `user_profiles`: before it, a signed-in user could edit their own `credits_balance` from the browser.
 2. **Set secrets** (Supabase dashboard, Edge Functions, Secrets, or `supabase secrets set`):

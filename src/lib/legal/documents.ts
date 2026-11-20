@@ -1,3 +1,4 @@
+import { IS_BYOK } from '../mode';
 /**
  * DRAFT legal pages. They describe what the product actually does today, in plain language. They are NOT legal advice and have not been reviewed by a
  * lawyer: have them reviewed before you take real money. Everything in [square brackets] is a decision or a fact only the operator can supply.
@@ -8,7 +9,7 @@ export interface LegalDoc { slug: 'terms' | 'privacy' | 'refunds' | 'ai-policy';
 export const LEGAL_DRAFT_NOTICE = 'DRAFT. This page has not been reviewed by a lawyer and must be reviewed and completed before launch. Items in [square brackets] are for the operator to fill in.';
 export const OPERATOR = { company: '[Company name and registered address]', email: '[support email address]', jurisdiction: '[governing law and courts]' };
 
-export const LEGAL_DOCS: LegalDoc[] = [
+const CREDIT_DOCS: LegalDoc[] = [
   {
     slug: 'terms', title: 'Terms of Service', summary: 'The rules for using SubwayTakes Studio, buying credits and what you may make.',
     sections: [
@@ -77,5 +78,19 @@ export const LEGAL_DOCS: LegalDoc[] = [
     ],
   },
 ];
+
+// Bringing your own muapi key there is nothing to buy from us: the pages that talk about credits, packs, referrals and refunds are swapped for what is true.
+const BYOK_TERMS_SECTION: LegalSection = { heading: 'Your muapi account and costs', body: [
+  'The Service makes videos, voices and images with your own muapi account. You create the account, you hold the key, and muapi charges you directly for what you generate. We do not sell credits or take payment for generations.',
+  'The price of an action is shown before you run it. It comes from muapi and is an estimate; muapi\'s own terms and billing apply.',
+  'Your key is saved only in your browser and is sent with each request to our server, which passes it on to muapi and does not store or log it. Remove it any time from the key dialog. Keep it private: anyone with your key can spend your muapi balance. [Operator: confirm and review this section with a lawyer.]',
+] };
+function byokDoc(d: LegalDoc): LegalDoc {
+  if (d.slug === 'terms') return { ...d, summary: 'The rules for using SubwayTakes Studio with your own muapi account and what you may make.', sections: [...d.sections.filter(x => !['Credits', 'Packs and unlocks', 'Referrals'].includes(x.heading)).flatMap(x => (x.heading === 'Your account' ? [x, BYOK_TERMS_SECTION] : [x]))] };
+  if (d.slug === 'refunds') return { ...d, summary: 'Generations are billed by muapi, not by us.', sections: [{ heading: 'We do not charge you', body: ['SubwayTakes Studio does not sell credits or take payment for generations, so there is nothing for us to refund. What you generate is billed by muapi to your own muapi account.', 'If a generation failed or you were charged wrongly, contact muapi support under muapi\'s terms. [Operator: confirm this wording, and state anything you do charge for, such as a subscription, if that changes.]'] }] };
+  if (d.slug === 'privacy') return { ...d, sections: [...d.sections, { heading: 'Your muapi key', body: ['Your muapi key is kept only in your browser. It travels with each request to our server only so that the request can be forwarded to muapi; we do not store or log it, and it is never saved in your projects or in our database.'] }] };
+  return d;
+}
+export const LEGAL_DOCS: LegalDoc[] = IS_BYOK ? CREDIT_DOCS.map(byokDoc) : CREDIT_DOCS;
 
 export const legalDoc = (slug: string): LegalDoc | undefined => LEGAL_DOCS.find(d => d.slug === slug);
