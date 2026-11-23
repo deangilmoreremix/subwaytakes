@@ -34,7 +34,11 @@ cp .env.example .env   # then fill in the two Supabase values
 npm run dev
 ```
 
-### Game-show formats
+### Vox-pop poll
+
+Take tab, "Vox-pop poll": one question, two answer labels (Yes and No by default) and up to five guest lines that each start with the guest's label ("Yes: obviously, it is meat between bread."). A line with no known label is refused with its line number, so a count is never a guess. Each guest becomes their own Two-shot episode with the same question, a different original guest description from a pool of eight (never real people), and their own answer; after all of them a **results card** closes the video (the question, two bars that grow, whole-number percentages that add up to 100, a star on the winner, "N guests on the train"). One cost confirmation for the whole poll, a failed guest never stops the rest, and only guests whose clip was made are counted. The card is a normal timeline clip, saved in project files (re-validated on opening). Verified: planner, tally and card data by unit tests; the whole flow through the real UI with real mp4 clips and a stubbed proxy (`scripts/poll-e2e.mjs`: 3 submits, same question, three different guests, own answer lines, one-card beats, tally 2 to 1, card after the last clip); and a REAL web export of that project (15 s: three 4 s clips then the 3 s card with Yes 67% and No 33%). Not verified: a real three-guest generation (about $1.80 on a fast model).
+
+## Game-show formats
 
 Four new shows in the Take tab: **Quick trivia** (question card with a ? badge and a green "CORRECT" pill that pops in after two seconds), **Two truths and a lie** (up to three numbered statements, split from what the guest says on full stops, semicolons or new lines), **Finish the sentence** and **Guess the price** (the amount the guest says pops up big). They use the same one-card hand-off beats and each city's own card word as every other show. Verified by unit tests (titles, splitting, ideas pass the content screen, every city, one-card beats) and REAL web exports of the three graphics through the real UI (`scripts/export-verse-test.mjs <clip> <out> x KJV "Quick trivia"` with `ANSWER=...`). Not verified: how the video models act out the host's reveal ("Correct!", pointing at the lie) in a real clip; the trivia pill always says CORRECT, so write the right answer as the guest's answer.
 
