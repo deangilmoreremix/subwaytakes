@@ -5,6 +5,7 @@
  */
 import { ensureTracks, type Project } from '../timeline/types';
 import { normalizeCrop } from '../timeline/crop';
+import { normalizePollResults } from '../poll';
 
 export const FILE_APP = 'subwaytakes';
 export const FILE_VERSION = 1;
@@ -43,6 +44,14 @@ export function parseProjectFile(text: string): ParsedFile {
     const src = (c as { src?: unknown }).src;
     if (src !== undefined && src !== null && src !== '' && !(typeof src === 'string' && /^https:\/\//i.test(src))) return { ok: false, reason: 'That project refers to media that is not a hosted https link, so it was not opened.' };
   }
+  // a poll results card is re-validated too; one that is not valid is dropped rather than drawn from junk
+  p.clips = p.clips.filter(c => {
+    const e = (c as { effect?: { type?: string } }).effect;
+    if (!e || e.type !== 'poll-results') return true;
+    const ok = normalizePollResults(e);
+    if (ok) (c as { effect?: unknown }).effect = ok;
+    return !!ok;
+  });
   // a crop that comes from a file is re-validated (zoom and focal point clamped) like everything else
   for (const c of p.clips) { const cc = c as { crop?: unknown }; if ('crop' in cc) { const n = normalizeCrop(cc.crop); if (n) cc.crop = n; else delete cc.crop; } }
   const name = typeof f.name === 'string' && f.name.trim() ? f.name.trim().slice(0, 80) : 'Opened episode';

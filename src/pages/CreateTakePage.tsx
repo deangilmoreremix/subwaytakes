@@ -13,6 +13,7 @@ import { SAMPLE_ANSWERS, applyShow, showOf, titleFor, type ShowId } from '../lib
 import { resolveTitle } from '../lib/shows/stored';
 import { twoShotRoute, describeCharacter, buildNativePrompt, spokenLines } from '../lib/interview';
 import { batchSpecs } from '../lib/interview/batch';
+import { POLL_RESULT_FRAMES, pollSpecs, tally, type PollAnswer, type PollResults } from '../lib/poll';
 import { runTwoShotImageJob, STILL_APPROX_CREDITS, STILL_MODEL, buildStillInput, buildAnimateInput } from '../lib/interview/twoshot';
 import { CutsPanel } from '../components/studio/CutsPanel';
 import { NATIVE_MODELS, chooseNativeModel, type Pipeline } from '../lib/muapi/registry';
@@ -331,6 +332,41 @@ export function CreateTakePage() {
     await refresh();
   }
 
+  /** Vox-pop poll: each guest is a Two-shot episode with the same question; a results card closes the video. Only guests whose clip was made are counted. */
+  async function runPoll(p: { question: string; labels: [string, string]; answers: PollAnswer[] }) {
+    if (running || batch?.running || !canGenerate) return;
+    if (spec.format !== 'twoshot' || imageRoute) { setError('A poll works with the Two-shot format and a described host.'); return; }
+    const specs = pollSpecs(spec, p.question, p.answers);
+    const one = await muapi.estimate(slug, { prompt: buildNativePrompt(specs[0]), aspect_ratio: spec.aspect, duration: spec.durationSeconds }).catch(() => null);
+    const each = one && typeof one.cost === 'number' ? one.cost : null;
+    if (each !== null && !affordable(each * specs.length)) return;
+    const msg = each !== null ? `Make a poll with ${specs.length} guests at about ${formatCredits(each)} each, ${formatCredits(each * specs.length)} in total?` : `Make a poll with ${specs.length} guests? The price could not be estimated.`;
+    if (!window.confirm(msg)) return;
+    setError(''); setBatch({ running: true, done: 0, total: specs.length, failed: [] });
+    const failed: string[] = []; const made: PollAnswer[] = [];
+    for (let i = 0; i < specs.length; i++) {
+      setRunning({ status: 'queued', startedAt: Date.now(), stages: [`Guest ${i + 1} of ${specs.length}`], stageIdx: 0 });
+      try {
+        const job = await runNativeJob({ spec: specs[i], tier: 'fast', modelSlug: slug });
+        await addJobToTimeline(job);
+        made.push(p.answers[i]);
+      } catch (e) { failed.push(`Guest ${i + 1}: ${e instanceof Error ? e.message : 'failed'}`); }   // one failure never stops the rest
+      setBatch({ running: true, done: made.length, total: specs.length, failed: [...failed] });
+    }
+    if (made.length >= 1) {
+      // read the timeline AFTER the long loop (a stale copy would drop the clips added above)
+      const cur = getProject();
+      const track = cur.tracks.find(t => t.kind === 'effect');
+      if (track) {
+        const card: PollResults = { type: 'poll-results', question: p.question.slice(0, 160), labels: p.labels, counts: tally(made) };
+        setProject(addClip(cur, { id: newId('poll'), trackId: track.id, kind: 'effect', label: 'Poll results', start: projectDuration(cur), duration: POLL_RESULT_FRAMES, trimStart: 0, effect: card }));
+      }
+    }
+    setBatch({ running: false, done: made.length, total: specs.length, failed });
+    setRunning(null);
+    await refresh();
+  }
+
   const TWOSHOT_STAGES = ['Making the starting image', 'Animating the interview'];
   async function generateTwoShotImage(host: NonNullable<typeof hostChar> & { portrait_url: string }) {
     const guest = characters.find(c => c.id === speakerId && c.role === 'guest' && c.portrait_url);
@@ -446,7 +482,7 @@ export function CreateTakePage() {
           )}
         </div>
         <div className="min-w-0 lg:min-h-0">
-          <Inspector fileSlot={<ProjectFileCard getProject={getProject} name={projectName} onOpen={(proj, n) => { setProject(proj); requestRename(n); }} />} aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
+          <Inspector onPoll={runPoll} fileSlot={<ProjectFileCard getProject={getProject} name={projectName} onOpen={(proj, n) => { setProject(proj); requestRename(n); }} />} aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, title: t } }); }}
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}

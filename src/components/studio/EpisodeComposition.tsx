@@ -2,6 +2,7 @@ import type React from 'react';
 import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion';
 import { Audio, Video } from '@remotion/media';
 import { cropStyle } from '../../lib/timeline/crop';
+import { PollResultsCard } from './PollResultsCard';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { LightLeak } from '@remotion/light-leaks';
 import { buildChains } from '../../lib/timeline/chains';
@@ -26,7 +27,8 @@ function ClipVideo({ clip }: { clip: Project['clips'][number] }) {
 export function EpisodeComposition({ project }: EpisodeProps) {
   const chains = buildChains(project.clips);
   const { width, height } = useVideoConfig();
-  const overlays = project.clips.filter(c => c.kind === 'effect' && c.effect);
+  const overlays = project.clips.filter(c => c.kind === 'effect' && c.effect?.type === 'light-leak');
+  const pollCards = project.clips.filter(c => c.kind === 'effect' && c.effect?.type === 'poll-results');
   const sounds = project.clips.filter(c => c.kind === 'audio' && c.src);
   const captions = project.clips.filter(c => c.kind === 'caption');
   const font = useCaptionFont(project.style?.captionFont);
@@ -54,7 +56,12 @@ export function EpisodeComposition({ project }: EpisodeProps) {
       ))}
       {overlays.map(c => (
         <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
-          <LightLeak seed={c.effect!.seed} hueShift={c.effect!.hueShift} />
+          {c.effect?.type === 'light-leak' && <LightLeak seed={c.effect.seed} hueShift={c.effect.hueShift} />}
+        </Sequence>
+      ))}
+      {pollCards.map(c => (
+        <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
+          {c.effect?.type === 'poll-results' && <PollResultsCard data={c.effect} fontFamily={titleFont.family} fontWeight={titleFont.weight} />}
         </Sequence>
       ))}
       {sounds.map(c => (

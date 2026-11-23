@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { DictateButton } from './DictateButton';
 import { ClipReframe } from './ClipReframe';
+import { PollBox } from './PollBox';
+import type { PollAnswer } from '../../lib/poll';
 import { VersePicker } from './VersePicker';
 import { QuotePicker } from './QuotePicker';
 import { bibleComposition, quoteComposition } from '../../lib/bible/spec';
@@ -58,10 +60,11 @@ function QuoteNote({ spec }: { spec: TakeSpec }) {
   );
 }
 
-export function Inspector({ aiLabel, onAiLabel, fileSlot, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
+export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
   aiLabel: boolean; onAiLabel: (on: boolean) => void;
   /** extra content at the end of the Output tab (the project file card) */
   fileSlot?: ReactNode;
+  onPoll: (p: { question: string; labels: [string, string]; answers: PollAnswer[] }) => void;
   onTemplate: (t: Template) => void; onAddDub: (url: string, label: string, seconds: number) => Promise<void>;
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
@@ -161,6 +164,7 @@ export function Inspector({ aiLabel, onAiLabel, fileSlot, onAddDub, onTemplate, 
           <div><Label>Tone</Label>
             <Segmented value={spec.tone} onChange={v => set('tone', v)} options={show.tones.map(t => ({ value: t, label: TONE_LABEL[t] }))} /></div>
           <BatchBox show={show.id} editableQuestion={show.editableQuestion} duel={show.guests === 2} disabled={spec.format !== 'twoshot' || imageRoute} onBatch={onBatch} batch={batch} />
+          <PollBox disabled={spec.format !== 'twoshot' || imageRoute ? 'A poll works with the Two-shot format and a described host.' : ''} onPoll={onPoll} batch={batch} />
           <details className="rounded-xl border border-line bg-ink-950 p-3 text-[12px] text-zinc-500">
             <summary className="cursor-pointer text-zinc-400">Final prompt</summary>
             <p className="mt-2 whitespace-pre-wrap leading-relaxed">{buildNativePrompt(spec)}</p>
@@ -250,12 +254,13 @@ export function Inspector({ aiLabel, onAiLabel, fileSlot, onAddDub, onTemplate, 
             <div><Label>Reframe</Label>
               <ClipReframe src={clip.src} atSeconds={(clip.trimStart + 6) / fps} frameAspect={(() => { const [a, b] = spec.aspect.split(':').map(Number); return a / b; })()} crop={clip.crop} onChange={c => onClipChange({ crop: c })} /></div>
           )}
-          {clip.kind === 'effect' && clip.effect && (<>
-            <div><Label hint={`${clip.effect.hueShift}°`}>Color shift</Label>
-              <input type="range" className="w-full" min={0} max={360} value={clip.effect.hueShift} onChange={e => onClipChange({ effect: { ...clip.effect!, hueShift: Number(e.target.value) } })} /></div>
-            <div><Label hint={`#${clip.effect.seed}`}>Pattern</Label>
-              <input type="range" className="w-full" min={1} max={20} value={clip.effect.seed} onChange={e => onClipChange({ effect: { ...clip.effect!, seed: Number(e.target.value) } })} /></div>
-          </>)}
+          {clip.kind === 'effect' && clip.effect?.type === 'poll-results' && <p className="text-[12px] text-zinc-400" data-testid="poll-clip-note">Poll results card: {clip.effect.counts[0]} to {clip.effect.counts[1]} ({clip.effect.labels[0]} / {clip.effect.labels[1]}). It is drawn from the votes you entered.</p>}
+          {clip.kind === 'effect' && clip.effect?.type === 'light-leak' && (() => { const leak = clip.effect; return (<>
+            <div><Label hint={`${leak.hueShift}°`}>Color shift</Label>
+              <input type="range" className="w-full" min={0} max={360} value={leak.hueShift} onChange={e => onClipChange({ effect: { ...leak, hueShift: Number(e.target.value) } })} /></div>
+            <div><Label hint={`#${leak.seed}`}>Pattern</Label>
+              <input type="range" className="w-full" min={1} max={20} value={leak.seed} onChange={e => onClipChange({ effect: { ...leak, seed: Number(e.target.value) } })} /></div>
+          </>); })()}
           {(clip.kind === 'video' || clip.kind === 'audio') && <div><Label hint={`${Math.round((clip.volume ?? 1) * 100)}%`}>Volume</Label>
             <input type="range" className="w-full" min={0} max={1} step={0.05} value={clip.volume ?? 1} onChange={e => onClipChange({ volume: Number(e.target.value) })} /></div>}
           {clip.kind === 'video' && (

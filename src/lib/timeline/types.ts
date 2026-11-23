@@ -35,7 +35,7 @@ export interface Clip {
   /** video: zoom and focal point (see crop.ts); absent means the whole picture, as before */
   crop?: import('./crop').ClipCrop;
   /** effect clips: which overlay and its parameters */
-  effect?: { type: 'light-leak'; seed: number; hueShift: number };
+  effect?: { type: 'light-leak'; seed: number; hueShift: number } | import('../poll').PollResults;
 }
 
 export type TransitionType = 'fade' | 'slide' | 'wipe' | 'iris' | 'clock-wipe' | 'push-cut';

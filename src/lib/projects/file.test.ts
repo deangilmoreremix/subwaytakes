@@ -54,3 +54,20 @@ describe('reframed clips in files', () => {
     const junk = mk('nope'); expect(junk.ok && junk.project.clips[0].crop).toBeUndefined();
   });
 });
+
+describe('poll results cards in files', () => {
+  const card = (effect: unknown) => ({ id: 'p', trackId: 'e1', kind: 'effect', label: 'Poll results', start: 60, duration: 90, trimStart: 0, effect });
+  const open = (effect: unknown) => parseProjectFile(serializeProjectFile(proj({ clips: [proj().clips[0], card(effect) as never] }), 'x'));
+  it('keeps a valid card (re-validated) and drops one made of junk', () => {
+    const ok = open({ type: 'poll-results', question: 'Q?', labels: ['Yes', 'No'], counts: [3, 2] });
+    expect(ok.ok && ok.project.clips.filter(c => c.kind === 'effect')).toHaveLength(1);
+    const wild = open({ type: 'poll-results', question: 'Q?', labels: ['Yes', 'No'], counts: [500, -2] });
+    expect(wild.ok && wild.project.clips[1].effect).toMatchObject({ counts: [99, 0] });
+    const junk = open({ type: 'poll-results', question: 5, labels: 'x', counts: 'y' });
+    expect(junk.ok && junk.project.clips.filter(c => c.kind === 'effect')).toHaveLength(0);
+  });
+  it('leaves other effects alone', () => {
+    const leak = open({ type: 'light-leak', seed: 3, hueShift: 20 });
+    expect(leak.ok && leak.project.clips.filter(c => c.kind === 'effect')).toHaveLength(1);
+  });
+});
