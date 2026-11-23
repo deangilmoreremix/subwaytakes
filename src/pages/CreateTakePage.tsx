@@ -13,6 +13,7 @@ import { SAMPLE_ANSWERS, applyShow, showOf, titleFor, type ShowId } from '../lib
 import { resolveTitle } from '../lib/shows/stored';
 import { twoShotRoute, describeCharacter, buildNativePrompt, spokenLines } from '../lib/interview';
 import { batchSpecs } from '../lib/interview/batch';
+import { TOUR_TAG_FRAMES, planTour, type CityTag } from '../lib/tour';
 import { POLL_RESULT_FRAMES, pollSpecs, tally, type PollAnswer, type PollResults } from '../lib/poll';
 import { runTwoShotImageJob, STILL_APPROX_CREDITS, STILL_MODEL, buildStillInput, buildAnimateInput } from '../lib/interview/twoshot';
 import { CutsPanel } from '../components/studio/CutsPanel';
@@ -367,6 +368,40 @@ export function CreateTakePage() {
     await refresh();
   }
 
+  /** World tour: the same take in each chosen city (its own card and station look). A city name tags the start of each stop; a failed city never stops the rest. */
+  async function runTour(cityIds: string[]) {
+    if (running || batch?.running || !canGenerate) return;
+    if (spec.format !== 'twoshot' || imageRoute) { setError('A tour works with the Two-shot format and a described host.'); return; }
+    const stops = planTour(spec, cityIds);
+    if (!stops.length) return;
+    const one = await muapi.estimate(slug, { prompt: buildNativePrompt(stops[0].spec), aspect_ratio: spec.aspect, duration: spec.durationSeconds }).catch(() => null);
+    const each = one && typeof one.cost === 'number' ? one.cost : null;
+    if (each !== null && !affordable(each * stops.length)) return;
+    const msg = each !== null ? `Take a tour of ${stops.length} cities at about ${formatCredits(each)} each, ${formatCredits(each * stops.length)} in total?` : `Take a tour of ${stops.length} cities? The price could not be estimated.`;
+    if (!window.confirm(msg)) return;
+    setError(''); setBatch({ running: true, done: 0, total: stops.length, failed: [] });
+    const failed: string[] = []; let done = 0;
+    for (let i = 0; i < stops.length; i++) {
+      setRunning({ status: 'queued', startedAt: Date.now(), stages: [`${stops[i].label} (${i + 1} of ${stops.length})`], stageIdx: 0 });
+      try {
+        const job = await runNativeJob({ spec: stops[i].spec, tier: 'fast', modelSlug: slug });
+        const before = getProject();
+        const vt = before.tracks.find(t => t.kind === 'video');
+        const start = vt ? before.clips.filter(c => c.trackId === vt.id).reduce((m, c) => Math.max(m, c.start + c.duration), 0) : 0;
+        await addJobToTimeline(job);
+        // read the timeline AFTER the await: the clip was just added and a stale copy would drop it
+        const cur = getProject();
+        const et = cur.tracks.find(t => t.kind === 'effect');
+        if (et) { const tag: CityTag = { type: 'city-card', city: stops[i].label }; setProject(addClip(cur, { id: newId('city'), trackId: et.id, kind: 'effect', label: stops[i].label, start, duration: TOUR_TAG_FRAMES, trimStart: 0, effect: tag })); }
+        done++;
+      } catch (e) { failed.push(`${stops[i].label}: ${e instanceof Error ? e.message : 'failed'}`); }
+      setBatch({ running: true, done, total: stops.length, failed: [...failed] });
+    }
+    setBatch({ running: false, done, total: stops.length, failed });
+    setRunning(null);
+    await refresh();
+  }
+
   const TWOSHOT_STAGES = ['Making the starting image', 'Animating the interview'];
   async function generateTwoShotImage(host: NonNullable<typeof hostChar> & { portrait_url: string }) {
     const guest = characters.find(c => c.id === speakerId && c.role === 'guest' && c.portrait_url);
@@ -482,7 +517,7 @@ export function CreateTakePage() {
           )}
         </div>
         <div className="min-w-0 lg:min-h-0">
-          <Inspector onPoll={runPoll} fileSlot={<ProjectFileCard getProject={getProject} name={projectName} onOpen={(proj, n) => { setProject(proj); requestRename(n); }} />} aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
+          <Inspector onPoll={runPoll} onTour={runTour} fileSlot={<ProjectFileCard getProject={getProject} name={projectName} onOpen={(proj, n) => { setProject(proj); requestRename(n); }} />} aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, title: t } }); }}
             onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}

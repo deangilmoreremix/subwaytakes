@@ -71,3 +71,14 @@ describe('poll results cards in files', () => {
     expect(leak.ok && leak.project.clips.filter(c => c.kind === 'effect')).toHaveLength(1);
   });
 });
+
+describe('city tags in files', () => {
+  const tag = (effect: unknown) => ({ id: 't', trackId: 'e1', kind: 'effect', label: 'London', start: 0, duration: 60, trimStart: 0, effect });
+  const open = (effect: unknown) => parseProjectFile(serializeProjectFile(proj({ clips: [proj().clips[0], tag(effect) as never] }), 'x'));
+  it('keeps a valid city tag (trimmed) and drops junk', () => {
+    const ok = open({ type: 'city-card', city: '  London ' });
+    expect(ok.ok && ok.project.clips[1].effect).toEqual({ type: 'city-card', city: 'London' });
+    const junk = open({ type: 'city-card', city: 5 });
+    expect(junk.ok && junk.project.clips.filter(c => c.kind === 'effect')).toHaveLength(0);
+  });
+});

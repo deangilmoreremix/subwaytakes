@@ -4,6 +4,7 @@ import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { DictateButton } from './DictateButton';
 import { ClipReframe } from './ClipReframe';
 import { PollBox } from './PollBox';
+import { TourBox } from './TourBox';
 import { DEFAULT_LOOK, LOOKS, lookOf } from '../../lib/interview/looks';
 import type { PollAnswer } from '../../lib/poll';
 import { VersePicker } from './VersePicker';
@@ -61,11 +62,12 @@ function QuoteNote({ spec }: { spec: TakeSpec }) {
   );
 }
 
-export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
+export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onTour, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
   aiLabel: boolean; onAiLabel: (on: boolean) => void;
   /** extra content at the end of the Output tab (the project file card) */
   fileSlot?: ReactNode;
   onPoll: (p: { question: string; labels: [string, string]; answers: PollAnswer[] }) => void;
+  onTour: (cityIds: string[]) => void;
   onTemplate: (t: Template) => void; onAddDub: (url: string, label: string, seconds: number) => Promise<void>;
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
@@ -171,6 +173,7 @@ export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onAddDub, onTe
             </div></div>
           <BatchBox show={show.id} editableQuestion={show.editableQuestion} duel={show.guests === 2} disabled={spec.format !== 'twoshot' || imageRoute} onBatch={onBatch} batch={batch} />
           <PollBox disabled={spec.format !== 'twoshot' || imageRoute ? 'A poll works with the Two-shot format and a described host.' : ''} onPoll={onPoll} batch={batch} />
+          <TourBox disabled={spec.format !== 'twoshot' || imageRoute ? 'A tour works with the Two-shot format and a described host.' : ''} onTour={onTour} batch={batch} />
           <details className="rounded-xl border border-line bg-ink-950 p-3 text-[12px] text-zinc-500">
             <summary className="cursor-pointer text-zinc-400">Final prompt</summary>
             <p className="mt-2 whitespace-pre-wrap leading-relaxed">{buildNativePrompt(spec)}</p>

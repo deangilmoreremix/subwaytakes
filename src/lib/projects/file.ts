@@ -6,6 +6,7 @@
 import { ensureTracks, type Project } from '../timeline/types';
 import { normalizeCrop } from '../timeline/crop';
 import { normalizePollResults } from '../poll';
+import { normalizeCityTag } from '../tour';
 
 export const FILE_APP = 'subwaytakes';
 export const FILE_VERSION = 1;
@@ -47,8 +48,8 @@ export function parseProjectFile(text: string): ParsedFile {
   // a poll results card is re-validated too; one that is not valid is dropped rather than drawn from junk
   p.clips = p.clips.filter(c => {
     const e = (c as { effect?: { type?: string } }).effect;
-    if (!e || e.type !== 'poll-results') return true;
-    const ok = normalizePollResults(e);
+    if (!e || (e.type !== 'poll-results' && e.type !== 'city-card')) return true;
+    const ok = e.type === 'poll-results' ? normalizePollResults(e) : normalizeCityTag(e);
     if (ok) (c as { effect?: unknown }).effect = ok;
     return !!ok;
   });

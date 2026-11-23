@@ -3,6 +3,7 @@ import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion';
 import { Audio, Video } from '@remotion/media';
 import { cropStyle } from '../../lib/timeline/crop';
 import { PollResultsCard } from './PollResultsCard';
+import { CityTagCard } from './CityTagCard';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { LightLeak } from '@remotion/light-leaks';
 import { buildChains } from '../../lib/timeline/chains';
@@ -29,6 +30,7 @@ export function EpisodeComposition({ project }: EpisodeProps) {
   const { width, height } = useVideoConfig();
   const overlays = project.clips.filter(c => c.kind === 'effect' && c.effect?.type === 'light-leak');
   const pollCards = project.clips.filter(c => c.kind === 'effect' && c.effect?.type === 'poll-results');
+  const cityTags = project.clips.filter(c => c.kind === 'effect' && c.effect?.type === 'city-card');
   const sounds = project.clips.filter(c => c.kind === 'audio' && c.src);
   const captions = project.clips.filter(c => c.kind === 'caption');
   const font = useCaptionFont(project.style?.captionFont);
@@ -62,6 +64,11 @@ export function EpisodeComposition({ project }: EpisodeProps) {
       {pollCards.map(c => (
         <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
           {c.effect?.type === 'poll-results' && <PollResultsCard data={c.effect} fontFamily={titleFont.family} fontWeight={titleFont.weight} />}
+        </Sequence>
+      ))}
+      {cityTags.map(c => (
+        <Sequence key={c.id} from={c.start} durationInFrames={c.duration} layout="absolute-fill">
+          {c.effect?.type === 'city-card' && <CityTagCard city={c.effect.city} fontFamily={titleFont.family} fontWeight={titleFont.weight} />}
         </Sequence>
       ))}
       {sounds.map(c => (
