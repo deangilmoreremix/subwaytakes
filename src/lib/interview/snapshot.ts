@@ -3,6 +3,7 @@ import { AMBIENCE, CITIES, CROWDS, DEFAULT_PLACE, SCENES, STREET_SCENES, TIMES, 
 import { SHOWS, showOf } from '../shows';
 import { TRANSLATIONS, findVerse, pickVerse, typedVerse, type Translation } from '../bible';
 import { findQuote, pickQuote } from '../quotes';
+import { DEFAULT_LOOK, isLook } from './looks';
 import { recomposeBible } from '../bible/spec';
 
 // What a project remembers about the episode being made (show, take, verse, quote, place...), so reopening or reloading brings the same episode back.
@@ -15,6 +16,7 @@ export interface TakeSnapshot {
   place: PlaceSpec; tone: string; durationSeconds: number; aspect: string; format: string;
   verse?: { ref: string; translation: string; text?: string };
   quoteId?: string; reflection?: string;
+  look?: string;
 }
 
 export function snapshotSpec(s: TakeSpec): TakeSnapshot {
@@ -26,6 +28,7 @@ export function snapshotSpec(s: TakeSpec): TakeSnapshot {
   if (s.verse) snap.verse = s.verse.source === 'typed' ? { ref: s.verse.ref, translation: 'custom', text: s.verse.text } : { ref: s.verse.ref, translation: s.verse.translation };
   if (s.quote) snap.quoteId = s.quote.id;
   if (s.reflection !== undefined) snap.reflection = s.reflection;
+  if (s.look && s.look !== DEFAULT_LOOK) snap.look = s.look;
   return snap;
 }
 
@@ -75,6 +78,7 @@ export function restoreSpec(raw: unknown, rules: RestoreRules): TakeSpec | null 
     durationSeconds: Number.isFinite(Number(r.durationSeconds)) ? Math.min(12, Math.max(4, Math.round(Number(r.durationSeconds)))) : DEFAULT_TAKE.durationSeconds,
     aspect: oneOf(r.aspect, ['9:16', '16:9', '1:1'] as const, DEFAULT_TAKE.aspect),
     format: format === 'cuts' && rules.cutsLocked ? 'twoshot' : format,
+    look: isLook(r.look) && r.look !== DEFAULT_LOOK ? r.look : undefined,   // an unknown look falls back to the default
   };
   if (!sameShow) { spec.take = DEFAULT_TAKE.take; }   // a locked or unknown show's own text is not carried into another show
   if (sameShow && showId === 'bible') {

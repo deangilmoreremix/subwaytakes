@@ -18,7 +18,11 @@ import { TONE_TEXT, questionFor, showOf, type ShowId, type Tone } from '../shows
 export type { Tone };
 export type InterviewFormat = 'twoshot' | 'cuts' | 'solo';
 
+import { lookStillLine, lookVideoLine, type LookId } from './looks';
+
 export interface TakeSpec {
+  /** Art direction (see looks.ts). Absent means the documentary look every older episode used. */
+  look?: LookId;
   /** Which show (host question, tone, badge, graphic). */
   show: ShowId;
   /** The host's question; only used by shows whose question is editable. */
@@ -151,7 +155,8 @@ export function buildNativePrompt(t: TakeSpec): string {
       `There is exactly ONE card in the scene, ${card}, and only the person who is speaking holds it: the host holds it to their own mouth to ask, then hands it to guest A, who hands it back, then to guest B. ${NO_MIC_RULE}`,
       `The host asks: "${host}" Guest A, ${tone}, argues: "${guest}" Guest B, ${tone}, argues back: "${guest2 ?? ''}" ${show.reaction}`,
       `Each of the three voices is distinct and the lips match the words. Slight camera sway, natural ambient sound of the place. ${noText}${guard}`,
-    ].join(' ');
+      lookVideoLine(t.look),
+    ].filter(Boolean).join(' ');
   }
   if (t.format === 'solo') {
     return [
@@ -160,7 +165,8 @@ export function buildNativePrompt(t: TakeSpec): string {
       NO_MIC_RULE,
       `The host asks off-screen: "${host}" The guest answers to camera, ${tone}: "${guest}"`,
       `Lip movement matches the speech. Natural gestures, ambient sound of the place. ${noText}${guard}`,
-    ].join(' ');
+      lookVideoLine(t.look),
+    ].filter(Boolean).join(' ');
   }
   // twoshot (cuts also uses this wording for a single combined fallback)
   const sitting = t.place.mode === 'transit' && t.place.scene === 'train_seated';
@@ -174,7 +180,8 @@ export function buildNativePrompt(t: TakeSpec): string {
     `Beat 2, from ${beats.askEnd} to ${beats.passEnd} seconds: in one clear movement the host hands the card across to the guest's mouth and the guest takes it. The host's hands are empty afterwards. Nobody speaks during the hand-off.`,
     `Beat 3, from ${beats.passEnd} seconds to the end: the guest holds the card to their own mouth, ${tone}, and answers: "${guest}" The guest does not start speaking until the card is in their hand. The host listens with empty hands. ${show.reaction}`,
     `Visible lip movement matches each speaker's words and each voice is distinct. Slight camera sway, natural ambient sound of the place. ${noText}${guard}`,
-  ].join(' ');
+    lookVideoLine(t.look),
+  ].filter(Boolean).join(' ');
 }
 
 export type Role = 'host' | 'guest' | 'guest2';
@@ -183,7 +190,7 @@ export type Role = 'host' | 'guest' | 'guest2';
 export function buildStillPrompt(t: TakeSpec, role: Role): string {
   const who = role === 'host' ? t.hostDescription : role === 'guest2' ? (t.guest2Description || 'a different local commuter, clearly distinct from the first guest') : t.guestDescription;
   const card = cardMicPhrase(t.place.city);
-  return `Close-up portrait photo of ${who}. Setting: ${sceneText(t)}. They hold ${card} up near their mouth, looking at the camera mid-sentence. ${NO_MIC_RULE} Handheld documentary framing, natural light, photorealistic, ${t.aspect} framing.`;
+  return `Close-up portrait photo of ${who}. Setting: ${sceneText(t)}. They hold ${card} up near their mouth, looking at the camera mid-sentence. ${NO_MIC_RULE} ${lookStillLine(t.look)}, ${t.aspect} framing.`;
 }
 
 export interface CutShot { role: Role; text: string; portraitPrompt: string }
@@ -280,6 +287,6 @@ export function buildTwoShotStillPrompt(t: TakeSpec, opts: { guestHasReference?:
     opts.guestHasReference ? 'The guest is the person in the second reference image: keep their face exactly the same.' : `The guest is ${t.guestDescription}.`,
     `Setting: ${sceneText(t)}.`,
     `There is exactly one card, ${card}: the host holds it to their own mouth as if asking a question, and the guest's hands are empty in their lap, ready to take it. ${NO_MIC_RULE}`,
-    'Handheld documentary look, natural light, photorealistic, no text or watermarks.',
+    `${lookStillLine(t.look)}, no text or watermarks.`,
   ].join(' ');
 }

@@ -4,6 +4,7 @@ import { Segmented, Label, inputCls, ModelChip } from './ui';
 import { DictateButton } from './DictateButton';
 import { ClipReframe } from './ClipReframe';
 import { PollBox } from './PollBox';
+import { DEFAULT_LOOK, LOOKS, lookOf } from '../../lib/interview/looks';
 import type { PollAnswer } from '../../lib/poll';
 import { VersePicker } from './VersePicker';
 import { QuotePicker } from './QuotePicker';
@@ -163,6 +164,11 @@ export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onAddDub, onTe
           <PlacePanel place={spec.place} onChange={p => set('place', p)} />
           <div><Label>Tone</Label>
             <Segmented value={spec.tone} onChange={v => set('tone', v)} options={show.tones.map(t => ({ value: t, label: TONE_LABEL[t] }))} /></div>
+          <div><Label hint={lookOf(spec.look).hint}>Look</Label>
+            <div role="radiogroup" aria-label="Look" className="flex flex-wrap gap-1.5" data-testid="look-picker">
+              {LOOKS.map(l => <button key={l.id} role="radio" aria-checked={lookOf(spec.look).id === l.id} data-look={l.id} onClick={() => set('look', l.id === DEFAULT_LOOK ? undefined : l.id)}
+                className={clsx('rounded-lg border px-2.5 py-1 text-[12px] transition', lookOf(spec.look).id === l.id ? 'border-accent bg-accent-soft text-white' : 'border-line text-zinc-400 hover:border-zinc-500')}>{l.label}</button>)}
+            </div></div>
           <BatchBox show={show.id} editableQuestion={show.editableQuestion} duel={show.guests === 2} disabled={spec.format !== 'twoshot' || imageRoute} onBatch={onBatch} batch={batch} />
           <PollBox disabled={spec.format !== 'twoshot' || imageRoute ? 'A poll works with the Two-shot format and a described host.' : ''} onPoll={onPoll} batch={batch} />
           <details className="rounded-xl border border-line bg-ink-950 p-3 text-[12px] text-zinc-500">
