@@ -34,6 +34,8 @@ export interface Clip {
   transitionIn?: { type: TransitionType; frames: number };
   /** video: zoom and focal point (see crop.ts); absent means the whole picture, as before */
   crop?: import('./crop').ClipCrop;
+  /** video track: this clip is a still picture (src is an image) that drifts slowly (zoom in or out, or pan); used by narrated videos */
+  still?: { motion: 'in' | 'out' | 'left' | 'right' };
   /** effect clips: which overlay and its parameters */
   effect?: { type: 'light-leak'; seed: number; hueShift: number } | import('../poll').PollResults | import('../tour').CityTag;
 }

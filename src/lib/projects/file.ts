@@ -7,6 +7,7 @@ import { ensureTracks, type Project } from '../timeline/types';
 import { normalizeCrop } from '../timeline/crop';
 import { normalizePollResults } from '../poll';
 import { normalizeCityTag } from '../tour';
+import { isMotion } from '../narrated';
 
 export const FILE_APP = 'subwaytakes';
 export const FILE_VERSION = 1;
@@ -55,6 +56,8 @@ export function parseProjectFile(text: string): ParsedFile {
   });
   // a crop that comes from a file is re-validated (zoom and focal point clamped) like everything else
   for (const c of p.clips) { const cc = c as { crop?: unknown }; if ('crop' in cc) { const n = normalizeCrop(cc.crop); if (n) cc.crop = n; else delete cc.crop; } }
+  // a still picture clip keeps only a known drift; anything else is a plain clip again
+  for (const c of p.clips) { const cc = c as { still?: { motion?: unknown } }; if ('still' in cc) { if (cc.still && typeof cc.still === 'object' && isMotion(cc.still.motion)) cc.still = { motion: cc.still.motion }; else delete cc.still; } }
   const name = typeof f.name === 'string' && f.name.trim() ? f.name.trim().slice(0, 80) : 'Opened episode';
   return { ok: true, name, project: ensureTracks(p as Project) };
 }

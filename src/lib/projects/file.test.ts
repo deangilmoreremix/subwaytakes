@@ -82,3 +82,12 @@ describe('city tags in files', () => {
     expect(junk.ok && junk.project.clips.filter(c => c.kind === 'effect')).toHaveLength(0);
   });
 });
+
+describe('still picture clips in files', () => {
+  const still = (s: unknown) => ({ ...proj().clips[0], src: 'https://cdn.example/a.png', still: s });
+  const open = (s: unknown) => parseProjectFile(serializeProjectFile(proj({ clips: [still(s) as never] }), 'x'));
+  it('keeps a known drift, and turns anything else back into a plain clip', () => {
+    const ok = open({ motion: 'left', extra: 'x' }); expect(ok.ok && ok.project.clips[0].still).toEqual({ motion: 'left' });
+    for (const bad of [{ motion: 'spin' }, 'nope', null, {}]) { const r = open(bad); expect(r.ok && 'still' in r.project.clips[0], JSON.stringify(bad)).toBe(false); }
+  });
+});

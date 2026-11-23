@@ -13,6 +13,10 @@ import { SAMPLE_ANSWERS, applyShow, showOf, titleFor, type ShowId } from '../lib
 import { resolveTitle } from '../lib/shows/stored';
 import { twoShotRoute, describeCharacter, buildNativePrompt, spokenLines } from '../lib/interview';
 import { batchSpecs } from '../lib/interview/batch';
+import { runNarrated, IMAGE_SLUG, narratedProblem } from '../lib/narrated/pipeline';
+import { addNarratedClips, planNarrated, scenePrompt } from '../lib/narrated';
+import { TTS_SLUG, buildTtsInput } from '../lib/muapi/voices';
+import type { NarratedRequest } from '../components/studio/NarratedBox';
 import { TOUR_TAG_FRAMES, planTour, type CityTag } from '../lib/tour';
 import { POLL_RESULT_FRAMES, pollSpecs, tally, type PollAnswer, type PollResults } from '../lib/poll';
 import { runTwoShotImageJob, STILL_APPROX_CREDITS, STILL_MODEL, buildStillInput, buildAnimateInput } from '../lib/interview/twoshot';
@@ -402,6 +406,38 @@ export function CreateTakePage() {
     await refresh();
   }
 
+  /** Faceless narrated video: one voice and one picture per scene, then the pictures, the voice and the words are placed on the timeline. */
+  async function runNarratedVideo(r: NarratedRequest) {
+    if (running || batch?.running || !canGenerate) return;
+    const opts = { input: r.input, style: r.style, aspect: spec.aspect, fps: getProject().fps, voice: { provider: r.voice.provider, voiceId: r.voice.id } } as const;
+    const problem = narratedProblem(opts);
+    if (problem) { setError(problem); return; }
+    const plan = planNarrated(r.input);
+    const [tts, img] = await Promise.all([
+      muapi.estimate(TTS_SLUG[r.voice.provider], buildTtsInput(r.voice.provider, plan.script, r.voice.id)).catch(() => null),
+      muapi.estimate(IMAGE_SLUG, { prompt: scenePrompt(plan.beats[0], r.style, spec.aspect, r.input.kind), aspect_ratio: spec.aspect, resolution: '1K', quality: 'low' }).catch(() => null),
+    ]);
+    const ok = (x: { cost: number } | null) => (x && typeof x.cost === 'number' ? x.cost : null);
+    const total = ok(tts) !== null && ok(img) !== null ? ok(tts)! + ok(img)! * plan.beats.length : null;
+    if (total !== null && !affordable(total)) return;
+    const msg = total !== null ? `Make a narrated video with ${plan.beats.length} pictures and a voice for about ${formatCredits(total)}?` : `Make a narrated video with ${plan.beats.length} pictures and a voice? The price could not be estimated.`;
+    if (!window.confirm(msg)) return;
+    setError('');
+    try {
+      const res = await runNarrated({ ...opts, onStage: label => setRunning(cur => ({ status: 'processing', startedAt: cur?.startedAt ?? Date.now(), stages: [label], stageIdx: 0 })) });
+      // read the timeline AFTER the long run (a stale copy would drop clips added meanwhile)
+      const cur = getProject();
+      if (res.scenes.length) setProject(addNarratedClips(cur, { scenes: res.scenes, audioUrl: res.audioUrl, audioFrames: res.audioFrames, label: 'Narration' }));
+      else {
+        const sound = cur.tracks.find(t => t.kind === 'audio');
+        if (sound) setProject(addClip(cur, { id: newId('voice'), trackId: sound.id, kind: 'audio', label: 'Narration', start: projectDuration(cur), duration: Math.max(1, res.audioFrames), trimStart: 0, sourceFrames: res.audioFrames, src: res.audioUrl, volume: 1 }));
+        setError(`The voice was made and kept, but no pictures could be created. ${res.warnings.join(' ')}`);
+      }
+      if (res.scenes.length && res.warnings.length) setError(`Done, with ${res.warnings.length} picture${res.warnings.length > 1 ? 's' : ''} reused: ${res.warnings.join(' ')}`);
+    } catch (e) { setError(e instanceof Error ? e.message : 'The narrated video failed'); }
+    finally { setRunning(null); }
+  }
+
   const TWOSHOT_STAGES = ['Making the starting image', 'Animating the interview'];
   async function generateTwoShotImage(host: NonNullable<typeof hostChar> & { portrait_url: string }) {
     const guest = characters.find(c => c.id === speakerId && c.role === 'guest' && c.portrait_url);
@@ -483,7 +519,7 @@ export function CreateTakePage() {
         <OnboardingCard onDismiss={() => updateOnboarding({ dismissed: true })} input={{
           customised: spec.show !== DEFAULT_TAKE.show || spec.place.city !== DEFAULT_TAKE.place.city || spec.place.scene !== DEFAULT_TAKE.place.scene || spec.place.time !== DEFAULT_TAKE.place.time,
           tookTake: spec.take.trim() !== '' && spec.take !== DEFAULT_TAKE.take, balance: profile?.credits_balance ?? null, hasKey: keyed,
-          videoClips: project.clips.filter(c => c.kind === 'video').length, captionClips: project.clips.filter(c => c.kind === 'caption').length, exported: !!onboarding.exported }} />
+          videoClips: project.clips.filter(c => c.kind === 'video' && !c.still).length, captionClips: project.clips.filter(c => c.kind === 'caption').length, exported: !!onboarding.exported }} />
       )}
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-4 p-4 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-h-0 flex-col gap-3">
@@ -517,10 +553,10 @@ export function CreateTakePage() {
           )}
         </div>
         <div className="min-w-0 lg:min-h-0">
-          <Inspector onPoll={runPoll} onTour={runTour} fileSlot={<ProjectFileCard getProject={getProject} name={projectName} onOpen={(proj, n) => { setProject(proj); requestRename(n); }} />} aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
+          <Inspector onPoll={runPoll} onTour={runTour} onNarrated={runNarratedVideo} narratedBusy={!!running} fileSlot={<ProjectFileCard getProject={getProject} name={projectName} onOpen={(proj, n) => { setProject(proj); requestRename(n); }} />} aiLabel={project.style?.aiLabel !== false} onAiLabel={on => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, aiLabel: on } }); }} onAddDub={addDubToTimeline} onTemplate={applyTpl} spec={spec} set={set} slug={slug} setSlug={setSlug} jobs={jobs} loading={loading} onAddJob={addJobToTimeline} usedUrls={usedUrls}
             pipeline={pipeline} onPipeline={setPipeline}
             title={resolveTitle(project.style?.title) ?? undefined} onTitle={t => { const cur = getProject(); setProject({ ...cur, style: { ...cur.style, title: t } }); }}
-            onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video').length} onBatch={runBatch} batch={batch}
+            onBestOf={() => setProject(assembleBestOf(project))} videoClipCount={project.clips.filter(c => c.kind === 'video' && !c.still).length} onBatch={runBatch} batch={batch}
             characters={characters} hostHint={route.hint} imageRoute={imageRoute}
             cutsSlot={<CutsPanel characters={characters} hostId={hostId} onHost={setHostId} guestId={speakerId} onGuest={setSpeakerId} duel={showOf(spec.show).guests === 2} guest2Id={guest2Id} onGuest2={setGuest2Id} recordings={{ host: recordingFor(cutsLines.host), guest: recordingFor(cutsLines.guest), guest2: cutsLines.guest2 ? recordingFor(cutsLines.guest2) : undefined }} />}
             lipsyncSlot={<LipsyncPanel characters={characters} speakerId={speakerId} onSpeaker={setSpeakerId} model={lipModel} onModel={setLipModel} script={spec.take} canGenerate={canGenerate} recording={ownVoice} onRecord={() => setRecordFor(spec.take)} onClearRecording={() => setRecordings(r => { const n = { ...r }; delete n[spec.take]; return n; })} />}

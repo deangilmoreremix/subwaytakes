@@ -23,7 +23,7 @@ const stepOf = (s: Progress['stage'] | 'done'): number => (s === 'checking' || s
 function sampleProject(fps: number, style: CaptionStyle, base: Project): Project {
   const w = ['Pineapple', 'belongs', 'on', 'pizza'].map((t, i) => ({ t, s: 6 + i * 16, e: 20 + i * 16 }));
   const cap: Clip = { id: 'sample', trackId: 'c1', kind: 'caption', label: 'Caption', text: w.map(x => x.t).join(' '), words: w, start: 0, duration: 84, trimStart: 0 };
-  const video = base.clips.find(c => c.kind === 'video' && c.src);
+  const video = base.clips.find(c => c.kind === 'video' && c.src && !c.still);
   return { ...base, fps, clips: [...(video ? [{ ...video, start: 0, duration: 84 }] : []), cap], style: { ...base.style, captions: style } };
 }
 

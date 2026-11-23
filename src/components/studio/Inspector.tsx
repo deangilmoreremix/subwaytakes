@@ -5,6 +5,8 @@ import { DictateButton } from './DictateButton';
 import { ClipReframe } from './ClipReframe';
 import { PollBox } from './PollBox';
 import { TourBox } from './TourBox';
+import { NarratedBox, type NarratedRequest } from './NarratedBox';
+import { attribution as quoteAttribution } from '../../lib/quotes';
 import { DEFAULT_LOOK, LOOKS, lookOf } from '../../lib/interview/looks';
 import type { PollAnswer } from '../../lib/poll';
 import { VersePicker } from './VersePicker';
@@ -62,12 +64,14 @@ function QuoteNote({ spec }: { spec: TakeSpec }) {
   );
 }
 
-export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onTour, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
+export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onTour, onNarrated, narratedBusy, onAddDub, onTemplate, spec, set, slug, setSlug, jobs, loading, onAddJob, usedUrls, clip, onClipChange, pipeline, onPipeline, lipsyncSlot, cutsSlot, characters, hostHint, imageRoute, title, onTitle, onBestOf, videoClipCount, onBatch, batch, onAddSfx, onAddEffect, transition, onTransition, fps, captionFont, onCaptionFont, captionCount, hasCaptions, onGenerateCaptions, onOpenStudio, canGenerate }: {
   aiLabel: boolean; onAiLabel: (on: boolean) => void;
   /** extra content at the end of the Output tab (the project file card) */
   fileSlot?: ReactNode;
   onPoll: (p: { question: string; labels: [string, string]; answers: PollAnswer[] }) => void;
   onTour: (cityIds: string[]) => void;
+  onNarrated: (r: NarratedRequest) => void;
+  narratedBusy: boolean;
   onTemplate: (t: Template) => void; onAddDub: (url: string, label: string, seconds: number) => Promise<void>;
   spec: TakeSpec; set: <K extends keyof TakeSpec>(k: K, v: TakeSpec[K]) => void; slug: string; setSlug: (s: string) => void;
   jobs: ClipJob[]; loading: boolean; onAddJob: (j: ClipJob) => void; usedUrls: Set<string>;
@@ -174,6 +178,7 @@ export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onTour, onAddD
           <BatchBox show={show.id} editableQuestion={show.editableQuestion} duel={show.guests === 2} disabled={spec.format !== 'twoshot' || imageRoute} onBatch={onBatch} batch={batch} />
           <PollBox disabled={spec.format !== 'twoshot' || imageRoute ? 'A poll works with the Two-shot format and a described host.' : ''} onPoll={onPoll} batch={batch} />
           <TourBox disabled={spec.format !== 'twoshot' || imageRoute ? 'A tour works with the Two-shot format and a described host.' : ''} onTour={onTour} batch={batch} />
+          <NarratedBox disabled="" busy={narratedBusy} onRun={onNarrated} quote={spec.quote ? { text: spec.quote.text, attribution: quoteAttribution(spec.quote) } : undefined} verse={spec.verse ? { text: spec.verse.text, attribution: `${spec.verse.ref}${spec.verse.translation === 'custom' ? '' : ` (${spec.verse.translation})`}` } : undefined} />
           <details className="rounded-xl border border-line bg-ink-950 p-3 text-[12px] text-zinc-500">
             <summary className="cursor-pointer text-zinc-400">Final prompt</summary>
             <p className="mt-2 whitespace-pre-wrap leading-relaxed">{buildNativePrompt(spec)}</p>
@@ -257,9 +262,9 @@ export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onTour, onAddD
         )}
 
         {tab === 'clip' && clip && (<>
-          <div><Label>{clip.kind === 'caption' ? 'Caption' : clip.kind === 'audio' ? 'Sound effect' : clip.kind === 'effect' ? 'Effect' : 'Video clip'}</Label><p className="truncate text-[12px] text-zinc-400">{clip.label}</p></div>
+          <div><Label>{clip.kind === 'caption' ? 'Caption' : clip.kind === 'audio' ? 'Sound effect' : clip.kind === 'effect' ? 'Effect' : clip.still ? 'Picture' : 'Video clip'}</Label><p className="truncate text-[12px] text-zinc-400">{clip.label}</p></div>
           {clip.kind === 'caption' && <div><Label>Text</Label><textarea className={inputCls} rows={3} value={clip.text ?? ''} onChange={e => onClipChange({ text: e.target.value, words: undefined })} /></div>}   {/* the words are re-spread from the new text, so the preview and the export change too */}
-          {clip.kind === 'video' && clip.src && (
+          {clip.kind === 'video' && clip.src && !clip.still && (
             <div><Label>Reframe</Label>
               <ClipReframe src={clip.src} atSeconds={(clip.trimStart + 6) / fps} frameAspect={(() => { const [a, b] = spec.aspect.split(':').map(Number); return a / b; })()} crop={clip.crop} onChange={c => onClipChange({ crop: c })} /></div>
           )}
@@ -272,7 +277,7 @@ export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onTour, onAddD
           </>); })()}
           {(clip.kind === 'video' || clip.kind === 'audio') && <div><Label hint={`${Math.round((clip.volume ?? 1) * 100)}%`}>Volume</Label>
             <input type="range" className="w-full" min={0} max={1} step={0.05} value={clip.volume ?? 1} onChange={e => onClipChange({ volume: Number(e.target.value) })} /></div>}
-          {clip.kind === 'video' && (
+          {clip.kind === 'video' && !clip.still && (
             <div className="space-y-2.5 rounded-xl border border-line bg-ink-950 p-3">
               <Label hint={transition.current ? `${(transition.current.frames / fps).toFixed(1)}s` : undefined}>Transition in</Label>
               {transition.available ? (<>
@@ -302,7 +307,7 @@ export function Inspector({ aiLabel, onAiLabel, fileSlot, onPoll, onTour, onAddD
               <p className="text-[11px] text-zinc-500">Pick a style, transcribe in your browser, then edit words, timing and motion.</p>
             </div>
           )}
-          {clip.kind === 'video' && clip.src?.startsWith('https://') && <DubPanel key={clip.id} clip={clip} fps={fps} characters={characters} canGenerate={canGenerate} onAddDub={onAddDub} />}
+          {clip.kind === 'video' && !clip.still && clip.src?.startsWith('https://') && <DubPanel key={clip.id} clip={clip} fps={fps} characters={characters} canGenerate={canGenerate} onAddDub={onAddDub} />}
           <div className="grid grid-cols-2 gap-3 text-[12px]">
             <div><Label>Start</Label><p className="tnum text-zinc-300">{(clip.start / fps).toFixed(2)}s</p></div>
             <div><Label>Length</Label><p className="tnum text-zinc-300">{(clip.duration / fps).toFixed(2)}s</p></div>
