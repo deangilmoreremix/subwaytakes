@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { CITIES, DEFAULT_PLACE } from '../places';
 import { DEFAULT_TAKE, buildNativePrompt, cutsPlan, cutsProblem, spokenLines, type TakeSpec } from '../interview';
-import { SAMPLE_ANSWERS, SHOWS, TONE_TEXT, applyShow, extractNumber, extractScore, showOf, splitOptions, titleFor, type ShowId } from './index';
+import { SAMPLE_ANSWERS, SHOWS, TONE_TEXT, applyShow, extractNumber, extractScore, showOf, splitOptions, splitStatements, titleFor, type ShowId } from './index';
 import { resolveTitle } from './stored';
 
 const spec = (id: ShowId, p: Partial<TakeSpec> = {}): TakeSpec => applyShow({ ...DEFAULT_TAKE, ...p }, id);
 
 describe('the show catalogue', () => {
-  it('has twelve shows with unique ids, badges and ideas', () => {
-    expect(SHOWS).toHaveLength(12);
-    expect(new Set(SHOWS.map(s => s.id)).size).toBe(12);
-    expect(new Set(SHOWS.map(s => s.badge)).size).toBe(12);
+  it('has sixteen shows with unique ids, badges and ideas', () => {
+    expect(SHOWS).toHaveLength(16);
+    expect(new Set(SHOWS.map(s => s.id)).size).toBe(16);
+    expect(new Set(SHOWS.map(s => s.badge)).size).toBe(16);
     for (const s of SHOWS) {
       expect(s.ideas.length, s.id).toBeGreaterThanOrEqual(3);
       expect(s.tones, s.id).toContain(s.defaultTone);
@@ -151,4 +151,40 @@ describe('stored title compatibility', () => {
     expect(r.guest).toBe('Maya');
   });
   it('returns null for nothing', () => { expect(resolveTitle(undefined)).toBeNull(); expect(resolveTitle({})).toBeNull(); });
+});
+
+describe('game-show formats', () => {
+  it('Quick trivia shows the question and a CORRECT reveal pill', () => {
+    const t = titleFor({ ...spec('trivia'), question: 'Which ocean is the largest?', take: 'The Pacific.' });
+    expect(t.variant).toBe('quiz'); expect(t.headline).toBe('Which ocean is the largest?'); expect(t.value).toMatch(/CORRECT/);
+  });
+  it('Two truths and a lie shows up to three numbered statements', () => {
+    const t = titleFor(spec('truths', { take: 'I have met a chef. I once ate a whole pizza; I have never flown.' }));
+    expect(t.variant).toBe('truths'); expect(t.items).toEqual(['I have met a chef.', 'I once ate a whole pizza', 'I have never flown.']);
+    expect(splitStatements('One. Two. Three. Four.')).toHaveLength(3);
+    expect(splitStatements('1) cats 2) dogs; and birds')).toEqual(['cats 2) dogs', 'birds']);
+    expect(splitStatements('')).toEqual([]);
+  });
+  it('Guess the price reuses the big number, Finish the sentence puts the question on screen', () => {
+    expect(titleFor(spec('guess_price', { take: 'I say $6.50.' })).value).toBe('$6.50');
+    expect(titleFor(spec('finish_sentence')).headline).toMatch(/Finish the sentence/);
+  });
+  it('each has a valid default tone, a sample answer, ideas that pass the screen, and a reaction beat', async () => {
+    const { checkText } = await import('../safety');
+    for (const id of ['trivia', 'truths', 'finish_sentence', 'guess_price'] as const) {
+      const s = showOf(id);
+      expect(s.tones).toContain(s.defaultTone); expect(SAMPLE_ANSWERS[id][0].length).toBeGreaterThan(5); expect(s.ideas.length).toBeGreaterThanOrEqual(4); expect(s.reaction.length).toBeGreaterThan(10);
+      for (const idea of s.ideas) expect(checkText(idea).ok, idea).toBe(true);
+      expect(checkText(SAMPLE_ANSWERS[id][0]).ok).toBe(true);
+    }
+  });
+  it('their prompts use the one-card beats and each city\'s own card word', () => {
+    for (const id of ['trivia', 'truths', 'finish_sentence', 'guess_price'] as const) {
+      for (const c of CITIES.filter(c => c.id !== 'custom')) {
+        const p = buildNativePrompt(spec(id, { place: { ...DEFAULT_PLACE, city: c.id } }));
+        expect(p).toMatch(/exactly ONE card/); expect(p).toMatch(/Beat 3/);
+        if (c.id !== 'nyc') expect(p).not.toMatch(/MetroCard/);
+      }
+    }
+  });
 });

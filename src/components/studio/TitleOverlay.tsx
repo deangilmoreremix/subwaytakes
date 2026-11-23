@@ -25,7 +25,7 @@ export function TitleOverlay({ title, fontFamily, fontWeight }: { title: StoredT
 
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
-      {d.variant !== 'ab' && d.variant !== 'verse' && d.variant !== 'quote' && lines.length > 0 && (
+      {d.variant !== 'ab' && d.variant !== 'verse' && d.variant !== 'quote' && d.variant !== 'quiz' && d.variant !== 'truths' && lines.length > 0 && (
         <div style={{ ...base, position: 'absolute', top: '6%', left: '6%', right: '14%', fontSize: headSize, lineHeight: 1.05, color: '#fff', textShadow: SHADOW, textTransform: 'uppercase' }}>
           {lines.map((l, i) => <div key={i}>{l}</div>)}
         </div>
@@ -57,6 +57,28 @@ export function TitleOverlay({ title, fontFamily, fontWeight }: { title: StoredT
               <div style={{ fontSize: 52, lineHeight: 1.1, color: '#fff', textTransform: 'uppercase' }}>{text}</div>
             </div>
           ) : null)}
+        </div>
+      )}
+
+      {d.variant === 'quiz' && (
+        <div style={{ position: 'absolute', top: '6%', left: '5%', right: '5%', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ ...base, display: 'flex', alignItems: 'center', gap: 22, background: 'rgba(0,0,0,0.66)', borderRadius: 26, padding: '20px 28px' }}>
+            <div style={{ width: 92, height: 92, borderRadius: 46, background: d.badgeBg, color: d.badgeFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 62, flexShrink: 0 }}>?</div>
+            <div style={{ fontSize: 50, lineHeight: 1.1, color: '#fff' }}>{d.headline}</div>
+          </div>
+          {d.value && <div style={{ ...base, alignSelf: 'flex-start', background: d.badgeBg, color: d.badgeFg, fontSize: 56, padding: '8px 34px', borderRadius: 999, opacity: interpolate(frame, [60, 72], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }), transform: `scale(${interpolate(frame, [60, 72], [0.6, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })})` }}>{d.value}</div>}
+        </div>
+      )}
+
+      {d.variant === 'truths' && (
+        <div style={{ position: 'absolute', top: '5%', left: '5%', right: '5%', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ ...base, fontSize: 44, color: '#fff', textShadow: SHADOW, textTransform: 'uppercase', letterSpacing: 2 }}>{d.headline}</div>
+          {(d.items ?? []).map((text, i) => (
+            <div key={i} style={{ ...base, display: 'flex', alignItems: 'center', gap: 22, background: 'rgba(0,0,0,0.62)', borderRadius: 24, padding: '14px 24px' }}>
+              <div style={{ width: 76, height: 76, borderRadius: 38, background: d.badgeBg, color: d.badgeFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 50, flexShrink: 0 }}>{i + 1}</div>
+              <div style={{ fontSize: 42, lineHeight: 1.1, color: '#fff' }}>{text}</div>
+            </div>
+          ))}
         </div>
       )}
 

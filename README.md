@@ -34,7 +34,11 @@ cp .env.example .env   # then fill in the two Supabase values
 npm run dev
 ```
 
-### Share image and GIF teaser (free)
+### Game-show formats
+
+Four new shows in the Take tab: **Quick trivia** (question card with a ? badge and a green "CORRECT" pill that pops in after two seconds), **Two truths and a lie** (up to three numbered statements, split from what the guest says on full stops, semicolons or new lines), **Finish the sentence** and **Guess the price** (the amount the guest says pops up big). They use the same one-card hand-off beats and each city's own card word as every other show. Verified by unit tests (titles, splitting, ideas pass the content screen, every city, one-card beats) and REAL web exports of the three graphics through the real UI (`scripts/export-verse-test.mjs <clip> <out> x KJV "Quick trivia"` with `ANSWER=...`). Not verified: how the video models act out the host's reveal ("Correct!", pointing at the lie) in a real clip; the trivia pill always says CORRECT, so write the right answer as the guest's answer.
+
+## Share image and GIF teaser (free)
 
 After an export finishes, the export dialog has "Share it": **Share image** saves a poster PNG from the best moment of your episode (optionally with one line of text along the bottom) and **GIF teaser** saves a looping GIF of up to 3 seconds, 10 frames a second, 480 px wide, refused if it would be too big to share (over about 8 MB). Both are made in the browser from the file you just exported, loaded only when you press the button. Verified with the real GIF encoder on a real exported MP4 (`scripts/share-test.mjs`: real GIF89a, 480 px wide, right shape, 18 frames for a 2-second video, about 1 MB, loops, caption bar present) and through the real export dialog (`SHARE_DIR=<dir> node scripts/export-project.mjs ...`). Not verified: very long or very detailed videos on slow phones (the GIF takes about 2 seconds per second of teaser here on CPU), and how a particular app displays the GIF.
 

@@ -10,7 +10,8 @@ import { BIBLE_IDEAS, BIBLE_SAMPLE, MOTIVATION_IDEAS, MOTIVATION_SAMPLE } from '
 
 export type ShowId =
   | 'hot_take' | 'happiness' | 'one_question' | 'reveal' | 'duel'
-  | 'would_you_rather' | 'compliment' | 'rate_my' | 'red_flag' | 'confession' | 'bible' | 'motivation';
+  | 'would_you_rather' | 'compliment' | 'rate_my' | 'red_flag' | 'confession' | 'bible' | 'motivation'
+  | 'trivia' | 'truths' | 'finish_sentence' | 'guess_price';
 
 export type Tone = 'playful' | 'deadpan' | 'heated' | 'warm' | 'joyful' | 'grateful' | 'candid' | 'surprised' | 'reverent' | 'hopeful' | 'calm' | 'fired_up' | 'tough_love';
 
@@ -36,7 +37,7 @@ export const TONE_LABEL: Record<Tone, string> = {
 };
 
 /** How the on-screen graphic is drawn. */
-export type TitleVariant = 'take' | 'number' | 'vs' | 'ab' | 'score' | 'verse' | 'quote';
+export type TitleVariant = 'take' | 'number' | 'vs' | 'ab' | 'score' | 'verse' | 'quote' | 'quiz' | 'truths';
 
 export interface Show {
   id: ShowId;
@@ -129,6 +130,30 @@ export const SHOWS: Show[] = [
     ideas: ['Red flag or green flag: texting back after three days?', 'Red flag or green flag: still being friends with an ex?', 'Red flag or green flag: always being early?', 'Red flag or green flag: never watching TV?'],
   },
   {
+    id: 'trivia', label: 'Quick trivia', blurb: 'The host asks a question, the guest answers, the host says Correct.', editableQuestion: true,
+    question: 'Which planet is closest to the sun?', answerLabel: 'Their answer (the right one, so the host can say Correct)', tones: ['playful', 'surprised', 'joyful'], defaultTone: 'playful',
+    variant: 'quiz', badge: 'QUICK TRIVIA', badgeBg: '#22c55e', badgeFg: '#052e16', reaction: 'The host cheers and says "Correct!" with a thumbs up.', guests: 1, place: {},
+    ideas: ['Which planet is closest to the sun?', 'How many legs does a spider have?', 'What is the capital of Australia?', 'Which ocean is the largest?', 'How many minutes are in a day?'],
+  },
+  {
+    id: 'truths', label: 'Two truths and a lie', blurb: 'Three statements, one is a lie. The host guesses.', editableQuestion: true,
+    question: 'Tell me two truths and a lie.', answerLabel: 'Three statements (separate them with a full stop or a semicolon)', tones: ['playful', 'deadpan', 'candid'], defaultTone: 'deadpan',
+    variant: 'truths', badge: '2 TRUTHS 1 LIE', badgeBg: '#38bdf8', badgeFg: '#082f49', reaction: 'The host squints, points at one statement and shouts "That is the lie!"', guests: 1, place: {},
+    ideas: ['Tell me two truths and a lie.', 'Two truths and a lie about your job.', 'Two truths and a lie about your commute.', 'Two truths and a lie about your weekend.'],
+  },
+  {
+    id: 'finish_sentence', label: 'Finish the sentence', blurb: 'The host starts a sentence, the guest finishes it.', editableQuestion: true,
+    question: 'Finish the sentence: the best thing about Mondays is...', answerLabel: 'How they finish it', tones: ['playful', 'warm', 'surprised'], defaultTone: 'playful',
+    variant: 'take', badge: 'FINISH IT', badgeBg: '#fb7185', badgeFg: '#4c0519', reaction: 'The host laughs and repeats the funniest word.', guests: 1, place: {},
+    ideas: ['Finish the sentence: the best thing about Mondays is...', 'Finish the sentence: the worst thing about trains is...', 'Finish the sentence: nobody tells you that adulthood is...', 'Finish the sentence: my secret talent is...'],
+  },
+  {
+    id: 'guess_price', label: 'Guess the price', blurb: 'The guest guesses what something costs, the price pops up.', editableQuestion: true,
+    question: 'Guess the price of this coffee.', answerLabel: 'Their guess (include the amount)', tones: ['playful', 'surprised', 'deadpan'], defaultTone: 'surprised',
+    variant: 'number', badge: 'GUESS THE PRICE', badgeBg: '#facc15', badgeFg: '#422006', reaction: 'The host reveals the real price and gasps.', guests: 1, place: {},
+    ideas: ['Guess the price of this coffee.', 'Guess the price of a train ticket here.', 'Guess the price of a slice of pizza.', 'Guess what a month of rent costs here.'],
+  },
+  {
     id: 'confession', label: 'Confessions', blurb: 'A funny, harmless confession.', editableQuestion: true,
     question: 'What is the dumbest thing you have ever spent money on?', answerLabel: 'Their confession', tones: ['candid', 'playful', 'surprised'], defaultTone: 'candid',
     variant: 'take', badge: 'CONFESSION', badgeBg: '#c084fc', badgeFg: '#2a0a4a', reaction: 'The host covers their mouth and laughs.', guests: 1, place: {},
@@ -182,6 +207,12 @@ export function extractScore(text: string): string | null {
 }
 
 /** "Would you rather X or Y?" into its two options (null if it cannot be split). */
+/** Up to three statements from what the guest said: split on sentence ends, semicolons or new lines. Pure. */
+export function splitStatements(text: string, max = 3): string[] {
+  const parts = text.split(/(?<=[.!?])\s+|;\s*|\n+/).map(s => s.replace(/^\s*(?:and\s+|[0-9]+[.)]\s*)/i, '').trim()).filter(Boolean);
+  return parts.slice(0, max);
+}
+
 export function splitOptions(question: string): [string, string] | null {
   const body = question.replace(/^would you rather\s+/i, '').replace(/[?.!\s]+$/g, '');
   const parts = body.split(/\s+or\s+/i);
@@ -202,6 +233,8 @@ export interface TitleData {
   left?: string; right?: string;
   /** number / score: the big value. */
   value?: string;
+  /** truths: the three statements, numbered on screen. */
+  items?: string[];
 }
 
 export interface TitleInput {
@@ -218,6 +251,8 @@ export function titleFor(t: TitleInput): TitleData {
     case 'number': return { ...base, headline: question, value: extractNumber(t.take) ?? undefined };
     case 'score': return { ...base, headline: question, value: extractScore(t.take) ?? undefined };
     case 'verse': return t.verse?.text ? { ...base, headline: t.verse.text, value: `${t.verse.ref} · ${t.verse.translation === 'custom' ? 'your text' : t.verse.translation}` } : { ...base, headline: question };
+    case 'quiz': return { ...base, headline: question, value: '✓ CORRECT' };
+    case 'truths': return { ...base, headline: 'Two truths and a lie', items: splitStatements(t.take) };
     case 'ab': {
       const ab = splitOptions(question);
       return { ...base, headline: 'Would you rather', left: ab?.[0], right: ab?.[1] };
@@ -243,6 +278,10 @@ export const SAMPLE_ANSWERS: Record<ShowId, string[]> = {
   rate_my: ['That is a solid 7 out of 10. The jacket is great but the shoes are fighting it.'],
   red_flag: ['Red flag. Three days is a lifetime. Just text back.'],
   confession: ['I bought a stand mixer and have used it exactly once, to make one single cookie.'],
+  trivia: ['Mercury.'],
+  truths: ['I have met a famous chef. I once ate a whole pizza alone. I have never been on a plane.'],
+  finish_sentence: ['The best thing about Mondays is that the coffee finally makes sense.'],
+  guess_price: ['I say six dollars and fifty cents, because everything is a scam now.'],
   bible: [BIBLE_SAMPLE],
   motivation: [MOTIVATION_SAMPLE],
 };
