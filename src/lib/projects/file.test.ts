@@ -91,3 +91,14 @@ describe('still picture clips in files', () => {
     for (const bad of [{ motion: 'spin' }, 'nope', null, {}]) { const r = open(bad); expect(r.ok && 'still' in r.project.clips[0], JSON.stringify(bad)).toBe(false); }
   });
 });
+
+describe('malformed clips in files', () => {
+  const base = proj().clips[0];
+  const open = (c: unknown) => parseProjectFile(serializeProjectFile(proj({ clips: [base, c as never] }), 'x'));
+  it('drops clips with a bad kind, track, start, length or trim, and keeps the good one', () => {
+    for (const bad of [{ ...base, id: 'k', kind: 'banana' }, { ...base, id: 't', trackId: 'ghost' }, { ...base, id: 's', start: -5 }, { ...base, id: 'd', duration: 0 }, { ...base, id: 'n', duration: -10 }, { ...base, id: 'h', start: 1e12 }, { ...base, id: 'x', trimStart: -1 }, { ...base, id: 'f', duration: 'long' }, null, 5]) {
+      const r = open(bad); expect(r.ok && r.project.clips.map(c => c.id), JSON.stringify(bad)).toEqual(['a']);
+    }
+    const good = open({ ...base, id: 'g', start: 90 }); expect(good.ok && good.project.clips).toHaveLength(2);
+  });
+});

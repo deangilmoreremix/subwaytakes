@@ -3,7 +3,7 @@
  * The file is plain JSON. It holds the timeline only (clips are links to hosted media, never the media itself) and NEVER the muapi key.
  * Pure helpers here; the browser pieces (file pickers, download) are at the bottom.
  */
-import { ensureTracks, type Project } from '../timeline/types';
+import { DEFAULT_PROJECT, ensureTracks, type Clip, type Project } from '../timeline/types';
 import { normalizeCrop } from '../timeline/crop';
 import { normalizePollResults } from '../poll';
 import { normalizeCityTag } from '../tour';
@@ -41,6 +41,17 @@ export function parseProjectFile(text: string): ParsedFile {
   if (typeof f.fileVersion !== 'number' || f.fileVersion > FILE_VERSION) return { ok: false, reason: 'That file was made by a newer version of the app. Update the app and try again.' };
   const p = f.project as Partial<Project> | undefined;
   if (!p || typeof p !== 'object' || !Array.isArray(p.clips) || !Array.isArray(p.tracks) || typeof p.fps !== 'number' || !(p.fps > 0 && p.fps <= 120)) return { ok: false, reason: 'That project file is damaged or incomplete.' };
+  // every clip must be a well-formed object (known kind, a track that exists, a start and length that are sane numbers); anything else is dropped, not drawn
+  const trackIds = new Set([...(p.tracks as Array<{ id?: unknown }>).map(t => t?.id), ...DEFAULT_PROJECT.tracks.map(t => t.id)]);
+  const KINDS = new Set(['video', 'caption', 'audio', 'effect']);
+  const MAX_FRAMES = 30 * 60 * 60 * 3;   // three hours at 30 fps
+  p.clips = p.clips.filter(c => {
+    const x = c as Partial<Clip> | null;
+    return !!x && typeof x === 'object' && KINDS.has(x.kind as string) && typeof x.trackId === 'string' && trackIds.has(x.trackId)
+      && Number.isFinite(x.start) && (x.start as number) >= 0 && (x.start as number) <= MAX_FRAMES
+      && Number.isFinite(x.duration) && (x.duration as number) > 0 && (x.duration as number) <= MAX_FRAMES
+      && (x.trimStart === undefined || (Number.isFinite(x.trimStart) && (x.trimStart as number) >= 0));
+  });
   // only plain https media links may come in from a file (no javascript:, file:, data: or blob: URLs)
   for (const c of p.clips) {
     const src = (c as { src?: unknown }).src;
