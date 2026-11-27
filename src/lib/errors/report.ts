@@ -27,7 +27,12 @@ export function scrub(text: string, max: number): string { return scrubKey(text)
 export function reportError(rawMessage: string, rawStack?: string): void {
   const message = scrub(rawMessage, 300); const stack = rawStack ? scrub(rawStack, 2000) : undefined;
   if (!shouldSend(message)) return;
-  try { void Promise.resolve(supabase.rpc('client_error_log', { p_message: message, p_stack: stack ?? null, p_url: cleanUrl(window.location.href) })).then(() => undefined, () => undefined); } catch { /* reporting must never throw */ }
+  // the server only takes reports from signed-in users, so a signed-out visitor's report would just be refused
+  try {
+    void Promise.resolve(supabase.auth.getSession())
+      .then(({ data }) => (data?.session ? supabase.rpc('client_error_log', { p_message: message, p_stack: stack ?? null, p_url: cleanUrl(window.location.href) }) : undefined))
+      .then(() => undefined, () => undefined);
+  } catch { /* reporting must never throw */ }
 }
 
 /** Install once at startup. */

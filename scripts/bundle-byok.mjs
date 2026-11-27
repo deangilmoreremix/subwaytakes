@@ -10,7 +10,8 @@ byok = byok.replaceAll('isObj', 'isObjB');                  // pricing.ts has it
 let entry = readFileSync(`${F}/subwaytakes-byok/index.ts`, 'utf8')
   .replace(/import \{ handle, type ByokCaller, type ByokDeps \} from "..\/_shared\/byok.ts";\n/, '')
   .replace('import "jsr:@supabase/functions-js/edge-runtime.d.ts";\n', '')
-  .replace('import { createClient } from "npm:@supabase/supabase-js@2";\n', '');
+  .replace('import { createClient } from "npm:@supabase/supabase-js@2";\n', '')
+  .replace('import { corsHeadersFor, parseOrigins } from "../_shared/cors.ts";\n', '');
 const head = 'import "jsr:@supabase/functions-js/edge-runtime.d.ts";\nimport { createClient } from "npm:@supabase/supabase-js@2";\n';
-writeFileSync(out, `${head}\n// ---- bundled from _shared/{pricing,paths,safety,byok}.ts\n${['pricing', 'paths', 'safety'].map(n => strip(`_shared/${n}.ts`)).join('\n')}\n${byok}\n// ---- entrypoint\n${entry}`);
+writeFileSync(out, `${head}\n// ---- bundled from _shared/{pricing,paths,safety,cors,byok}.ts\n${['pricing', 'paths', 'safety', 'cors'].map(n => strip(`_shared/${n}.ts`)).join('\n')}\n${byok}\n// ---- entrypoint\n${entry}`);
 console.log('wrote', out);

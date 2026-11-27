@@ -5,8 +5,15 @@ export const BUCKET = import.meta.env.VITE_BILLING_MODE === 'credits' ? 'media' 
 
 const SAFE = (s: string) => s.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/\.{2,}/g, '.').replace(/^[-.]+|[-.]+$/g, '').slice(0, 80) || 'file';
 
-/** Build the owner-scoped object path (folder = user id, which the storage RLS policy checks). Pure. */
-export function mediaPath(userId: string, name: string, now = Date.now(), rand = Math.random().toString(36).slice(2, 8)): string {
+/** 128 random bits as hex. Files in the bucket are readable by anyone with the exact URL (muapi and the exporter need that), so the name is the secret: it must not be guessable. */
+export function randomToken(): string {
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+}
+
+/** Build the owner-scoped object path (folder = user id, which the storage RLS policy checks). Pure apart from the default random token. */
+export function mediaPath(userId: string, name: string, now = Date.now(), rand = randomToken()): string {
   return `${userId}/${now}-${rand}-${SAFE(name)}`;
 }
 

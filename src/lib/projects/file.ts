@@ -50,7 +50,7 @@ export function parseProjectFile(text: string): ParsedFile {
     return !!x && typeof x === 'object' && KINDS.has(x.kind as string) && typeof x.trackId === 'string' && trackIds.has(x.trackId)
       && Number.isFinite(x.start) && (x.start as number) >= 0 && (x.start as number) <= MAX_FRAMES
       && Number.isFinite(x.duration) && (x.duration as number) > 0 && (x.duration as number) <= MAX_FRAMES
-      && (x.trimStart === undefined || (Number.isFinite(x.trimStart) && (x.trimStart as number) >= 0));
+      && (x.trimStart === undefined || (Number.isFinite(x.trimStart) && (x.trimStart as number) >= 0 && (x.trimStart as number) <= MAX_FRAMES));
   });
   // only plain https media links may come in from a file (no javascript:, file:, data: or blob: URLs)
   for (const c of p.clips) {

@@ -1,19 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { handle, type ByokCaller, type ByokDeps } from "../_shared/byok.ts";
+import { corsHeadersFor, parseOrigins } from "../_shared/cors.ts";
 
 // BYOK door to muapi: forwards the customer's OWN key (header X-Muapi-Key) to muapi. The key is never stored, logged or returned.
 // Decision logic is in ../_shared/byok.ts (unit tested); this file only wires the network and the rate-limit table.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Muapi-Key",
-};
+// Only the app's own origins may read answers (set ALLOWED_ORIGINS="https://a.com,https://b.com" to add a custom domain); never a wildcard.
+const allowedOrigins = parseOrigins(Deno.env.get("ALLOWED_ORIGINS"));
 const MUAPI = "https://api.muapi.ai";
 
-function reply(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
+function reply(status: number, body: unknown, cors: Record<string, string>) {
+  return new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" } });
 }
 
 const url = Deno.env.get("SUPABASE_URL")!;
@@ -54,8 +52,9 @@ const deps: ByokDeps = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
-  if (req.method !== "POST") return reply(405, { error: "Method not allowed" });
+  const cors = corsHeadersFor(req.headers.get("Origin"), allowedOrigins);
+  if (req.method === "OPTIONS") return new Response(null, { status: cors["Access-Control-Allow-Origin"] ? 204 : 403, headers: cors });
+  if (req.method !== "POST") return reply(405, { error: "Method not allowed" }, cors);
 
   const auth = req.headers.get("Authorization");
   let caller: ByokCaller | null = null;
@@ -66,12 +65,12 @@ Deno.serve(async (req) => {
   }
 
   let payload: { method?: string; path?: string; body?: unknown };
-  try { payload = await req.json(); } catch { return reply(400, { code: "bad_request", error: "Invalid JSON" }); }
+  try { payload = await req.json(); } catch { return reply(400, { code: "bad_request", error: "Invalid JSON" }, cors); }
   try {
     const out = await handle(caller, { method: payload.method ?? "POST", path: payload.path ?? "", body: payload.body }, req.headers.get("x-muapi-key"), deps);
-    return reply(out.status, out.body);
+    return reply(out.status, out.body, cors);
   } catch (e) {
     console.log(JSON.stringify({ event: "unhandled", message: e instanceof Error ? e.message.slice(0, 120) : "unknown" }));
-    return reply(500, { code: "internal", error: "Something went wrong. Try again." });
+    return reply(500, { code: "internal", error: "Something went wrong. Try again." }, cors);
   }
 });

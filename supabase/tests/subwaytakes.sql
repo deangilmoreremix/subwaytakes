@@ -36,8 +36,10 @@ SELECT pg_temp.fails('anon cannot read projects', 'SELECT * FROM subwaytakes.pro
 SELECT pg_temp.fails('anon cannot read profiles', 'SELECT * FROM subwaytakes.user_profiles', 'permission denied');
 SELECT pg_temp.fails('anon cannot call rate_hit', 'SELECT subwaytakes.rate_hit(''' || '00000000-0000-0000-0000-000000000a01' || ''', ''free'')', 'permission denied');
 SELECT pg_temp.fails('anon cannot create a project', 'SELECT * FROM subwaytakes.project_create(''x'', ''{}'')', 'permission denied');
-SELECT pg_temp.expect('anon can report a browser error (limited)', subwaytakes.client_error_log('boom ' || random()::text, NULL, 'https://app.example/create'));
+SELECT pg_temp.fails('anon can no longer write to the error log', 'SELECT subwaytakes.client_error_log(''boom'', NULL, NULL)', 'permission denied');
 RESET ROLE;
+SELECT pg_temp.expect('no policy lets anyone list our bucket (files are served by exact URL only)', (SELECT count(*) FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'subwaytakes_media_public_read') = 0);
+SELECT pg_temp.expect('the bucket is still public so exact URLs keep working', (SELECT public FROM storage.buckets WHERE id = 'subwaytakes-media'));
 
 -- ================================================================ a user: own rows, never the balance
 SET ROLE authenticated;
