@@ -21,3 +21,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# build leftovers
+tsconfig.tsbuildinfo
+supabase/.temp

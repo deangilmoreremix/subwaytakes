@@ -1,30 +1,22 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { IS_BYOK } from './lib/mode';
 import { AuthProvider, useAuth } from './lib/auth';
-import { AppShell } from './components/AppLayout/AppShell';
+import { StudioShell as AppShell } from './components/studio/StudioShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
+import { captureReferral, useReferralClaim } from './lib/referrals';
 
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
-const CreateHubPage = lazy(() => import('./pages/CreateHubPage').then(m => ({ default: m.CreateHubPage })));
-const CreateSubwayPage = lazy(() => import('./pages/create/CreateSubwayPage').then(m => ({ default: m.CreateSubwayPage })));
-const CreateStreetPage = lazy(() => import('./pages/create/CreateStreetPage').then(m => ({ default: m.CreateStreetPage })));
-const CreateMotivationalPage = lazy(() => import('./pages/create/CreateMotivationalPage').then(m => ({ default: m.CreateMotivationalPage })));
-const CreateWisdomPage = lazy(() => import('./pages/create/CreateWisdomPage').then(m => ({ default: m.CreateWisdomPage })));
-const CreateStudioPage = lazy(() => import('./pages/create/CreateStudioPage').then(m => ({ default: m.CreateStudioPage })));
-const CreateMuapiPage = lazy(() => import('./pages/create/CreateMuapiPage').then(m => ({ default: m.CreateMuapiPage })));
-const ClipPage = lazy(() => import('./pages/ClipPage').then(m => ({ default: m.ClipPage })));
-const LibraryPage = lazy(() => import('./pages/LibraryPage').then(m => ({ default: m.LibraryPage })));
-const EpisodeBuilderPage = lazy(() => import('./pages/EpisodeBuilderPage').then(m => ({ default: m.EpisodeBuilderPage })));
-const EpisodePage = lazy(() => import('./pages/EpisodePage').then(m => ({ default: m.EpisodePage })));
-const QuestionBankPage = lazy(() => import('./pages/QuestionBankPage').then(m => ({ default: m.QuestionBankPage })));
-const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
-const TemplateManagerPage = lazy(() => import('./pages/TemplateManagerPage').then(m => ({ default: m.TemplateManagerPage })));
-const EnhancePage = lazy(() => import('./pages/EnhancePage').then(m => ({ default: m.EnhancePage })));
+const CreateTakePage = lazy(() => import('./pages/CreateTakePage').then(m => ({ default: m.CreateTakePage })));
+const CastPage = lazy(() => import('./pages/CastPage').then(m => ({ default: m.CastPage })));
+const RecastPage = lazy(() => import('./pages/RecastPage').then(m => ({ default: m.RecastPage })));
+const GalleryPage = lazy(() => import('./pages/GalleryPage').then(m => ({ default: m.GalleryPage })));
+const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const LegalPage = lazy(() => import('./pages/LegalPage').then(m => ({ default: m.LegalPage })));
+const BillingSuccessPage = lazy(() => import('./pages/BillingResultPage').then(m => ({ default: m.BillingSuccessPage })));
+const BillingCancelPage = lazy(() => import('./pages/BillingResultPage').then(m => ({ default: m.BillingCancelPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
-const CompilationBuilderPage = lazy(() => import('./pages/CompilationBuilderPage'));
-const CompilationPage = lazy(() => import('./pages/CompilationPage'));
 
 function PageLoader() {
   return (
@@ -42,10 +34,16 @@ function FullScreenLoader() {
   );
 }
 
+/** Signed-out visitors go to /login and come back to where they were headed. */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) return <FullScreenLoader />;
+  if (!isAuthenticated) {
+    const returnTo = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?returnTo=${returnTo}`} replace />;
+  }
 
   return <>{children}</>;
 }
@@ -67,6 +65,8 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
 
 function AppContent() {
   const { loading } = useAuth();
+  useEffect(() => { captureReferral(window.location.search); }, []);   // an invite link is remembered before any sign-in redirect
+  useReferralClaim();
 
   if (loading) return <FullScreenLoader />;
 
@@ -79,33 +79,22 @@ function AppContent() {
               <AuthPage />
             </PublicOnlyRoute>
           } />
+          {/* legal pages are public: they must be readable before signing up */}
+          {['terms', 'privacy', 'refunds', 'ai-policy'].map(slug => <Route key={slug} path={`/${slug}`} element={<LegalPage slug={slug} />} />)}
           <Route path="/*" element={
             <ProtectedRoute>
               <AppShell>
                 <Suspense fallback={<PageLoader />}>
                   <Routes>
                     <Route path="/" element={<Navigate to="/create" replace />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/create" element={<CreateHubPage />} />
-                    <Route path="/create/subway" element={<CreateSubwayPage />} />
-                    <Route path="/create/street" element={<CreateStreetPage />} />
-                    <Route path="/create/motivational" element={<CreateMotivationalPage />} />
-                    <Route path="/create/wisdom" element={<CreateWisdomPage />} />
-                    <Route path="/create/studio" element={<CreateStudioPage />} />
-                    <Route path="/create/muapi" element={<CreateMuapiPage />} />
-                    <Route path="/library" element={<LibraryPage />} />
-                    <Route path="/clips/:id" element={<ClipPage />} />
-                    <Route path="/clips/:id/enhance" element={<EnhancePage contentType="clip" />} />
-                    <Route path="/episodes/new" element={<EpisodeBuilderPage />} />
-                    <Route path="/episodes/:id" element={<EpisodePage />} />
-                    <Route path="/episodes/:id/enhance" element={<EnhancePage contentType="episode" />} />
-                    <Route path="/compilations/new" element={<CompilationBuilderPage />} />
-                    <Route path="/compilations/:id" element={<CompilationPage />} />
-                    <Route path="/compilations/:id/enhance" element={<EnhancePage contentType="compilation" />} />
-                    <Route path="/questions" element={<QuestionBankPage />} />
-                    <Route path="/templates" element={<TemplateManagerPage />} />
+                    <Route path="/create" element={<CreateTakePage />} />
+                    <Route path="/cast" element={<CastPage />} />
+                    <Route path="/recast" element={<RecastPage />} />
+                    <Route path="/library" element={<GalleryPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/analytics" element={<AnalyticsPage />} />
+                    <Route path="/billing/success" element={IS_BYOK ? <Navigate to="/create" replace /> : <BillingSuccessPage />} />
+                    <Route path="/billing/cancel" element={IS_BYOK ? <Navigate to="/create" replace /> : <BillingCancelPage />} />
+                    <Route path="/admin" element={IS_BYOK ? <Navigate to="/create" replace /> : <AdminPage />} />
                     <Route path="*" element={<Navigate to="/create" replace />} />
                   </Routes>
                 </Suspense>

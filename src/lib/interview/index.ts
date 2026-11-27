@@ -1,0 +1,292 @@
+/**
+ * Interview shot engine. The real SubwayTakes format (checked against the channel's
+ * videos) is a TWO-SHOT: host and guest sit shoulder to shoulder on a subway bench,
+ * motion-blurred windows behind them, and BOTH hold a flat transit card up to their
+ * mouths as the microphone. There is no real microphone.
+ *
+ * Formats:
+ *  - twoshot: one native-audio video of both people (default)
+ *  - cuts:    host and guest portraits, each lip-synced, placed back to back
+ *  - solo:    guest close-up, host's hand holds the card into frame
+ */
+import type { Aspect } from '../muapi/registry';
+import type { PickedVerse } from '../bible/types';
+import type { PickedQuote } from '../quotes/types';
+import { DEFAULT_PLACE, cardMicPhrase, cityOf, placePrompt, type PlaceSpec } from '../places';
+import { TONE_TEXT, questionFor, showOf, type ShowId, type Tone } from '../shows';
+
+export type { Tone };
+export type InterviewFormat = 'twoshot' | 'cuts' | 'solo';
+
+import { lookStillLine, lookVideoLine, type LookId } from './looks';
+
+export interface TakeSpec {
+  /** Art direction (see looks.ts). Absent means the documentary look every older episode used. */
+  look?: LookId;
+  /** Which show (host question, tone, badge, graphic). */
+  show: ShowId;
+  /** The host's question; only used by shows whose question is editable. */
+  question?: string;
+  /** What the guest says (Hot Take: the take). Duel: guest A. */
+  take: string;
+  /** Duel only: guest B's side. */
+  take2?: string;
+  /** Scripture show: the verse shown on screen (word for word, from the verified library or typed by the customer). */
+  verse?: PickedVerse;
+  /** Motivation show: a library quote shown on screen with its author (optional: without one the guest gives their own advice). */
+  quote?: PickedQuote;
+  /** Scripture show: the guest's own reflection on the verse. `take` (what is spoken) is composed from the verse and this. */
+  reflection?: string;
+  /** Duel only: how guest B looks. */
+  guest2Description?: string;
+  guestDescription: string;
+  hostDescription: string;
+  /** Cast character used as the host (its portrait enables the starting-image route). */
+  hostCharacterId?: string;
+  place: PlaceSpec;
+  tone: Tone;
+  durationSeconds: number;
+  aspect: Aspect;
+  format: InterviewFormat;
+}
+
+export const OPENER = "So what's ur take?";
+export const WORDS_PER_SECOND = 2.5;
+const OPENER_SECONDS = 1.8;
+
+export const DEFAULT_TAKE: TakeSpec = {
+  show: 'hot_take',
+  take: 'Pineapple belongs on pizza and anyone who disagrees is scared of joy.',
+  guestDescription: 'a local commuter in their 30s in a winter jacket',
+  hostDescription: 'a young host with big curly hair and round sunglasses, wearing a bright bomber jacket',
+  place: DEFAULT_PLACE,
+  tone: 'playful',
+  durationSeconds: 8,
+  aspect: '9:16',
+  format: 'twoshot',
+};
+
+export const FORMATS: { id: InterviewFormat; label: string; hint: string }[] = [
+  { id: 'twoshot', label: 'Two-shot', hint: 'Host and guest side by side, one video' },
+  { id: 'cuts', label: 'Cuts', hint: 'Host, then guest: two lip-synced shots' },
+  { id: 'solo', label: 'Solo', hint: 'Guest close-up only' },
+];
+
+/** Words a person can say in `seconds` (leaving room for the opener when `withOpener`). */
+export function wordBudget(seconds: number, withOpener: boolean): number {
+  const usable = Math.max(2, seconds - (withOpener ? OPENER_SECONDS : 0));
+  return Math.max(6, Math.floor(usable * WORDS_PER_SECOND));
+}
+
+const clip = (text: string, max: number) => {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return { text: words.slice(0, max).join(' '), trimmed: words.length > max };
+};
+
+/**
+ * The lines each person speaks, trimmed to fit the clip. The host's line is the show's question.
+ * Duel: the answer time is shared by guest A (`take`) and guest B (`take2`).
+ */
+/** Words the guest (or each guest in a duel) can say in the clip, after the host's question. */
+/** Scripture, and Motivation with a quote: the spoken line is COMPOSED from a verse or quote plus the guest's own words. */
+export const isComposedShow = (t: Partial<Pick<TakeSpec, 'show' | 'quote'>>): boolean => t.show === 'bible' || (t.show === 'motivation' && !!t.quote);
+/** In Cuts the voice reads the whole line and the clip is as long as the audio (priced by the text), so a composed verse or quote is not squeezed into the clip-length slider. About 28 seconds of speech; the line also stays under the lip-sync script limit (600 characters). */
+export const CUTS_COMPOSED_WORDS = 75;
+/** The hand-off takes about this long: the host holds the card across, the guest takes it. */
+export const PASS_SECONDS = 1;
+
+/**
+ * One interview, one card. The Two-shot clip is planned in beats so the card changes hands ONCE and the guest only speaks once it is in their hand:
+ * (1) the host asks with the card at their own mouth, (2) the host hands it across, (3) the guest answers with it. Times are in seconds from the start.
+ */
+export function twoShotBeats(t: Pick<TakeSpec, 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question'>>): { askEnd: number; passEnd: number; end: number } {
+  const host = questionFor(showOf(t.show), t.question);
+  const total = Math.max(4, t.durationSeconds);
+  const ask = Math.max(OPENER_SECONDS, host.split(/\s+/).length / WORDS_PER_SECOND);
+  // the guest always keeps at least half of what is left after the hand-off, so a long question cannot swallow the answer
+  const askEnd = Math.min(ask, total / 2 - PASS_SECONDS / 2);
+  const round = (n: number) => Math.round(n * 10) / 10;
+  return { askEnd: round(askEnd), passEnd: round(askEnd + PASS_SECONDS), end: round(total) };
+}
+
+export function guestWordBudget(t: Pick<TakeSpec, 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'format' | 'quote'>>): number {
+  if (t.format === 'cuts' && isComposedShow(t)) return CUTS_COMPOSED_WORDS;
+  const host = questionFor(showOf(t.show), t.question);
+  const hostSeconds = Math.max(OPENER_SECONDS, host.split(/\s+/).length / WORDS_PER_SECOND);
+  // in a Two-shot the hand-off takes a second in which nobody speaks; Cuts and Solo have no hand-off
+  const handOff = t.format === 'cuts' || t.format === 'solo' ? 0 : PASS_SECONDS;
+  return Math.max(6, Math.floor(Math.max(2, t.durationSeconds - hostSeconds - handOff) * WORDS_PER_SECOND));
+}
+
+export function spokenLines(t: Pick<TakeSpec, 'take' | 'durationSeconds'> & Partial<Pick<TakeSpec, 'show' | 'question' | 'take2' | 'format' | 'quote'>>): { host: string; guest: string; guest2?: string; trimmed: boolean } {
+  const show = showOf(t.show);
+  const host = questionFor(show, t.question);
+  const budget = guestWordBudget(t);
+  if (show.guests === 2) {
+    const each = Math.max(4, Math.floor(budget / 2));
+    const a = clip(t.take, each), b = clip(t.take2 ?? '', each);
+    return { host, guest: a.text, guest2: b.text, trimmed: a.trimmed || b.trimmed };
+  }
+  const a = clip(t.take, budget);
+  return { host, guest: a.text, trimmed: a.trimmed };
+}
+
+export const NO_MIC_RULE = 'The transit card is the only microphone. There is no real microphone, no lavalier, no boom, no phone held as a mic, and no visible audio gear. The card shows no brand logos or readable text.';
+
+function sceneText(t: TakeSpec): string {
+  return placePrompt(t.place);
+}
+
+/** Native-audio prompt for the chosen format and show. */
+export function buildNativePrompt(t: TakeSpec): string {
+  const show = showOf(t.show);
+  const { host, guest, guest2 } = spokenLines(t);
+  const card = cardMicPhrase(t.place.city);
+  const tone = TONE_TEXT[t.tone] ?? TONE_TEXT[show.defaultTone];
+  const noText = 'No subtitles, no on-screen text, no logos or watermarks.';
+  const guard = show.guard ? ` ${show.guard}` : '';
+  if (show.guests === 2) {
+    // Debate duel: three people. Unverified on the video models; Cuts (one lip-synced shot each) is the safe route.
+    const sitting = t.place.mode === 'transit' && t.place.scene === 'train_seated';
+    return [
+      `Handheld vertical documentary shot of three people: the host (${t.hostDescription}) between two guests, guest A (${t.guestDescription}) and guest B (${t.guest2Description || 'a different local commuter, clearly distinct from guest A'}).`,
+      `Setting: ${sceneText(t)}.`,
+      `${sitting ? 'They sit' : 'They stand'} close together, the host in the middle, framed from the chest up.`,
+      `There is exactly ONE card in the scene, ${card}, and only the person who is speaking holds it: the host holds it to their own mouth to ask, then hands it to guest A, who hands it back, then to guest B. ${NO_MIC_RULE}`,
+      `The host asks: "${host}" Guest A, ${tone}, argues: "${guest}" Guest B, ${tone}, argues back: "${guest2 ?? ''}" ${show.reaction}`,
+      `Each of the three voices is distinct and the lips match the words. Slight camera sway, natural ambient sound of the place. ${noText}${guard}`,
+      lookVideoLine(t.look),
+    ].filter(Boolean).join(' ');
+  }
+  if (t.format === 'solo') {
+    return [
+      `Handheld vertical documentary close-up of ${t.guestDescription}. Setting: ${sceneText(t)}.`,
+      `Out of frame, the host's hand holds ${card} toward the guest as the microphone.`,
+      NO_MIC_RULE,
+      `The host asks off-screen: "${host}" The guest answers to camera, ${tone}: "${guest}"`,
+      `Lip movement matches the speech. Natural gestures, ambient sound of the place. ${noText}${guard}`,
+      lookVideoLine(t.look),
+    ].filter(Boolean).join(' ');
+  }
+  // twoshot (cuts also uses this wording for a single combined fallback)
+  const sitting = t.place.mode === 'transit' && t.place.scene === 'train_seated';
+  const beats = twoShotBeats(t);
+  return [
+    `Handheld vertical documentary two-shot of two people: the host (${t.hostDescription}) and the guest (${t.guestDescription}).`,
+    `Setting: ${sceneText(t)}.`,
+    sitting ? 'They sit shoulder to shoulder, close together, framed from the chest up.' : 'They stand shoulder to shoulder, close together, framed from the chest up.',
+    `There is exactly ONE card in the scene, ${card}, and only the person who is speaking holds it. ${NO_MIC_RULE}`,
+    `Beat 1, from 0 to ${beats.askEnd} seconds: the host holds the card to their own mouth and asks the guest: "${host}" The guest listens, both hands empty in their lap.`,
+    `Beat 2, from ${beats.askEnd} to ${beats.passEnd} seconds: in one clear movement the host hands the card across to the guest's mouth and the guest takes it. The host's hands are empty afterwards. Nobody speaks during the hand-off.`,
+    `Beat 3, from ${beats.passEnd} seconds to the end: the guest holds the card to their own mouth, ${tone}, and answers: "${guest}" The guest does not start speaking until the card is in their hand. The host listens with empty hands. ${show.reaction}`,
+    `Visible lip movement matches each speaker's words and each voice is distinct. Slight camera sway, natural ambient sound of the place. ${noText}${guard}`,
+    lookVideoLine(t.look),
+  ].filter(Boolean).join(' ');
+}
+
+export type Role = 'host' | 'guest' | 'guest2';
+
+/** Still-image prompt of one person holding the card as a mic (for Cuts). */
+export function buildStillPrompt(t: TakeSpec, role: Role): string {
+  const who = role === 'host' ? t.hostDescription : role === 'guest2' ? (t.guest2Description || 'a different local commuter, clearly distinct from the first guest') : t.guestDescription;
+  const card = cardMicPhrase(t.place.city);
+  return `Close-up portrait photo of ${who}. Setting: ${sceneText(t)}. They hold ${card} up near their mouth, looking at the camera mid-sentence. ${NO_MIC_RULE} ${lookStillLine(t.look)}, ${t.aspect} framing.`;
+}
+
+export interface CutShot { role: Role; text: string; portraitPrompt: string }
+
+/** Cuts: the host asks, then the guest answers (Debate duel: guest A, then guest B). */
+export function cutsPlan(t: TakeSpec): CutShot[] {
+  const { host, guest, guest2 } = spokenLines(t);
+  const plan: CutShot[] = [
+    { role: 'host', text: host, portraitPrompt: buildStillPrompt(t, 'host') },
+    { role: 'guest', text: guest, portraitPrompt: buildStillPrompt(t, 'guest') },
+  ];
+  if (showOf(t.show).guests === 2 && guest2) plan.push({ role: 'guest2', text: guest2, portraitPrompt: buildStillPrompt(t, 'guest2') });
+  return plan;
+}
+
+/** Whether Cuts has everything it needs (both characters need a portrait and a voice). */
+/** `ownVoice`: the customer recorded this person's line themselves, so no Cast voice is needed. */
+type Person = { portrait_url?: string | null; voice_id?: string | null; ownVoice?: boolean };
+const needsVoice = (p: Person) => !p.voice_id && !p.ownVoice;
+export function cutsProblem(host: Person | undefined, guest: Person | undefined, guest2?: Person | undefined, needsSecondGuest = false): string | null {
+  if (needsSecondGuest) {
+    if (!guest2) return 'Pick a second guest from Cast for the duel.';
+    if (!guest2.portrait_url || needsVoice(guest2)) return 'The second guest needs a portrait and a voice in Cast, or record their line yourself.';
+  }
+  if (!host || !guest) return 'Pick a host and a guest from Cast.';
+  if (!host.portrait_url || needsVoice(host)) return 'The host needs a portrait and a voice in Cast, or record the line yourself.';
+  if (!guest.portrait_url || needsVoice(guest)) return 'The guest needs a portrait and a voice in Cast, or record the line yourself.';
+  return null;
+}
+
+/** Text for the on-screen title: the take, uppercase-free, wrapped to short lines. */
+export function titleLines(take: string, maxChars = 18, maxLines = 5): string[] {
+  const words = take.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    if (cur && (cur + ' ' + w).length > maxChars) { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
+  }
+  if (cur) lines.push(cur);
+  return lines.slice(0, maxLines);
+}
+
+/** Size and wrapping for the bold take / quote card: short takes stay big (the original look), longer advice shrinks so the whole text fits instead of being cut. */
+export function takeCardLayout(text: string): { size: number; maxChars: number; maxLines: number } {
+  const n = text.trim().length;
+  if (n <= 48) return { size: 86, maxChars: 16, maxLines: 5 };
+  if (n <= 90) return { size: 68, maxChars: 20, maxLines: 6 };
+  if (n <= 150) return { size: 56, maxChars: 24, maxLines: 7 };
+  return { size: 46, maxChars: 28, maxLines: 9 };
+}
+
+export function cardNameFor(t: Pick<TakeSpec, 'place'>): string {
+  return cityOf(t.place.city).card;
+}
+
+// ---- Host from Cast ---------------------------------------------------------------
+
+export interface HostCharacter {
+  id?: string; name?: string; age_range?: string; gender?: string; ethnicity?: string;
+  hair_description?: string; clothing_style?: string; distinguishing_features?: string | null;
+  portrait_url?: string | null;
+}
+
+/** One-line text description of a Cast character (used for the text route and as a fallback). */
+export function describeCharacter(c: HostCharacter): string {
+  const bits = [
+    `a ${[c.gender, c.ethnicity].filter(Boolean).join(' ')} person`.replace('a  person', 'a person'),
+    c.age_range, c.hair_description, c.clothing_style ? `wearing ${c.clothing_style}` : '', c.distinguishing_features ?? '',
+  ].map(x => (x ?? '').trim()).filter(Boolean);
+  return bits.join(', ');
+}
+
+/** The host description to use: the Cast character's text if one is chosen, else the typed description. */
+export function effectiveHostDescription(t: Pick<TakeSpec, 'hostDescription'>, host?: HostCharacter): string {
+  return host ? describeCharacter(host) || t.hostDescription : t.hostDescription;
+}
+
+export type TwoShotRoute = 'text' | 'image';
+
+/** Image route needs a hosted https portrait on the chosen Cast host; otherwise the text route is used. */
+export function twoShotRoute(t: Pick<TakeSpec, 'format'>, host?: HostCharacter): { route: TwoShotRoute; hint?: string } {
+  if (t.format !== 'twoshot' || !host) return { route: 'text' };
+  if (host.portrait_url && /^https:\/\//.test(host.portrait_url)) return { route: 'image' };
+  return { route: 'text', hint: `${host.name ?? 'This host'} has no portrait yet, so their text description is used. Add a portrait in Cast to keep their face.` };
+}
+
+/** Prompt for the ONE starting still of host and guest side by side (image-to-image from the host's portrait). */
+export function buildTwoShotStillPrompt(t: TakeSpec, opts: { guestHasReference?: boolean } = {}): string {
+  const card = cardMicPhrase(t.place.city);
+  const sitting = t.place.mode === 'transit' && t.place.scene === 'train_seated';
+  return [
+    `Photo of two people, ${sitting ? 'seated shoulder to shoulder' : 'standing shoulder to shoulder'}, framed from the chest up, ${t.aspect} vertical framing.`,
+    `The host is the person in the first reference image: keep their face, hair and look exactly the same.`,
+    opts.guestHasReference ? 'The guest is the person in the second reference image: keep their face exactly the same.' : `The guest is ${t.guestDescription}.`,
+    `Setting: ${sceneText(t)}.`,
+    `There is exactly one card, ${card}: the host holds it to their own mouth as if asking a question, and the guest's hands are empty in their lap, ready to take it. ${NO_MIC_RULE}`,
+    `${lookStillLine(t.look)}, no text or watermarks.`,
+  ].join(' ');
+}

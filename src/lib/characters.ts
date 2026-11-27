@@ -10,7 +10,7 @@ export const DEFAULT_HOST: Omit<CharacterBible, 'id' | 'user_id' | 'created_at'>
   ethnicity: 'mixed-race',
   clothing_style: 'casual streetwear, dark hoodie, confident stance',
   hair_description: 'short fade, well-groomed',
-  distinguishing_features: 'warm smile, expressive eyebrows, microphone in hand',
+  distinguishing_features: 'warm smile, expressive eyebrows, holds a transit card up like a microphone',
   energy_persona: 'confident, charismatic, quick-witted street interviewer',
   voice_style: 'energetic and engaging, slight NYC accent',
   is_default: true,
@@ -196,4 +196,18 @@ export async function deleteCharacter(id: string): Promise<void> {
     .eq('id', id);
 
   if (error) throw new Error(error.message);
+}
+
+export type CharacterVoicePatch = Partial<Pick<CharacterBible, 'portrait_url' | 'voice_provider' | 'voice_id' | 'voice_speed' | 'name' | 'distinguishing_features' | 'energy_persona' | 'clothing_style' | 'hair_description'>>;
+
+export async function updateCharacter(id: string, patch: CharacterVoicePatch): Promise<CharacterBible> {
+  const { data, error } = await supabase.from('character_bibles').update(patch).eq('id', id).select().single();
+  if (error) throw new Error(error.message);
+  return data as CharacterBible;
+}
+
+/** One-paragraph portrait prompt built from the character's appearance fields (pure). */
+export function buildPortraitPrompt(c: Pick<CharacterBible, 'name' | 'age_range' | 'gender' | 'ethnicity' | 'hair_description' | 'clothing_style' | 'distinguishing_features' | 'energy_persona'>, setting = 'a crowded NYC subway platform'): string {
+  const feat = c.distinguishing_features ? `, ${c.distinguishing_features}` : '';
+  return `Close-up portrait photo of a ${c.gender} ${c.ethnicity} person, ${c.age_range}, ${c.hair_description}, wearing ${c.clothing_style}${feat}. Facing the camera mid-sentence with an expressive, animated face (${c.energy_persona}). On ${setting}, natural fluorescent light, candid street-interview framing, photorealistic.`;
 }

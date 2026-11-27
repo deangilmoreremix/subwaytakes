@@ -2,8 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, MapPin, Clock, Save, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { CITY_STYLES } from '../lib/constants';
+import { CITIES } from '../lib/places';
 import { clsx } from '../lib/format';
+import { CreditsCard } from '../components/CreditsCard';
+import { BrandKitCard } from '../components/BrandKitCard';
+import { UsageCard } from '../components/UsageCard';
+import { LegalLinks } from './LegalPage';
+import { ReferralCard } from '../components/ReferralCard';
+import { MuapiKeyCard } from '../components/MuapiKeyCard';
+import { IS_BYOK } from '../lib/mode';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -74,6 +81,14 @@ export function SettingsPage() {
 
       <h1 className="text-2xl font-semibold text-zinc-100 mb-8">Settings</h1>
 
+      {IS_BYOK ? <div className="mb-6"><MuapiKeyCard /></div> : <>
+        <div className="mb-6"><CreditsCard /></div>
+        <div className="mb-6"><UsageCard /></div>
+        <div className="mb-6"><ReferralCard /></div>
+      </>}
+      <div className="mb-6"><BrandKitCard /></div>
+      <LegalLinks className="mb-8" />
+
       <div className="space-y-8">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
           <div className="flex items-center gap-3 mb-6">
@@ -107,9 +122,7 @@ export function SettingsPage() {
                 )}>
                   {profile?.subscription_tier || 'Free'}
                 </span>
-                <span className="text-sm text-zinc-500">
-                  {profile?.credits_balance ?? 0} credits remaining
-                </span>
+
               </div>
             </div>
           </div>
@@ -125,15 +138,15 @@ export function SettingsPage() {
 
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-2">Default City Style</label>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                {CITY_STYLES.map(city => (
+              <label className="block text-sm font-medium text-zinc-300 mb-2">Default City</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {CITIES.filter(c => c.id !== 'custom').map(city => (
                   <button
-                    key={city.value}
-                    onClick={() => setDefaultCity(city.value)}
+                    key={city.id}
+                    onClick={() => setDefaultCity(city.id)}
                     className={clsx(
                       'px-3 py-2 rounded-xl text-sm font-medium border transition',
-                      defaultCity === city.value
+                      defaultCity === city.id
                         ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
                         : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600'
                     )}

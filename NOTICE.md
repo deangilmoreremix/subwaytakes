@@ -1,0 +1,35 @@
+# Notices
+
+## Captions studio
+
+The caption studio (style presets, motion engines, transcript editor, caption exports) was designed with two open-source projects as references.
+No code was copied from either; this app re-implements the ideas in TypeScript and Remotion for in-browser rendering.
+
+- **ai-video-captions** by Nicolai Gaina, MIT licence: https://github.com/nicolaigaina/ai-video-captions
+  (upload-style-preview-burn pipeline, the six named styles Hormozi, MrBeast, Karaoke, Minimal, Bounce, Classic, draggable caption position, language-aware fonts)
+- **Capite** by Muneeb Khan, MIT licence: https://github.com/muneebkhan08/Capite
+  (the "Studio" transcript and motion editor: click-to-seek words, inline editing, timing nudges, find and replace, casing, seven motion engines, preset categories, SRT/VTT/TXT/ASS export)
+
+The 33 presets in `src/lib/captions/presets.ts` are this app's own colour, font and motion settings (names and categories follow the references; the full Capite preset table was not reproduced).
+
+## On-device speech recognition (free, runs in the browser)
+
+- **Transformers.js** (`@huggingface/transformers`), Apache-2.0, running OpenAI Whisper ONNX conversions from the Hugging Face hub (`onnx-community/whisper-*_timestamped`).
+- **react-easy-crop** (6.2.4), MIT, for the crop and reframe tools.
+- **gifenc** (1.0.3), MIT, for the GIF teaser.
+- **MediaPipe Tasks Vision** (`@mediapipe/tasks-vision` 1.2.0), Apache-2.0, with Google's MediaPipe selfie segmentation model (`selfie_segmenter.tflite`) for on-device background removal. The model and the WebAssembly runtime are downloaded at run time from their official hosts and are not bundled.
+- **whisper.cpp** compiled to WebAssembly through `@remotion/whisper-web` (Remotion licence: free for individuals and companies of up to three people; check https://remotion.dev/license if your team grows), models from `ggerganov/whisper.cpp`.
+- **Web Speech API** (browser built-in) for optional dictation.
+- Fonts: Google Fonts families through `@remotion/google-fonts` (SIL Open Font Licence / Apache-2.0).
+
+## Quote library
+
+Quotes in `src/lib/quotes/quotes.generated.ts` are words found in public-domain books from Project Gutenberg (https://www.gutenberg.org), in the author's own voice (no characters in plays or novels): Marcus Aurelius, *Meditations* (Casaubon, 1634); Epictetus, *Discourses and Enchiridion* (George Long); Confucius, *The Analects* and Lao Tzu, *Tao Te Ching* (both James Legge); Friedrich Nietzsche, *Beyond Good and Evil* (Helen Zimmern, 1907); Ralph Waldo Emerson, *Essays* (First Series and Essays); Henry David Thoreau, *Walden*; Benjamin Franklin, *Autobiography*; Mark Twain, *Pudd'nhead Wilson*, *The Innocents Abroad*, *Life on the Mississippi*, *Following the Equator*, *A Connecticut Yankee in King Arthur's Court*; William James, *The Will to Believe*, *Talks to Teachers*, *Pragmatism*, *The Varieties of Religious Experience*; Booker T. Washington, *Up from Slavery*; Thomas Carlyle, *On Heroes*; Samuel Smiles, *Self-Help*; James Allen, *As a Man Thinketh*. Project Gutenberg texts used here are in the public domain; the Gutenberg trademark and licence apply to their distribution of the ebooks, and we do not reproduce their boilerplate or formatting.
+
+Candidate sayings were found with the help of the **akhiltak/inspirational-quotes** list (MIT licence, https://github.com/akhiltak/inspirational-quotes). Only author names and rough sayings were used to look things up in the books; none of that list's wording ships in the product.
+
+## Scripture and verse library
+
+- Bible texts in `src/lib/bible/verses.generated.ts`: **King James Version** and **World English Bible** (public domain) and the **Berean Standard Bible** (placed in the public domain by its publisher on 30 April 2023, https://berean.bible/licensing.htm).
+- Every verse is kept only when independent sources agree: wldeh/bible-api (https://github.com/wldeh/bible-api), api.getbible.net, bible-api.com and the scrollmapper/bible_databases collection (https://github.com/scrollmapper/bible_databases, MIT for the database tooling; the texts used are public domain). See `scripts/build-verses.mjs`.
+- Which verses are offered per theme draws on **OpenBible.info** topic scores, licensed CC BY 4.0 (https://www.openbible.info/topics/). Only verse references are used, never the ESV text that site displays. Attribution: "Topic data from OpenBible.info, CC BY 4.0".

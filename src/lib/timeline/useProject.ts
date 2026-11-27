@@ -1,0 +1,51 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { DEFAULT_PROJECT, ensureTracks, type Project } from './types';
+
+const KEY = 'subwaytakes.project.v1';
+
+/** Read the saved project (or a fresh one). */
+export function loadProject(): Project {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Project;
+      if (p && Array.isArray(p.clips) && Array.isArray(p.tracks)) return ensureTracks(p);
+    }
+  } catch { /* unavailable or corrupt: start fresh */ }
+  return DEFAULT_PROJECT;
+}
+
+/** Save immediately (used when navigating away right after a change, where the debounced save would be cancelled). */
+export function saveProject(p: Project): void {
+  try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* storage unavailable */ }
+}
+
+/** Project state with undo/redo. `set(next, false)` updates without recording history (use during drags after `checkpoint`). */
+export function useProject() {
+  const [project, setProject] = useState<Project>(loadProject);
+  const past = useRef<Project[]>([]);
+  const future = useRef<Project[]>([]);
+  const latest = useRef(project);
+  latest.current = project;
+
+  useEffect(() => {
+    const t = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(project)); } catch { /* ignore */ } }, 300);
+    return () => clearTimeout(t);
+  }, [project]);
+
+  // the draft is saved 300 ms after the last change; leaving or reloading the page inside that window must not lose it
+  useEffect(() => {
+    const flush = () => { try { localStorage.setItem(KEY, JSON.stringify(latest.current)); } catch { /* storage full or blocked */ } };
+    const onHide = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush); document.addEventListener('visibilitychange', onHide);
+    return () => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', onHide); };
+  }, []);
+
+  const checkpoint = useCallback(() => { past.current.push(latest.current); if (past.current.length > 100) past.current.shift(); future.current = []; }, []);
+  const set = useCallback((next: Project, record = true) => { if (record) checkpoint(); latest.current = next; setProject(next); }, [checkpoint]);
+  const undo = useCallback(() => { const p = past.current.pop(); if (p) { future.current.push(latest.current); setProject(p); } }, []);
+  const redo = useCallback(() => { const p = future.current.pop(); if (p) { past.current.push(latest.current); setProject(p); } }, []);
+  /** The newest project, even when called from a callback created before the last update. */
+  const getProject = useCallback(() => latest.current, []);
+  return { project, set, checkpoint, undo, redo, getProject };
+}

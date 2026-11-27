@@ -1,0 +1,15 @@
+{
+ "id": "43da73c2-95d4-4aa4-8f90-52ee00cea55d",
+ "status": "completed",
+ "outputs": [
+  "https://cdn.muapi.ai/outputs/generated/43da73c2-95d4-4aa4-8f90-52ee00cea55d_cf348e73.mp3"
+ ],
+ "error": "",
+ "cost": {
+  "amount_usd": 0.0035,
+  "amount_credits": 0,
+  "bonus_credits_used": 0,
+  "refunded": false
+ },
+ "executionTime": 15582.648000000001
+}

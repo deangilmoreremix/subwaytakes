@@ -1,0 +1,15 @@
+{
+ "id": "a1e9375d-509e-467c-9fea-bc40d4791eef",
+ "status": "completed",
+ "outputs": [
+  "```json\n{\n  \"summary\": \"A man speaks into a microphone at a subway station about pineapple on pizza.\",\n  \"timestamps\": [0.8, 1.5, 2.5, 3.2]\n}\n```"
+ ],
+ "error": "",
+ "cost": {
+  "amount_usd": 0.004,
+  "amount_credits": 0,
+  "bonus_credits_used": 0,
+  "refunded": false
+ },
+ "executionTime": 10858.929
+}

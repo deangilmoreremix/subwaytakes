@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Film, Mail, Lock, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { LegalLinks } from './LegalPage';
 import { useAuth } from '../lib/auth';
 
 export function AuthPage() {
@@ -90,7 +92,7 @@ export function AuthPage() {
           {success && mode === 'signup' && (
             <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
               <p className="text-sm text-emerald-400">
-                Account created successfully! You can now sign in.
+                Account created! Check your email and click the confirmation link. You can look around now, but generating needs a confirmed email.
               </p>
             </div>
           )}
@@ -155,6 +157,13 @@ export function AuthPage() {
               )}
             </button>
           </form>
+
+          {mode === 'signup' && (
+            <p className="mt-3 text-center text-[12px] text-zinc-500" data-testid="signup-consent">
+              By creating an account you agree to the <Link to="/terms" className="underline hover:text-zinc-300">Terms</Link>, the <Link to="/privacy" className="underline hover:text-zinc-300">Privacy Policy</Link> and the <Link to="/ai-policy" className="underline hover:text-zinc-300">AI and Likeness Policy</Link>.
+            </p>
+          )}
+          <LegalLinks className="mt-4 justify-center" />
 
           <div className="mt-6 text-center">
             <button

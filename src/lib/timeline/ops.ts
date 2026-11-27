@@ -1,0 +1,269 @@
+import { MIN_CLIP, type Clip, type Project, type TransitionType } from './types';
+import type { CaptionWord } from '../captions/model';
+import { clipText } from '../captions/words';
+
+/** Word times of a caption (relative to its start) after its left edge moved by `d` frames (positive = trimmed in). Words that end before the new start go; the rest keep their place against the speech. */
+function wordsAfterLeftTrim(words: CaptionWord[], d: number, duration: number): CaptionWord[] {
+  return words.map(w => ({ t: w.t, s: Math.max(0, w.s - d), e: Math.min(duration, w.e - d) })).filter(w => w.e - 0 > 0 && w.s < duration).map(w => ({ ...w, e: Math.max(w.s + 1, w.e) }));
+}
+/** Words that still start inside a caption that was shortened to `duration` frames. */
+function wordsAfterRightTrim(words: CaptionWord[], duration: number): CaptionWord[] {
+  return words.filter(w => w.s < duration).map(w => ({ ...w, e: Math.min(duration, Math.max(w.s + 1, w.e)) }));
+}
+/** A caption clip with new words: its text follows the words (older captions without words are left as they are). */
+const withNewWords = (c: Clip, words: CaptionWord[]): Clip => (c.kind === 'caption' && c.words?.length ? { ...c, words, text: clipText({ ...c, words }) } : c);
+
+let counter = 0;
+export const newId = (p = 'clip') => `${p}_${Date.now().toString(36)}_${(counter++).toString(36)}`;
+
+export const clipEnd = (c: Clip) => c.start + c.duration;
+export const projectDuration = (p: Project) => p.clips.reduce((m, c) => Math.max(m, clipEnd(c)), 0);
+
+const onTrack = (p: Project, trackId: string, exceptId?: string) =>
+  p.clips.filter(c => c.trackId === trackId && c.id !== exceptId).sort((a, b) => a.start - b.start);
+
+/** Snap a frame to the nearest clip edge / playhead / 0 within `threshold` frames. */
+export function snap(p: Project, frame: number, threshold: number, exceptId?: string, playhead?: number): number {
+  const points = [0, ...(playhead !== undefined ? [playhead] : [])];
+  for (const c of p.clips) if (c.id !== exceptId) points.push(c.start, clipEnd(c));
+  let best = frame, dist = threshold + 1;
+  for (const pt of points) { const d = Math.abs(pt - frame); if (d < dist) { dist = d; best = pt; } }
+  return dist <= threshold ? best : frame;
+}
+
+/** Earliest start >= `desired` where `duration` fits on the track without overlap. */
+export function findFreeStart(p: Project, trackId: string, desired: number, duration: number, exceptId?: string): number {
+  let start = Math.max(0, desired);
+  for (const c of onTrack(p, trackId, exceptId)) {
+    if (start + duration <= c.start) break;
+    if (start < clipEnd(c)) start = clipEnd(c);
+  }
+  return start;
+}
+
+export function addClip(p: Project, clip: Omit<Clip, 'id'> & { id?: string }): Project {
+  const start = findFreeStart(p, clip.trackId, clip.start, clip.duration);
+  return normalizeTransitions({ ...p, clips: [...p.clips, { ...clip, id: clip.id ?? newId(), start }] });
+}
+
+/** Move a clip (optionally to another track of the same kind); never overlaps neighbours. */
+export function moveClip(p: Project, id: string, start: number, trackId?: string): Project {
+  const c = p.clips.find(x => x.id === id);
+  if (!c) return p;
+  const target = trackId && p.tracks.find(t => t.id === trackId)?.kind === c.kind ? trackId : c.trackId;
+  if (start === c.start && target === c.trackId) return p; // a click is not a move
+  const s = findFreeStart(p, target, start, c.duration, id);
+  return normalizeTransitions({ ...p, clips: p.clips.map(x => (x.id === id ? { ...x, start: s, trackId: target } : x)) });
+}
+
+/** Trim the left or right edge by `delta` frames (negative extends). Clamped by source, neighbours and MIN_CLIP. */
+export function trimClip(p: Project, id: string, edge: 'left' | 'right', delta: number): Project {
+  const c = p.clips.find(x => x.id === id);
+  if (!c) return p;
+  const siblings = onTrack(p, c.trackId, id);
+  const prevEnd = Math.max(0, ...siblings.filter(s => clipEnd(s) <= c.start).map(clipEnd));
+  const next = siblings.find(s => s.start >= clipEnd(c));
+  const isVideo = c.kind === 'video' || c.kind === 'audio'; // clips backed by source media
+  let { start, duration, trimStart } = c;
+  if (edge === 'left') {
+    let d = delta;
+    d = Math.max(d, prevEnd - c.start);                 // not into previous clip
+    if (isVideo) d = Math.max(d, -c.trimStart);          // not before source start
+    d = Math.min(d, c.duration - MIN_CLIP);              // keep minimum length
+    start += d; duration -= d; if (isVideo) trimStart += d;
+  } else {
+    let d = delta;
+    if (next) d = Math.min(d, next.start - clipEnd(c));
+    if (isVideo && c.sourceFrames !== undefined) d = Math.min(d, c.sourceFrames - (c.trimStart + c.duration));
+    d = Math.max(d, MIN_CLIP - c.duration);
+    duration += d;
+  }
+  return normalizeTransitions({ ...p, clips: p.clips.map(x => {
+    if (x.id !== id) return x;
+    const moved = { ...x, start, duration, trimStart };
+    if (x.kind !== 'caption' || !x.words?.length) return moved;
+    // a caption's word times are relative to its own start, so they move with the edge that moved
+    const words = edge === 'left' ? wordsAfterLeftTrim(x.words, start - x.start, duration) : wordsAfterRightTrim(x.words, duration);
+    return words.length ? withNewWords(moved, words) : moved;
+  }) });
+}
+
+/** Split the clip under `frame` (or the given clip) into two at `frame`. */
+export function splitAt(p: Project, frame: number, id?: string): Project {
+  const c = p.clips.find(x => (id ? x.id === id : x.start < frame && frame < clipEnd(x) && x.kind === 'video')) ??
+            p.clips.find(x => x.start < frame && frame < clipEnd(x));
+  if (!c || frame <= c.start + MIN_CLIP - 1 || frame >= clipEnd(c) - MIN_CLIP + 1) return p;
+  const leftDur = frame - c.start;
+  const right: Clip = { ...c, id: newId(), start: frame, duration: c.duration - leftDur, trimStart: c.kind === 'video' || c.kind === 'audio' ? c.trimStart + leftDur : c.trimStart };
+  const { transitionIn: _noIn, ...rightClean } = right; void _noIn; // the new right half starts a fresh cut
+  let leftHalf: Clip = { ...c, duration: leftDur }; let rightHalf = rightClean as Clip;
+  if (c.kind === 'caption' && c.words?.length) {
+    // each half keeps only its own words, timed against its own start (the right half's highlight starts at ITS first word, not the whole line again)
+    const lw = wordsAfterRightTrim(c.words, leftDur);
+    const rw = wordsAfterLeftTrim(c.words, leftDur, c.duration - leftDur);
+    const halves: Clip[] = [lw.length ? withNewWords(leftHalf, lw) : null, rw.length ? withNewWords(rightHalf, rw) : null].filter((x): x is Clip => !!x);
+    if (halves.length < 2) return p;   // one side would be empty: nothing sensible to split
+    [leftHalf, rightHalf] = halves as [Clip, Clip];
+  }
+  return normalizeTransitions({ ...p, clips: p.clips.flatMap(x => (x.id === c.id ? [leftHalf, rightHalf] : [x])) });
+}
+
+export function deleteClip(p: Project, id: string, ripple = false): Project {
+  const c = p.clips.find(x => x.id === id);
+  if (!c) return p;
+  return normalizeTransitions({
+    ...p,
+    clips: p.clips.filter(x => x.id !== id).map(x => (ripple && x.trackId === c.trackId && x.start >= clipEnd(c) ? { ...x, start: x.start - c.duration } : x)),
+  });
+}
+
+export function updateClip(p: Project, id: string, patch: Partial<Clip>): Project {
+  return { ...p, clips: p.clips.map(x => (x.id === id ? { ...x, ...patch } : x)) };
+}
+
+export const framesToTime = (f: number, fps: number) => {
+  const s = f / fps;
+  const m = Math.floor(s / 60);
+  return `${String(m).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+};
+
+// ---------------------------------------------------------------- transitions
+
+/** The clip right before `c` on its track (greatest start earlier than c.start), or undefined. */
+export function predecessorOf(p: Project, c: Clip): Clip | undefined {
+  return p.clips.filter(x => x.trackId === c.trackId && x.id !== c.id && x.start < c.start).sort((a, b) => b.start - a.start)[0];
+}
+
+/**
+ * Drop any transitionIn that is no longer consistent: it must overlap its predecessor by exactly `frames`,
+ * be shorter than both clips, and a clip's in- and out-transitions must fit inside it together.
+ * Every structural op runs this, so editing an edge simply removes a transition that no longer applies.
+ */
+export function normalizeTransitions(p: Project): Project {
+  let changed = false;
+  const byId = new Map(p.clips.map(c => [c.id, c]));
+  const valid = (c: Clip): boolean => {
+    const t = c.transitionIn;
+    if (!t) return true;
+    if (c.kind !== 'video' || t.frames < 1) return false;
+    const pred = predecessorOf(p, c);
+    if (!pred || pred.kind !== 'video') return false;
+    if (clipEnd(pred) - c.start !== t.frames) return false;
+    if (t.frames >= pred.duration || t.frames >= c.duration) return false;
+    const predIn = byId.get(pred.id)?.transitionIn?.frames ?? 0;
+    return predIn + t.frames < pred.duration; // in + out transitions of the previous clip must not collide
+  };
+  const clips = p.clips.map(c => {
+    if (c.transitionIn && !valid(c)) { changed = true; const { transitionIn: _drop, ...rest } = c; void _drop; return rest as Clip; }
+    return c;
+  });
+  return changed ? { ...p, clips } : p;
+}
+
+export interface TransitionContext {
+  /** a previous clip exists that this clip abuts (or already overlaps via a transition) */
+  available: boolean;
+  current?: { type: TransitionType; frames: number };
+  maxFrames: number;
+}
+
+export function getTransitionContext(p: Project, id: string): TransitionContext {
+  const c = p.clips.find(x => x.id === id);
+  if (!c || c.kind !== 'video') return { available: false, maxFrames: 0 };
+  const pred = predecessorOf(p, c);
+  if (!pred || pred.kind !== 'video') return { available: false, maxFrames: 0 };
+  const cur = c.transitionIn?.frames ?? 0;
+  const abut = clipEnd(pred) - c.start === cur;
+  if (!abut) return { available: false, maxFrames: 0 };
+  const predIn = pred.transitionIn?.frames ?? 0;
+  const maxFrames = Math.max(0, Math.min(pred.duration - predIn, c.duration) - 2);
+  return { available: maxFrames >= 2, current: c.transitionIn, maxFrames };
+}
+
+/**
+ * Set (or clear with null) the transition into clip `id`. The clip and everything after it on the track
+ * shift so the overlap equals the new length. No-op if the clip does not abut its predecessor.
+ */
+export function setTransition(p: Project, id: string, tr: { type: TransitionType; frames: number } | null): Project {
+  const c = p.clips.find(x => x.id === id);
+  if (!c) return p;
+  const ctx = getTransitionContext(p, id);
+  if (!ctx.available) return p;
+  const pred = predecessorOf(p, c)!;
+  const frames = tr ? Math.max(2, Math.min(Math.round(tr.frames), ctx.maxFrames)) : 0;
+  const newStart = clipEnd(pred) - frames;
+  const delta = newStart - c.start;
+  const clips = p.clips.map(x => {
+    if (x.trackId !== c.trackId || x.start < c.start) return x;
+    const moved = delta === 0 ? x : { ...x, start: x.start + delta };
+    if (x.id !== id) return moved;
+    if (!tr) { const { transitionIn: _drop, ...rest } = moved; void _drop; return rest as Clip; }
+    return { ...moved, transitionIn: { type: tr.type, frames } };
+  });
+  return normalizeTransitions({ ...p, clips });
+}
+
+// ---------------------------------------------------------------- recast
+
+/**
+ * Put a recast result on the timeline: the generated video MUTED on the video track, and the ORIGINAL clip as a
+ * sound clip at the same start, so the source soundtrack is restored without any re-encoding. If the source audio is
+ * longer than the generated video it is trimmed to match.
+ */
+export function addRecastClips(p: Project, a: { generatedUrl: string; sourceUrl: string; generatedFrames: number; sourceFrames: number; label: string; hasSourceAudio?: boolean; /** the clip already carries the new voice (lipsync), so keep its own audio and skip the original soundtrack */ voiced?: boolean }): { project: Project; videoId: string; audioId?: string } {
+  const video = p.tracks.find(t => t.kind === 'video');
+  if (!video) return { project: p, videoId: '' };
+  const start = p.clips.filter(c => c.trackId === video.id).reduce((m, c) => Math.max(m, clipEnd(c)), 0);
+  const videoId = newId('recast');
+  let next = addClip(p, { id: videoId, trackId: video.id, kind: 'video', label: a.label, start, duration: a.generatedFrames, trimStart: 0, sourceFrames: a.generatedFrames, src: a.generatedUrl, volume: a.voiced ? 1 : 0 });
+  if (a.voiced) return { project: next, videoId };
+  const placed = next.clips.find(c => c.id === videoId)!;
+  const sound = next.tracks.find(t => t.kind === 'audio');
+  if (!sound || a.hasSourceAudio === false) return { project: next, videoId };
+  const audioId = newId('src-audio');
+  const duration = Math.max(MIN_CLIP, Math.min(a.sourceFrames, a.generatedFrames));
+  next = addClip(next, { id: audioId, trackId: sound.id, kind: 'audio', label: 'Original audio', start: placed.start, duration, trimStart: 0, sourceFrames: a.sourceFrames, src: a.sourceUrl, volume: 1 });
+  return { project: next, videoId, audioId };
+}
+
+// ---------------------------------------------------------------- best-of
+
+export interface BestOfOptions { transition?: TransitionType | null; frames?: number; maxClips?: number }
+
+/**
+ * "Best of" compilation: lay the first `maxClips` video clips back to back from frame 0 in timeline order and join
+ * them with a transition. Sound, caption and effect clips that started inside a video clip move with it, so a recast's
+ * restored audio or a caption stays on its shot. Clips past the limit are left out of the layout (not deleted).
+ */
+export function assembleBestOf(p: Project, opts: BestOfOptions = {}): Project {
+  const { transition = 'fade', frames = 8, maxClips = 8 } = opts;
+  const video = p.tracks.find(t => t.kind === 'video');
+  if (!video) return p;
+  const shots = p.clips.filter(c => c.trackId === video.id).sort((a, b) => a.start - b.start).slice(0, maxClips);
+  if (!shots.length) return p;
+  let cursor = 0;
+  const base = new Map<string, number>();
+  for (const s of shots) { base.set(s.id, cursor); cursor += s.duration; }
+  const keep = new Set(shots.map(s => s.id));
+  // 1. the video track: abut, then join with transitions (which pull later shots left)
+  let next: Project = {
+    ...p,
+    clips: p.clips.filter(c => c.trackId !== video.id || keep.has(c.id)).map(c => {
+      if (c.trackId !== video.id) return c;
+      const { transitionIn: _drop, ...rest } = c; void _drop;
+      return { ...rest, start: base.get(c.id)! } as Clip;
+    }),
+  };
+  if (transition) for (const s of shots.slice(1)) next = setTransition(next, s.id, { type: transition, frames });
+  // 2. everything else follows the shot it started inside, using the FINAL shot positions
+  const finalStart = new Map(next.clips.filter(c => c.trackId === video.id).map(c => [c.id, c.start]));
+  next = {
+    ...next,
+    clips: next.clips.map(c => {
+      if (c.trackId === video.id) return c;
+      const owner = shots.find(s => c.start >= s.start && c.start < s.start + s.duration);
+      return owner ? { ...c, start: finalStart.get(owner.id)! + (c.start - owner.start) } : c;
+    }),
+  };
+  return normalizeTransitions(next);
+}
